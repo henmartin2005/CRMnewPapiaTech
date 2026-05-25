@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if is_edit else 'Nuevo' }} cliente{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('clients.list_clients') }}">Clientes</a></li>
+      <li class="breadcrumb-item active">{{ 'Editar cliente' if is_edit else 'Nuevo cliente' }}</li>
+    </ol>
+    <h1 class="pg-title">{{ 'Editar cliente' if is_edit else 'Nuevo cliente' }}</h1>
+  </div>
+</div>
+
+<div style="max-width:640px;">
+  <form method="POST"
+        action="{{ url_for('clients.edit_client', client_id=client_id) if is_edit else url_for('clients.new_client') }}"
+        novalidate id="clientForm">
+
+    <!-- Personal -->
+    <div class="section-card" style="margin-bottom:12px;">
+      <div class="card-header">
+        <span class="card-header-left"><i class="bi bi-person"></i> Información personal</span>
+      </div>
+      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <div>
+          <label class="form-label">Nombre <span style="color:var(--c-danger);">*</span></label>
+          <input type="text" name="first_name" class="form-control"
+                 value="{{ client.first_name or '' }}" placeholder="Nombre" required />
+        </div>
+
+        <div>
+          <label class="form-label">Apellido <span style="color:var(--c-danger);">*</span></label>
+          <input type="text" name="last_name" class="form-control"
+                 value="{{ client.last_name or '' }}" placeholder="Apellido" required />
+        </div>
+
+        <div>
+          <label class="form-label">Email <span style="color:var(--c-danger);">*</span></label>
+          <input type="email" name="email" class="form-control"
+                 value="{{ client.email or '' }}" placeholder="correo@ejemplo.com" required />
+        </div>
+
+        <div>
+          <label class="form-label">Teléfono</label>
+          <input type="tel" name="phone" class="form-control"
+                 value="{{ client.phone or '' }}" placeholder="+1 (555) 000-0000" />
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label class="form-label">Empresa <span style="color:var(--c-text-3);font-weight:400;">(opcional)</span></label>
+          <input type="text" name="company" class="form-control"
+                 value="{{ client.company or '' }}" placeholder="Nombre de la empresa" />
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Project -->
+    <div class="section-card" style="margin-bottom:12px;">
+      <div class="card-header">
+        <span class="card-header-left"><i class="bi bi-briefcase"></i> Proyecto</span>
+      </div>
+      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <div>
+          <label class="form-label">Tipo de proyecto <span style="color:var(--c-danger);">*</span></label>
+          <select name="project_type" class="form-select" required>
+            <option value="">Seleccionar…</option>
+            {% for value, label in project_types %}
+              <option value="{{ value }}" {% if client.project_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="form-label">Etapa del Pipeline</label>
+          <select name="pipeline_stage" class="form-select">
+            {% for value, label in pipeline_stages %}
+              <option value="{{ value }}" {% if client.pipeline_stage == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label class="form-label">Detalles del proyecto</label>
+          <textarea name="project_details" class="form-control" rows="3"
+                    placeholder="Describe brevemente el alcance…">{{ client.project_details or '' }}</textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Financial -->
+    <div class="section-card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <span class="card-header-left"><i class="bi bi-credit-card"></i> Financiero</span>
+      </div>
+      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <div>
+          <label class="form-label">Costo total del proyecto</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3);font-size:13px;">$</span>
+            <input type="number" name="total_cost" id="totalCost" class="form-control"
+                   style="padding-left:22px;"
+                   value="{{ client.total_cost or '0' }}" min="0" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Monto inicial pagado</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3);font-size:13px;">$</span>
+            <input type="number" name="amount_paid" id="amountPaid" class="form-control"
+                   style="padding-left:22px;"
+                   value="{{ client.amount_paid or '0' }}" min="0" step="0.01" placeholder="0.00" />
+          </div>
+          <div class="form-text">
+            Pendiente: <span id="pendingAmt" class="num" style="font-weight:600;color:var(--c-danger);">$0.00</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <a href="{{ url_for('clients.detail', client_id=client_id) if is_edit else url_for('clients.list_clients') }}"
+         class="btn btn-ghost btn-md">Cancelar</a>
+      <button type="submit" class="btn btn-primary btn-md">
+        <i class="bi bi-check-lg"></i>
+        {{ 'Guardar cambios' if is_edit else 'Crear cliente' }}
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updatePending() {
+  const total   = parseFloat(document.getElementById('totalCost').value) || 0;
+  const paid    = parseFloat(document.getElementById('amountPaid').value) || 0;
+  const pending = Math.max(0, total - paid);
+  const el = document.getElementById('pendingAmt');
+  el.textContent = '$' + pending.toLocaleString('en-US', {minimumFractionDigits:2});
+  el.style.color = pending > 0 ? 'var(--c-danger)' : 'var(--c-success)';
+}
+document.getElementById('totalCost').addEventListener('input', updatePending);
+document.getElementById('amountPaid').addEventListener('input', updatePending);
+updatePending();
+
+document.getElementById('clientForm').addEventListener('submit', function (e) {
+  if (!this.checkValidity()) { e.preventDefault(); e.stopPropagation(); }
+  this.classList.add('was-validated');
+});
+</script>
+{% endblock %}

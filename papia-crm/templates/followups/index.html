@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Follow-ups de hoy{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Follow-ups de hoy</h1>
+    <p class="page-subtitle">Seguimientos programados para hoy</p>
+  </div>
+</div>
+
+<div class="card crm-card">
+  <div class="card-body p-0">
+    {% if followups %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Cliente</th>
+              <th>Método</th>
+              <th>Resumen</th>
+              <th>Resultado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fu in followups %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ fu.first_name }} {{ fu.last_name }}</div>
+                <div class="text-muted small">{{ fu.phone or fu.email }}</div>
+              </td>
+              <td>
+                <span class="badge bg-primary-soft text-primary">
+                  {{ method_labels.get(fu.method, fu.method) }}
+                </span>
+              </td>
+              <td class="text-muted small">{{ fu.summary }}</td>
+              <td class="text-muted small">{{ fu.result or '—' }}</td>
+              <td>
+                <a href="{{ url_for('clients.detail', client_id=fu.client_id) }}"
+                   class="btn btn-sm btn-outline-primary">Ver cliente</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state py-5">
+        <i class="bi bi-calendar-check fs-1 text-muted"></i>
+        <p class="mt-2 text-muted">No hay follow-ups programados para hoy.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

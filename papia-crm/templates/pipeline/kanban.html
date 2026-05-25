@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Pipeline{% endblock %}
+
+{% block head %}
+<style>
+  .main-content { padding-bottom: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Pipeline</h1>
+    <p class="pg-sub">Arrastra las tarjetas para mover leads entre etapas</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus"></i> Nuevo lead
+    </a>
+  </div>
+</div>
+
+<div class="kanban-wrap" id="kanbanBoard">
+  {% for stage_val, stage_name in pipeline_stages %}
+    {% set cards = stages_data.get(stage_val, []) %}
+    <div class="kn-col" data-stage="{{ stage_val }}">
+
+      <div class="kn-head kn-head-{{ stage_val }}">
+        <span class="kn-title kn-title-{{ stage_val }}">{{ stage_name }}</span>
+        <span class="kn-count">{{ cards | length }}</span>
+      </div>
+
+      <div class="kn-body" data-stage="{{ stage_val }}"
+           ondragover="onDragOver(event)"
+           ondragleave="onDragLeave(event)"
+           ondrop="onDrop(event, '{{ stage_val }}')">
+
+        {% for client in cards %}
+          <div class="kn-card kn-border-{{ stage_val }}"
+               draggable="true"
+               data-id="{{ client.id }}"
+               ondragstart="onDragStart(event, {{ client.id }})"
+               ondragend="onDragEnd(event)">
+
+            <a href="{{ url_for('clients.detail', client_id=client.id) }}"
+               class="kn-card-name"
+               onclick="event.stopPropagation()">
+              {{ client.first_name }} {{ client.last_name }}
+            </a>
+
+            <div class="kn-card-type">
+              {{ project_labels.get(client.project_type, client.project_type) }}{% if client.company %} &middot; {{ client.company }}{% endif %}
+            </div>
+
+            <div class="kn-card-amount {% if client.pending > 0 %}amount-pending{% else %}amount-clear{% endif %}">
+              {% if client.pending > 0 %}
+                <i class="bi bi-exclamation-circle-fill" style="font-size:10px;"></i>
+              {% else %}
+                <i class="bi bi-check-circle-fill" style="font-size:10px;"></i>
+              {% endif %}
+              {{ client.pending | currency }}
+            </div>
+
+          </div>
+        {% endfor %}
+
+        {% if not cards %}
+          <div style="text-align:center;padding:20px 8px;font-size:11.5px;color:var(--c-text-3);opacity:.6;" class="kn-empty">
+            <i class="bi bi-inbox" style="display:block;font-size:18px;margin-bottom:4px;"></i>
+            Sin leads
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let dragId  = null;
+let dragEl  = null;
+
+function onDragStart(e, id) {
+  dragId = id;
+  dragEl = e.currentTarget;
+  dragEl.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.kn-body').forEach(c => c.classList.remove('over'));
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('over');
+}
+
+function onDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('over');
+  }
+}
+
+function onDrop(e, newStage) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('over');
+  if (!dragId) return;
+
+  const fromStage = dragEl.closest('[data-stage]').dataset.stage;
+  if (fromStage === newStage) return;
+
+  fetch('/pipeline/move', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({client_id: dragId, stage: newStage}),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (!d.ok) return;
+
+    const target = e.currentTarget;
+    const empty  = target.querySelector('.kn-empty');
+    if (empty) empty.remove();
+
+    // Update card border
+    dragEl.className = dragEl.className.replace(/kn-border-\w+/, 'kn-border-' + newStage);
+    target.insertBefore(dragEl, target.firstChild);
+
+    updateCount(fromStage);
+    updateCount(newStage);
+
+    const oldBody = document.querySelector(`.kn-body[data-stage="${fromStage}"]`);
+    if (!oldBody.querySelector('.kn-card')) {
+      oldBody.innerHTML = `<div style="text-align:center;padding:20px 8px;font-size:11.5px;color:var(--c-text-3);opacity:.6;" class="kn-empty">
+        <i class="bi bi-inbox" style="display:block;font-size:18px;margin-bottom:4px;"></i>Sin leads</div>`;
+    }
+  });
+
+  dragId = null;
+}
+
+function updateCount(stage) {
+  const col    = document.querySelector(`.kn-col[data-stage="${stage}"]`);
+  const count  = col.querySelector('.kn-count');
+  const cards  = col.querySelectorAll('.kn-card');
+  count.textContent = cards.length;
+}
+</script>
+{% endblock %}

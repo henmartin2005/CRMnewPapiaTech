@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Clientes</h1>
+    <p class="pg-sub">{{ clients | length }} registro{{ 's' if clients | length != 1 }}</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus"></i> Nuevo cliente
+    </a>
+  </div>
+</div>
+
+<div class="section-card">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+
+      <!-- Search -->
+      <form method="GET" action="{{ url_for('clients.list_clients') }}">
+        <div class="search-wrap">
+          <i class="bi bi-search"></i>
+          <input type="text"
+                 name="q"
+                 id="searchInput"
+                 class="search-input"
+                 placeholder="Buscar clientes…"
+                 value="{{ search }}"
+                 autocomplete="off" />
+          {% if not search %}
+            <span class="search-kbd">⌘K</span>
+          {% endif %}
+        </div>
+      </form>
+
+      <!-- Stage filter chips -->
+      <div class="filter-chips">
+        <a href="{{ url_for('clients.list_clients', q=search) }}"
+           class="chip {% if not request.args.get('stage') %}active{% endif %}">
+          Todos
+        </a>
+        {% set stages = [
+          ('new_lead','Nuevo Lead','#7DD3FC'),
+          ('contacted','Contactado','#93C5FD'),
+          ('proposal_sent','Propuesta','#FCD34D'),
+          ('negotiation','Negociación','#FDBA74'),
+          ('active_client','Activo','#86EFAC'),
+          ('recurring','Recurrente','#C4B5FD'),
+        ] %}
+        {% for val, label, dot_color in stages %}
+          <a href="{{ url_for('clients.list_clients', q=search, stage=val) }}"
+             class="chip {% if request.args.get('stage') == val %}active{% endif %}">
+            <span class="chip-dot" style="background:{{ dot_color }};"></span>
+            {{ label }}
+          </a>
+        {% endfor %}
+      </div>
+
+    </div>
+    <div class="toolbar-right">
+      {% if search or request.args.get('stage') %}
+        <a href="{{ url_for('clients.list_clients') }}" class="btn btn-ghost btn-xs">
+          <i class="bi bi-x"></i> Limpiar
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Table -->
+  {% if clients %}
+    <div style="overflow-x:auto;">
+      <table class="crm-table" id="clientsTable">
+        <thead>
+          <tr>
+            <th style="padding-left:16px;">Cliente</th>
+            <th class="d-none d-md-table-cell">Empresa</th>
+            <th class="d-none d-md-table-cell">Proyecto</th>
+            <th>Estado</th>
+            <th style="text-align:right;">Pendiente</th>
+            <th style="text-align:center;width:96px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for client in clients %}
+            {% if not request.args.get('stage') or client.pipeline_stage == request.args.get('stage') %}
+            <tr data-href="{{ url_for('clients.detail', client_id=client.id) }}">
+
+              <td style="padding-left:16px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div class="cl-avatar">
+                    {{ client.first_name[0] | upper }}{{ client.last_name[0] | upper }}
+                  </div>
+                  <div>
+                    <div style="font-weight:600;font-size:13px;">{{ client.first_name }} {{ client.last_name }}</div>
+                    <div style="font-size:11.5px;color:var(--c-text-3);">{{ client.email }}</div>
+                  </div>
+                </div>
+              </td>
+
+              <td class="d-none d-md-table-cell" style="color:var(--c-text-2);font-size:12.5px;">
+                {{ client.company or '<span style="color:var(--c-text-3);">—</span>' | safe }}
+              </td>
+
+              <td class="d-none d-md-table-cell">
+                <span style="font-size:11.5px;color:var(--c-text-2);">
+                  {{ project_labels.get(client.project_type, client.project_type) }}
+                </span>
+              </td>
+
+              <td>
+                <span class="stage stage-{{ client.pipeline_stage }}">
+                  {{ stage_labels.get(client.pipeline_stage, client.pipeline_stage) }}
+                </span>
+              </td>
+
+              <td style="text-align:right;">
+                <span class="num" style="font-size:12.5px;font-weight:600;color:{% if client.pending > 0 %}var(--c-danger){% else %}var(--c-success){% endif %};">
+                  {{ client.pending | currency }}
+                </span>
+              </td>
+
+              <td style="text-align:center;">
+                <div style="display:flex;align-items:center;justify-content:center;gap:3px;">
+                  <a href="{{ url_for('clients.detail', client_id=client.id) }}"
+                     class="btn btn-ghost btn-icon-xs" title="Ver perfil"
+                     onclick="event.stopPropagation()">
+                    <i class="bi bi-eye" style="font-size:12px;"></i>
+                  </a>
+                  <a href="{{ url_for('clients.edit_client', client_id=client.id) }}"
+                     class="btn btn-ghost btn-icon-xs" title="Editar"
+                     onclick="event.stopPropagation()">
+                    <i class="bi bi-pencil" style="font-size:12px;"></i>
+                  </a>
+                  <button type="button"
+                          class="btn btn-ghost btn-icon-xs"
+                          title="Eliminar"
+                          style="color:var(--c-danger);"
+                          onclick="event.stopPropagation();confirmDelete({{ client.id }}, '{{ client.first_name }} {{ client.last_name }}')">
+                    <i class="bi bi-trash" style="font-size:12px;"></i>
+                  </button>
+                </div>
+              </td>
+
+            </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <i class="bi bi-people"></i>
+      {% if search %}
+        <p>Sin resultados para <strong>"{{ search }}"</strong></p>
+        <a href="{{ url_for('clients.list_clients') }}" class="btn btn-ghost btn-xs">Ver todos</a>
+      {% else %}
+        <p>Aún no hay clientes registrados</p>
+        <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus"></i> Agregar primer cliente
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- Delete modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Eliminar cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--c-text-2);margin:0;">
+          ¿Eliminar a <strong id="deleteClientName"></strong>?
+          Esta acción no se puede deshacer.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <form id="deleteForm" method="POST">
+          <button type="submit" class="btn btn-danger btn-sm">
+            <i class="bi bi-trash"></i> Eliminar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete(id, name) {
+  document.getElementById('deleteClientName').textContent = name;
+  document.getElementById('deleteForm').action = '/clients/' + id + '/delete';
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+// Live search debounce
+const searchEl = document.getElementById('searchInput');
+if (searchEl) {
+  searchEl.addEventListener('input', function () {
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.form.submit(), 380);
+  });
+}
+
+// Row click → navigate
+document.querySelectorAll('.crm-table tbody tr[data-href]').forEach(row => {
+  row.addEventListener('click', function (e) {
+    if (!e.target.closest('button') && !e.target.closest('a')) {
+      window.location.href = this.dataset.href;
+    }
+  });
+});
+</script>
+{% endblock %}

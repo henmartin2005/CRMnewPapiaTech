@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Nueva conversación{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('whatsapp.index') }}">WhatsApp</a></li>
+      <li class="breadcrumb-item active">Nueva conversación</li>
+    </ol>
+    <h1 class="pg-title">Nueva conversación</h1>
+  </div>
+</div>
+
+<div style="max-width:480px;">
+  <div class="section-card">
+    <div class="card-header">
+      <span class="card-header-left">
+        <i class="bi bi-whatsapp" style="color:#25D366;"></i>
+        Iniciar conversación de WhatsApp
+      </span>
+    </div>
+    <div class="card-body">
+      <form method="POST">
+        <div style="margin-bottom:14px;">
+          <label class="form-label">
+            Número de teléfono <span style="color:var(--c-danger);">*</span>
+          </label>
+          <input type="tel" name="phone" class="form-control"
+                 placeholder="+1 (555) 000-0000" required
+                 value="{{ request.args.get('phone', '') }}" />
+          <div class="form-text">Incluye el código de país. Ej: +15551234567</div>
+        </div>
+        <div style="margin-bottom:18px;">
+          <label class="form-label">Mensaje inicial <span style="color:var(--c-text-3);font-weight:400;">(opcional)</span></label>
+          <textarea name="message" class="form-control" rows="3"
+                    placeholder="Hola, ¿cómo estás?…"></textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <a href="{{ url_for('whatsapp.index') }}" class="btn btn-ghost btn-md">Cancelar</a>
+          <button type="submit" class="btn btn-primary btn-md" style="background:#25D366;border-color:#25D366;">
+            <i class="bi bi-whatsapp"></i> Abrir conversación
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

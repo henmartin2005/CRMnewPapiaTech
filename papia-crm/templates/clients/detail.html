@@ -1,0 +1,624 @@
+{% extends "base.html" %}
+{% block title %}{{ client.first_name }} {{ client.last_name }}{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('clients.list_clients') }}">Clientes</a></li>
+      <li class="breadcrumb-item active">{{ client.first_name }} {{ client.last_name }}</li>
+    </ol>
+    <h1 class="pg-title" style="display:flex;align-items:center;gap:8px;">
+      {{ client.first_name }} {{ client.last_name }}
+      <span class="stage stage-{{ client.pipeline_stage }}" id="stageBadge">
+        {{ stage_labels.get(client.pipeline_stage, client.pipeline_stage) }}
+      </span>
+    </h1>
+    {% if client.company %}
+      <p class="pg-sub"><i class="bi bi-building" style="margin-right:4px;"></i>{{ client.company }}</p>
+    {% endif %}
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('clients.edit_client', client_id=client.id) }}"
+       class="btn btn-ghost btn-sm">
+      <i class="bi bi-pencil"></i> Editar
+    </a>
+    <button class="btn btn-primary btn-sm"
+            data-bs-toggle="modal" data-bs-target="#followupModal">
+      <i class="bi bi-calendar-plus"></i> Follow-up
+    </button>
+  </div>
+</div>
+
+<div class="detail-grid">
+
+  <!-- ── LEFT PANEL ── -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+
+    <!-- Contact -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="card-header-left">
+          <i class="bi bi-person"></i> Contacto
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="detail-row">
+          <i class="bi bi-envelope"></i>
+          <div>
+            <div class="detail-label">Email</div>
+            <a href="mailto:{{ client.email }}" class="detail-value">{{ client.email }}</a>
+          </div>
+        </div>
+        <div class="detail-row">
+          <i class="bi bi-telephone"></i>
+          <div style="flex:1;min-width:0;">
+            <div class="detail-label">Teléfono</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div class="detail-value">{{ client.phone or '—' }}</div>
+              {% if client.phone %}
+                <button class="btn-wa"
+                        data-bs-toggle="modal"
+                        data-bs-target="#waModal"
+                        title="Enviar mensaje de WhatsApp">
+                  <i class="bi bi-whatsapp"></i> Enviar WhatsApp
+                </button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="detail-row">
+          <i class="bi bi-building"></i>
+          <div>
+            <div class="detail-label">Empresa</div>
+            <div class="detail-value">{{ client.company or '—' }}</div>
+          </div>
+        </div>
+        <div class="detail-row">
+          <i class="bi bi-briefcase"></i>
+          <div>
+            <div class="detail-label">Proyecto</div>
+            <div class="detail-value">{{ project_labels.get(client.project_type, client.project_type) }}</div>
+          </div>
+        </div>
+        <div class="detail-row" style="border-bottom:none;">
+          <i class="bi bi-calendar3"></i>
+          <div>
+            <div class="detail-label">Cliente desde</div>
+            <div class="detail-value num">{{ client.created_at[:10] }}</div>
+          </div>
+        </div>
+        {% if client.project_details %}
+        <hr class="divider" />
+        <div style="font-size:12px;color:var(--c-text-2);">{{ client.project_details }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Financials -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="card-header-left">
+          <i class="bi bi-credit-card"></i> Financiero
+        </span>
+      </div>
+      <div class="card-body fin-panel">
+        <div class="fin-row">
+          <span class="fin-row-label">Costo total</span>
+          <span class="fin-row-value num">{{ client.total_cost | currency }}</span>
+        </div>
+        <div class="fin-row">
+          <span class="fin-row-label" style="color:var(--c-success);">Pagado</span>
+          <span class="fin-row-value num" style="color:var(--c-success);">{{ client.amount_paid | currency }}</span>
+        </div>
+        <div class="fin-row" style="border-bottom:none;">
+          <span class="fin-row-label" style="color:var(--c-danger);">Pendiente</span>
+          <span class="fin-row-value num" style="color:var(--c-danger);">{{ client.pending | currency }}</span>
+        </div>
+
+        {% if client.total_cost > 0 %}
+          {% set pct = ((client.amount_paid / client.total_cost) * 100) | round(1) %}
+          <div class="pay-progress">
+            <div class="pay-progress-header">
+              <span>Progreso de pago</span>
+              <span class="num">{{ pct }}%</span>
+            </div>
+            <div class="pay-bar">
+              <div class="pay-bar-fill" style="width:{{ pct }}%;"></div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Brochure -->
+    <div class="section-card">
+      <div class="card-body" style="padding:12px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font-size:13px;font-weight:600;">Brochure enviado</div>
+            <div style="font-size:11.5px;color:var(--c-text-3);">Marca cuando el cliente recibió el brochure</div>
+          </div>
+          <form method="POST" action="{{ url_for('clients.edit_client', client_id=client.id) }}" id="brochureForm">
+            <input type="hidden" name="first_name"      value="{{ client.first_name }}" />
+            <input type="hidden" name="last_name"       value="{{ client.last_name }}" />
+            <input type="hidden" name="email"           value="{{ client.email }}" />
+            <input type="hidden" name="phone"           value="{{ client.phone or '' }}" />
+            <input type="hidden" name="company"         value="{{ client.company or '' }}" />
+            <input type="hidden" name="project_type"    value="{{ client.project_type }}" />
+            <input type="hidden" name="project_details" value="{{ client.project_details or '' }}" />
+            <input type="hidden" name="pipeline_stage"  value="{{ client.pipeline_stage }}" />
+            <input type="hidden" name="total_cost"      value="{{ client.total_cost }}" />
+            <input type="hidden" name="amount_paid"     value="{{ client.amount_paid }}" />
+            <input type="hidden" name="brochure_sent"   id="brochureHidden"
+                   value="{{ '1' if client.brochure_sent else '0' }}" />
+            <div class="form-check form-switch" style="margin:0;padding-left:2.4em;">
+              <input class="form-check-input" type="checkbox" id="brochureToggle"
+                     {% if client.brochure_sent %}checked{% endif %}
+                     onchange="toggleBrochure(this)" />
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline stage -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="card-header-left">
+          <i class="bi bi-kanban"></i> Etapa del Pipeline
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="stage-picker">
+          {% for stage_val, stage_name in pipeline_stages %}
+            <button class="stage-btn {% if client.pipeline_stage == stage_val %}current stage-{{ stage_val }}{% endif %}"
+                    data-stage="{{ stage_val }}"
+                    onclick="changeStage({{ client.id }}, '{{ stage_val }}', this)">
+              {{ stage_name }}
+            </button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+
+    <!-- Add note -->
+    <div class="section-card">
+      <div class="card-header">
+        <span class="card-header-left"><i class="bi bi-plus-circle"></i> Nueva actividad</span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('clients.add_client_note', client_id=client.id) }}">
+          <div style="display:flex;gap:6px;align-items:flex-start;">
+            <select name="note_type" class="form-select" style="width:120px;flex-shrink:0;">
+              {% for val, label in note_types %}
+                <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+            <textarea name="content" class="form-control" rows="1"
+                      placeholder="Escribe una nota…" required
+                      style="resize:none;flex:1;min-height:34px;"></textarea>
+            <button type="submit" class="btn btn-primary btn-sm" style="flex-shrink:0;">
+              <i class="bi bi-plus"></i> Agregar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Activity feed -->
+    <div class="section-card">
+      <div class="section-head">
+        <span class="section-head-label">
+          <i class="bi bi-clock-history" style="margin-right:5px;"></i>Historial
+        </span>
+        <span class="section-count">{{ notes | length }}</span>
+      </div>
+      {% if notes %}
+        <div class="activity-feed">
+          {% for note in notes %}
+            <div class="activity-item">
+              <div class="act-icon act-{{ note.note_type }}">
+                {% if note.note_type == 'call'     %}<i class="bi bi-telephone-fill"></i>
+                {% elif note.note_type == 'meeting'%}<i class="bi bi-camera-video-fill"></i>
+                {% elif note.note_type == 'email'  %}<i class="bi bi-envelope-fill"></i>
+                {% elif note.note_type == 'whatsapp'%}<i class="bi bi-whatsapp"></i>
+                {% else                            %}<i class="bi bi-sticky-fill"></i>
+                {% endif %}
+              </div>
+              <div class="act-body">
+                <div class="act-meta">
+                  <span class="act-type">{{ note.note_type | note_label }}</span>
+                  <span class="act-date num">{{ note.created_at[:16].replace('T', ' ') }}</span>
+                </div>
+                <div class="act-text">{{ note.content }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty" style="padding:24px;">
+          <i class="bi bi-chat-left"></i>
+          <p>Sin actividad registrada</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Follow-ups -->
+    <div class="section-card">
+      <div class="section-head">
+        <span class="section-head-label">
+          <i class="bi bi-calendar-check" style="margin-right:5px;"></i>Follow-ups
+        </span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="section-count">{{ followups | length }}</span>
+          <button class="btn btn-ghost btn-icon-xs"
+                  data-bs-toggle="modal" data-bs-target="#followupModal"
+                  title="Nuevo follow-up">
+            <i class="bi bi-plus" style="font-size:13px;"></i>
+          </button>
+        </div>
+      </div>
+      {% if followups %}
+        <div style="overflow-x:auto;">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Método</th>
+                <th>Resumen</th>
+                <th>Resultado</th>
+                <th>Próxima fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fu in followups %}
+              <tr style="cursor:default;">
+                <td class="num" style="font-size:11.5px;color:var(--c-text-3);white-space:nowrap;">
+                  {{ fu.created_at[:10] }}
+                </td>
+                <td>
+                  <span class="stage" style="background:var(--c-bg);color:var(--c-text-2);border:1px solid var(--c-border);">
+                    {{ fu.method | method_label }}
+                  </span>
+                </td>
+                <td style="font-size:12.5px;max-width:200px;">{{ fu.summary }}</td>
+                <td style="font-size:12px;color:var(--c-text-3);">{{ fu.result or '—' }}</td>
+                <td>
+                  {% if fu.next_date %}
+                    <span class="num" style="font-size:11.5px;color:var(--c-warning);font-weight:600;">
+                      {{ fu.next_date }}
+                    </span>
+                  {% else %}
+                    <span style="color:var(--c-text-3);">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty" style="padding:24px;">
+          <i class="bi bi-calendar"></i>
+          <p>Sin follow-ups registrados</p>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<!-- ── FOLLOW-UP MODAL ── -->
+<div class="modal fade" id="followupModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('clients.add_client_followup', client_id=client.id) }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Registrar Follow-up</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label class="form-label">Método de contacto</label>
+            <select name="method" class="form-select" required>
+              {% for val, label in followup_methods %}
+                <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Resumen <span style="color:var(--c-danger);">*</span></label>
+            <textarea name="summary" class="form-control" rows="3"
+                      placeholder="¿De qué trató el contacto?" required></textarea>
+          </div>
+          <div>
+            <label class="form-label">Resultado</label>
+            <textarea name="result" class="form-control" rows="2"
+                      placeholder="¿Cuál fue el resultado o próximo paso?"></textarea>
+          </div>
+          <div>
+            <label class="form-label">Próxima fecha de seguimiento</label>
+            <input type="date" name="next_date" class="form-control" id="nextDateInput" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg"></i> Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     WHATSAPP MODAL
+══════════════════════════════════════════ -->
+{% if client.phone %}
+<div class="modal fade" id="waModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+
+      <div class="modal-header" style="border-bottom:1px solid var(--c-border);">
+        <h5 class="modal-title" style="display:flex;align-items:center;gap:8px;">
+          <i class="bi bi-whatsapp" style="color:#25D366;font-size:18px;"></i>
+          Enviar WhatsApp a {{ client.first_name }} {{ client.last_name }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body" style="padding:20px;">
+
+        <!-- Template selector -->
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text-3);margin-bottom:8px;">
+            Plantilla
+          </div>
+          <div class="wa-tpl-chips" style="display:flex;flex-wrap:wrap;gap:6px;">
+            <button type="button" class="wa-tpl-btn" data-tpl="saludo">Saludo inicial</button>
+            <button type="button" class="wa-tpl-btn" data-tpl="followup">Follow-up</button>
+            <button type="button" class="wa-tpl-btn" data-tpl="propuesta">Enviar propuesta</button>
+            <button type="button" class="wa-tpl-btn" data-tpl="pago">Recordatorio de pago</button>
+            <button type="button" class="wa-tpl-btn" data-tpl="custom">Personalizado</button>
+          </div>
+        </div>
+
+        <!-- Recipient info -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:var(--c-surface-2);border-radius:var(--radius-sm);border:1px solid var(--c-border);">
+          <i class="bi bi-telephone" style="color:var(--c-text-3);font-size:12px;"></i>
+          <span style="font-size:12.5px;color:var(--c-text-2);">Para:</span>
+          <span class="num" style="font-size:12.5px;font-weight:600;">{{ client.phone }}</span>
+        </div>
+
+        <!-- Message textarea -->
+        <div>
+          <div style="font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--c-text-3);margin-bottom:6px;">
+            Mensaje
+          </div>
+          <textarea id="waMsgText"
+                    class="form-control"
+                    rows="6"
+                    placeholder="Selecciona una plantilla o escribe tu mensaje…"
+                    style="min-height:120px;resize:vertical;font-size:13.5px;line-height:1.55;"></textarea>
+          <div style="display:flex;justify-content:space-between;margin-top:5px;">
+            <span id="waCharCount" style="font-size:11px;color:var(--c-text-3);">0 caracteres</span>
+            <span style="font-size:11px;color:var(--c-text-3);">máx. 1600</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="border-top:1px solid var(--c-border);padding:12px 20px;">
+        <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn-wa-send" id="waSendBtn">
+          <i class="bi bi-whatsapp"></i> Enviar mensaje
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleBrochure(checkbox) {
+  document.getElementById('brochureHidden').value = checkbox.checked ? '1' : '0';
+  document.getElementById('brochureForm').submit();
+}
+
+function changeStage(clientId, stage, btn) {
+  fetch('/clients/' + clientId + '/stage', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'stage=' + encodeURIComponent(stage),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok) return;
+    document.querySelectorAll('.stage-btn').forEach(b => {
+      b.className = 'stage-btn';
+    });
+    btn.className = 'stage-btn current stage-' + stage;
+    const badge = document.getElementById('stageBadge');
+    if (badge) {
+      badge.className = 'stage stage-' + stage;
+      badge.textContent = btn.textContent.trim();
+    }
+  });
+}
+
+document.getElementById('nextDateInput').min = new Date().toISOString().split('T')[0];
+
+// ══════════════════════════════════════════
+// WHATSAPP MODAL
+// ══════════════════════════════════════════
+{% if client.phone %}
+(function () {
+
+  // Pre-rendered templates (variables substituted server-side)
+  {% set tpl_saludo %}Hola {{ client.first_name }}, soy Henrry de Papia Technology Solutions. ¿Cómo estás? Me pongo en contacto contigo para presentarte nuestros servicios de desarrollo web y CRM. ¿Tienes unos minutos para conversar?{% endset %}
+  {% set tpl_followup %}Hola {{ client.first_name }}, espero que estés muy bien. Te escribo para dar seguimiento a nuestra conversación anterior sobre tu proyecto de {{ project_labels.get(client.project_type, client.project_type) }}. ¿Has tenido oportunidad de revisar la información que te compartí?{% endset %}
+  {% set tpl_propuesta %}Hola {{ client.first_name }}, adjunto encontrarás la propuesta formal para tu proyecto de {{ project_labels.get(client.project_type, client.project_type) }} por un valor de {{ client.total_cost | currency }}. Quedo atento a cualquier pregunta. ¡Estamos listos para comenzar cuando tú lo decidas!{% endset %}
+  {% set tpl_pago %}Hola {{ client.first_name }}, espero estés bien. Te recuerdo que tienes un saldo pendiente de {{ client.pending | currency }} por el proyecto de {{ project_labels.get(client.project_type, client.project_type) }}. ¿Podemos coordinar el pago esta semana?{% endset %}
+
+  const TEMPLATES = {
+    saludo:   {{ tpl_saludo   | tojson }},
+    followup: {{ tpl_followup | tojson }},
+    propuesta:{{ tpl_propuesta| tojson }},
+    pago:     {{ tpl_pago     | tojson }},
+    custom:   '',
+  };
+
+  const CLIENT_PHONE = {{ client.phone | tojson }};
+  const CLIENT_ID    = {{ client.id }};
+  const CLIENT_NAME  = {{ client.first_name | tojson }};
+
+  const textarea  = document.getElementById('waMsgText');
+  const sendBtn   = document.getElementById('waSendBtn');
+  const charCount = document.getElementById('waCharCount');
+
+  // ── Template chip selection ──
+  document.querySelectorAll('.wa-tpl-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.wa-tpl-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const tpl = this.dataset.tpl;
+      textarea.value = TEMPLATES[tpl] || '';
+      updateCount();
+      textarea.focus();
+    });
+  });
+
+  // ── Character counter ──
+  function updateCount() {
+    const n = textarea.value.length;
+    charCount.textContent = n + ' caracter' + (n === 1 ? '' : 'es');
+    charCount.style.color = n > 1400 ? 'var(--c-danger)' : 'var(--c-text-3)';
+  }
+  textarea.addEventListener('input', updateCount);
+
+  // ── Reset modal on open ──
+  document.getElementById('waModal').addEventListener('show.bs.modal', function () {
+    textarea.value = '';
+    charCount.textContent = '0 caracteres';
+    document.querySelectorAll('.wa-tpl-btn').forEach(b => b.classList.remove('active'));
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = '<i class="bi bi-whatsapp"></i> Enviar mensaje';
+  });
+
+  // ── Send ──
+  sendBtn.addEventListener('click', function () {
+    const msg = textarea.value.trim();
+    if (!msg) {
+      textarea.focus();
+      textarea.style.borderColor = 'var(--c-danger)';
+      setTimeout(() => textarea.style.borderColor = '', 1200);
+      return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando…';
+
+    fetch('/whatsapp/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        phone:     CLIENT_PHONE,
+        message:   msg,
+        client_id: CLIENT_ID,
+      }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('waModal')).hide();
+        // Show toast
+        showToast('Mensaje enviado a ' + CLIENT_NAME, 'success');
+        // Inject optimistic note into activity feed
+        injectActivityNote(msg);
+      } else {
+        showToast('Error al enviar: ' + (data.error || 'desconocido'), 'danger');
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="bi bi-whatsapp"></i> Enviar mensaje';
+      }
+    })
+    .catch(() => {
+      showToast('Error de conexión.', 'danger');
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="bi bi-whatsapp"></i> Enviar mensaje';
+    });
+  });
+
+  // ── Toast helper (matches .flash-msg style) ──
+  function showToast(msg, type) {
+    let wrap = document.querySelector('.flash-wrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'flash-wrap';
+      document.querySelector('.main-content').prepend(wrap);
+    }
+    const el = document.createElement('div');
+    el.className = 'flash-msg ' + type;
+    el.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+                    ${msg}
+                    <button class="flash-close" onclick="this.parentElement.remove()">
+                      <i class="bi bi-x"></i>
+                    </button>`;
+    wrap.appendChild(el);
+    setTimeout(() => {
+      el.style.transition = 'opacity .3s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 300);
+    }, 4000);
+  }
+
+  // ── Optimistic note in activity feed ──
+  function injectActivityNote(text) {
+    const feed = document.querySelector('.activity-feed');
+    if (!feed) return;
+
+    const now = new Date();
+    const ts  = now.getFullYear() + '-' +
+                String(now.getMonth()+1).padStart(2,'0') + '-' +
+                String(now.getDate()).padStart(2,'0') + ' ' +
+                String(now.getHours()).padStart(2,'0') + ':' +
+                String(now.getMinutes()).padStart(2,'0');
+
+    const item = document.createElement('div');
+    item.className = 'activity-item';
+    item.innerHTML = `
+      <div class="act-icon act-whatsapp"><i class="bi bi-whatsapp"></i></div>
+      <div class="act-body">
+        <div class="act-meta">
+          <span class="act-type">WhatsApp</span>
+          <span class="act-date num">${ts}</span>
+        </div>
+        <div class="act-text">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      </div>`;
+    feed.insertBefore(item, feed.firstChild);
+
+    // Remove the "no activity" empty state if present
+    const empty = feed.closest('.section-card').querySelector('.empty');
+    if (empty) empty.remove();
+
+    // Update counter badge
+    const badge = feed.closest('.section-card').querySelector('.section-count');
+    if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+  }
+
+})();
+{% endif %}
+</script>
+{% endblock %}

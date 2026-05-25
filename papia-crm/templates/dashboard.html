@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Dashboard</h1>
+    <p class="pg-sub">Papia Technology Solutions &mdash; resumen general</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus"></i> Nuevo cliente
+    </a>
+  </div>
+</div>
+
+<!-- ── KPI STRIP ── -->
+<div class="kpi-strip">
+
+  <div class="kpi-item">
+    <div class="kpi-label">Total leads</div>
+    <div class="kpi-value">{{ stats.total_leads }}</div>
+    <div class="kpi-meta">
+      <span class="kpi-dot" style="background:#60A5FA;"></span>
+      todos los contactos
+    </div>
+  </div>
+
+  <div class="kpi-item">
+    <div class="kpi-label">Clientes activos</div>
+    <div class="kpi-value" style="color:var(--c-success);">{{ stats.active_clients }}</div>
+    <div class="kpi-meta">
+      <span class="kpi-dot" style="background:var(--c-success);"></span>
+      activo + recurrente
+    </div>
+  </div>
+
+  <div class="kpi-item">
+    <div class="kpi-label">Propuestas enviadas</div>
+    <div class="kpi-value" style="color:var(--c-warning);">{{ stats.pending_proposals }}</div>
+    <div class="kpi-meta">
+      <span class="kpi-dot" style="background:var(--c-warning);"></span>
+      esperando respuesta
+    </div>
+  </div>
+
+  <div class="kpi-item">
+    <div class="kpi-label">Follow-ups hoy</div>
+    <div class="kpi-value" style="color:{% if todays_followups %}var(--c-danger){% else %}var(--c-text){% endif %};">
+      {{ todays_followups | length }}
+    </div>
+    <div class="kpi-meta">
+      <span class="kpi-dot" style="background:{% if todays_followups %}var(--c-danger){% else %}var(--c-border-2){% endif %};"></span>
+      {% if todays_followups %}requieren atención{% else %}todo al día{% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ── FINANCE STRIP ── -->
+<div class="fin-strip">
+
+  <div class="fin-item">
+    <div class="fin-label">Facturado</div>
+    <div class="fin-value num">{{ stats.total_billed | currency }}</div>
+    <div class="fin-bar">
+      <div class="fin-bar-fill" style="width:100%;background:var(--c-border-2);"></div>
+    </div>
+  </div>
+
+  <div class="fin-item">
+    <div class="fin-label">Cobrado</div>
+    <div class="fin-value num" style="color:var(--c-success);">{{ stats.total_collected | currency }}</div>
+    {% if stats.total_billed > 0 %}
+      {% set pct = ((stats.total_collected / stats.total_billed) * 100) | round(1) %}
+    {% else %}
+      {% set pct = 0 %}
+    {% endif %}
+    <div class="fin-bar">
+      <div class="fin-bar-fill" style="width:{{ pct }}%;background:var(--c-success);"></div>
+    </div>
+  </div>
+
+  <div class="fin-item">
+    <div class="fin-label">Pendiente por cobrar</div>
+    <div class="fin-value num" style="color:var(--c-danger);">{{ stats.total_pending | currency }}</div>
+    {% if stats.total_billed > 0 %}
+      {% set ppct = ((stats.total_pending / stats.total_billed) * 100) | round(1) %}
+    {% else %}
+      {% set ppct = 0 %}
+    {% endif %}
+    <div class="fin-bar">
+      <div class="fin-bar-fill" style="width:{{ ppct }}%;background:var(--c-danger);"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── TODAY'S FOLLOW-UPS ── -->
+<div class="section-card">
+  <div class="section-head">
+    <span class="section-head-label">Follow-ups de hoy</span>
+    {% if todays_followups %}
+      <span class="section-count">{{ todays_followups | length }}</span>
+    {% endif %}
+  </div>
+
+  {% if todays_followups %}
+    <div class="fu-list">
+      {% for fu in todays_followups %}
+      <div class="fu-row">
+        <div class="fu-avatar">
+          {{ fu.first_name[0] | upper }}{{ fu.last_name[0] | upper }}
+        </div>
+        <div class="fu-body">
+          <div class="fu-name">{{ fu.first_name }} {{ fu.last_name }}</div>
+          <div class="fu-summary">{{ fu.summary[:72] }}{% if fu.summary | length > 72 %}…{% endif %}</div>
+        </div>
+        <div class="fu-method">
+          {% set icons = {'phone':'telephone','email':'envelope','whatsapp':'whatsapp','meeting':'camera-video','other':'three-dots'} %}
+          <i class="bi bi-{{ icons.get(fu.method, 'chat') }}"></i>
+          {{ fu.method | method_label }}
+        </div>
+        <a href="{{ url_for('clients.detail', client_id=fu.client_id) }}" class="fu-link">
+          Ver <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty">
+      <i class="bi bi-check2-all"></i>
+      <p>Sin follow-ups pendientes para hoy</p>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
