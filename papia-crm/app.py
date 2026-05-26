@@ -2,10 +2,11 @@ import os
 from datetime import timedelta
 from flask import Flask, render_template, session, redirect, url_for, request
 
-# Load .env before anything else
+# Load .env from the same folder as this file, regardless of cwd
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    from pathlib import Path
+    load_dotenv(Path(__file__).parent / '.env', override=True)
 except ImportError:
     pass
 

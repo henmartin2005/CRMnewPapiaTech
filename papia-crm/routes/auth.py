@@ -24,8 +24,8 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
 
-        admin_user = os.getenv('ADMIN_USERNAME', 'admin')
-        admin_pass = os.getenv('ADMIN_PASSWORD', '')
+        admin_user = os.getenv('ADMIN_USERNAME', 'admin').strip().lstrip('﻿')
+        admin_pass = os.getenv('ADMIN_PASSWORD', '').strip()
 
         if username == admin_user and password == admin_pass and admin_pass:
             session.permanent = True
