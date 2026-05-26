@@ -23,6 +23,7 @@ NOTE_TYPES = [
     ('meeting', 'Reunión'),
     ('email', 'Email'),
     ('whatsapp', 'WhatsApp'),
+    ('website_lead', 'Lead Web'),
 ]
 
 FOLLOW_UP_METHODS = [

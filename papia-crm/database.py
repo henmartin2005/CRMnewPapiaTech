@@ -81,4 +81,12 @@ def init_db():
     """)
 
     conn.commit()
+
+    # Migrations: add columns introduced after initial deploy
+    try:
+        conn.execute("ALTER TABLE clients ADD COLUMN source TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass  # column already exists
+
     conn.close()

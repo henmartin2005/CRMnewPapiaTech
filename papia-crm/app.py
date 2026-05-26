@@ -12,17 +12,26 @@ except ImportError:
 
 from database import init_db
 from models.client import get_dashboard_stats, get_todays_followups, FOLLOW_UP_METHODS
+from flask_cors import CORS
 from routes.clients import clients_bp
 from routes.pipeline import pipeline_bp
 from routes.followups import followups_bp
 from routes.whatsapp import whatsapp_bp, get_unread_count
 from routes.auth import auth_bp
+from routes.leads import leads_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
 app.permanent_session_lifetime = timedelta(days=7)
 
+# CORS solo para el endpoint público de leads
+CORS(app, resources={r"/api/*": {"origins": [
+    "https://www.papiatech.com",
+    "https://papiatech.com",
+]}})
+
 app.register_blueprint(auth_bp)
+app.register_blueprint(leads_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
@@ -34,6 +43,8 @@ app.register_blueprint(whatsapp_bp)
 def require_login():
     open_endpoints = {'auth.login', 'auth.logout', 'static', 'whatsapp.webhook'}
     if request.endpoint in open_endpoints:
+        return
+    if request.path.startswith('/api/'):
         return
     if not session.get('logged_in'):
         return redirect(url_for('auth.login', next=request.full_path))
