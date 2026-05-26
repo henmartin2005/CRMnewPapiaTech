@@ -132,12 +132,17 @@
   <!-- Footer -->
   <div class="sb-footer">
     <div class="sb-user">
-      <div class="sb-avatar">A</div>
-      <span class="sb-user-name">Admin</span>
+      <div class="sb-avatar">{{ (session.username or 'A')[0] | upper }}</div>
+      <span class="sb-user-name">{{ session.username or 'Admin' }}</span>
     </div>
-    <button class="sb-theme-btn" id="themeToggle" title="Cambiar tema" aria-label="Toggle sidebar theme">
-      <i class="bi bi-circle-half" id="themeIcon"></i>
-    </button>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button class="sb-theme-btn" id="themeToggle" title="Cambiar tema" aria-label="Toggle sidebar theme">
+        <i class="bi bi-circle-half" id="themeIcon"></i>
+      </button>
+      <a href="{{ url_for('auth.logout') }}" class="sb-theme-btn" title="Cerrar sesión" aria-label="Cerrar sesión" style="text-decoration:none;">
+        <i class="bi bi-box-arrow-right"></i>
+      </a>
+    </div>
   </div>
 
 </nav>

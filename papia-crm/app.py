@@ -1,5 +1,6 @@
 import os
-from flask import Flask, render_template, g
+from datetime import timedelta
+from flask import Flask, render_template, session, redirect, url_for, request
 
 # Load .env before anything else
 try:
@@ -14,14 +15,27 @@ from routes.clients import clients_bp
 from routes.pipeline import pipeline_bp
 from routes.followups import followups_bp
 from routes.whatsapp import whatsapp_bp, get_unread_count
+from routes.auth import auth_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
+app.permanent_session_lifetime = timedelta(days=7)
 
+app.register_blueprint(auth_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
 app.register_blueprint(whatsapp_bp)
+
+
+# ── Auth guard: protect every route except login, logout, static, and webhook ──
+@app.before_request
+def require_login():
+    open_endpoints = {'auth.login', 'auth.logout', 'static', 'whatsapp.webhook'}
+    if request.endpoint in open_endpoints:
+        return
+    if not session.get('logged_in'):
+        return redirect(url_for('auth.login', next=request.full_path))
 
 
 # ── Context processor: unread WhatsApp badge available in every template ──

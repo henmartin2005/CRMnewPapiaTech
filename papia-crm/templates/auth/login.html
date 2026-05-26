@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acceso — Papia CRM</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Geist', sans-serif;
+      background: #0B0E14;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .login-logo {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 32px;
+    }
+
+    .login-logo img {
+      height: 32px;
+      object-fit: contain;
+    }
+
+    .login-card {
+      background: #13171F;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      padding: 32px;
+    }
+
+    .login-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #F5F0EB;
+      margin-bottom: 4px;
+    }
+
+    .login-sub {
+      font-size: 13px;
+      color: rgba(255,255,255,.4);
+      margin-bottom: 28px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255,255,255,.5);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap i {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(255,255,255,.25);
+      font-size: 14px;
+      pointer-events: none;
+    }
+
+    .field input {
+      width: 100%;
+      height: 40px;
+      padding: 0 12px 0 34px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      color: #F5F0EB;
+      font-family: 'Geist', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .14s ease, box-shadow .14s ease;
+    }
+
+    .field input::placeholder { color: rgba(255,255,255,.2); }
+
+    .field input:focus {
+      border-color: #2A5BFF;
+      box-shadow: 0 0 0 3px rgba(42,91,255,.18);
+      background: rgba(42,91,255,.06);
+    }
+
+    .error-msg {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(220,38,38,.12);
+      border: 1px solid rgba(220,38,38,.3);
+      border-radius: 8px;
+      color: #F87171;
+      font-size: 13px;
+      padding: 9px 12px;
+      margin-bottom: 18px;
+    }
+
+    .btn-login {
+      width: 100%;
+      height: 40px;
+      background: #2A5BFF;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'Geist', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .14s ease, transform .1s ease;
+      margin-top: 4px;
+    }
+
+    .btn-login:hover { background: #1A4AEF; }
+    .btn-login:active { transform: scale(.98); }
+
+    .login-footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: rgba(255,255,255,.18);
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-wrap">
+
+  <div class="login-logo">
+    <img src="https://www.papiatech.com/assets/logo-papiatech-white-CnoB7BBt.png" alt="Papia Tech" />
+  </div>
+
+  <div class="login-card">
+    <div class="login-title">Bienvenido</div>
+    <div class="login-sub">Ingresa tus credenciales para continuar</div>
+
+    {% if error %}
+      <div class="error-msg">
+        <i class="bi bi-exclamation-circle-fill"></i>
+        {{ error }}
+      </div>
+    {% endif %}
+
+    <form method="POST" autocomplete="on">
+      <div class="field">
+        <label for="username">Usuario</label>
+        <div class="input-wrap">
+          <i class="bi bi-person"></i>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="admin"
+            autocomplete="username"
+            required
+            autofocus
+          />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <div class="input-wrap">
+          <i class="bi bi-lock"></i>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+      </div>
+
+      <button type="submit" class="btn-login">Ingresar</button>
+    </form>
+  </div>
+
+  <div class="login-footer">Papia Technology Solutions LLC &copy; 2025</div>
+
+</div>
+
+</body>
+</html>
