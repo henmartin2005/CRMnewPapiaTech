@@ -19,6 +19,7 @@ from routes.followups import followups_bp
 from routes.whatsapp import whatsapp_bp, get_unread_count
 from routes.auth import auth_bp
 from routes.leads import leads_bp
+from routes.emails import emails_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -32,6 +33,7 @@ CORS(app, resources={r"/api/*": {"origins": [
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(leads_bp)
+app.register_blueprint(emails_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)

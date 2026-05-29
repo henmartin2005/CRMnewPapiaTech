@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block title %}Emails{% endblock %}
+
+{% block head %}
+<style>
+.main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.em-shell { display: flex; flex: 1; overflow: hidden; height: 100%; }
+
+/* ── LEFT PANEL ── */
+.em-left {
+  width: 300px; flex-shrink: 0;
+  border-right: 1px solid var(--c-border);
+  display: flex; flex-direction: column;
+  background: var(--c-surface);
+}
+
+.em-left-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+
+.em-left-title {
+  font-size: 13px; font-weight: 700; color: var(--c-text);
+  display: flex; align-items: center; gap: 7px;
+}
+.em-left-title i { color: var(--c-accent); font-size: 15px; }
+
+.em-convos { flex: 1; overflow-y: auto; }
+
+.em-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--c-border);
+  text-decoration: none; color: inherit;
+  transition: background var(--t);
+  cursor: pointer;
+}
+.em-item:hover { background: var(--c-surface-2); }
+.em-item.active { background: rgba(42,91,255,.06); border-right: 2px solid var(--c-accent); }
+
+.em-item-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, #2A5BFF, #8B5CF6);
+  color: #fff; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+.em-item-body { flex: 1; min-width: 0; }
+
+.em-item-name {
+  font-size: 13px; font-weight: 600; color: var(--c-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.em-item-subject {
+  font-size: 11.5px; color: var(--c-text-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.em-item-time { font-size: 10.5px; color: var(--c-text-3); white-space: nowrap; font-family: 'Geist Mono', monospace; }
+
+.em-empty-left {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 8px;
+  padding: 40px 20px; color: var(--c-text-3); text-align: center;
+}
+.em-empty-left i { font-size: 28px; opacity: .35; }
+.em-empty-left p { font-size: 12.5px; margin: 0; }
+
+/* ── RIGHT PANEL ── */
+.em-right {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--c-bg); min-width: 0;
+}
+
+.em-no-chat {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; color: var(--c-text-3);
+}
+.em-no-chat i { font-size: 40px; opacity: .2; }
+.em-no-chat p { font-size: 13px; margin: 0; }
+
+/* setup banner */
+.em-setup {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+  padding: 40px; text-align: center;
+}
+.em-setup i { font-size: 48px; color: var(--c-border-2); }
+.em-setup h3 { font-size: 16px; font-weight: 700; color: var(--c-text); margin: 0; }
+.em-setup p  { font-size: 13px; color: var(--c-text-3); margin: 0; max-width: 380px; }
+
+/* thread header */
+.em-chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0; gap: 12px;
+}
+.em-chat-name { font-size: 14px; font-weight: 700; color: var(--c-text); }
+.em-chat-sub  { font-size: 11.5px; color: var(--c-text-3); }
+.em-chat-actions { display: flex; gap: 6px; align-items: center; }
+
+/* thread */
+.em-thread {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.em-bubble {
+  max-width: 74%; border-radius: 10px; padding: 11px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.em-bubble.sent {
+  align-self: flex-end;
+  background: rgba(42,91,255,.07);
+  border: 1px solid rgba(42,91,255,.14);
+}
+.em-bubble.received {
+  align-self: flex-start;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+}
+
+.em-bubble-subject {
+  font-size: 11.5px; font-weight: 700; color: var(--c-text-2);
+  padding-bottom: 6px; border-bottom: 1px solid var(--c-border);
+}
+.em-bubble-body { font-size: 13px; color: var(--c-text); white-space: pre-wrap; line-height: 1.55; }
+.em-bubble-meta {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: 10.5px; color: var(--c-text-3); font-family: 'Geist Mono', monospace;
+}
+.em-bubble-meta i { font-size: 12px; color: var(--c-accent); }
+
+/* scrollbar */
+.em-thread::-webkit-scrollbar, .em-convos::-webkit-scrollbar { width: 4px; }
+.em-thread::-webkit-scrollbar-track, .em-convos::-webkit-scrollbar-track { background: transparent; }
+.em-thread::-webkit-scrollbar-thumb, .em-convos::-webkit-scrollbar-thumb { background: var(--c-border-2); border-radius: 99px; }
+
+/* action link button */
+.em-link-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 28px; padding: 0 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border); background: var(--c-surface);
+  color: var(--c-text-2); font-family: 'Geist', sans-serif;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  text-decoration: none; transition: border-color var(--t), color var(--t);
+}
+.em-link-btn:hover { border-color: var(--c-accent); color: var(--c-accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="em-shell">
+
+  <!-- ══ LEFT: list ══ -->
+  <div class="em-left">
+    <div class="em-left-header">
+      <div class="em-left-title">
+        <i class="bi bi-envelope"></i> Emails
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <a href="{{ url_for('emails.templates_page') }}" class="em-link-btn" title="Plantillas">
+          <i class="bi bi-file-text"></i>
+        </a>
+        {% if connected %}
+        <button class="btn-wa" style="border-color:var(--c-accent);color:var(--c-accent);"
+                data-bs-toggle="modal" data-bs-target="#composeModal">
+          <i class="bi bi-pencil-square"></i> Nuevo
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="em-convos">
+      {% if not connected %}
+        <div class="em-empty-left">
+          <i class="bi bi-envelope-slash"></i>
+          <p>Gmail no conectado</p>
+          <a href="{{ url_for('emails.gmail_auth') }}" class="btn-wa" style="margin-top:4px;border-color:var(--c-accent);color:var(--c-accent);">
+            <i class="bi bi-google"></i> Conectar
+          </a>
+        </div>
+      {% elif not conversations %}
+        <div class="em-empty-left">
+          <i class="bi bi-inbox"></i>
+          <p>Sin emails enviados aún</p>
+          <p style="font-size:11px;">Redacta el primero con el botón "Nuevo"</p>
+        </div>
+      {% else %}
+        {% for conv in conversations %}
+          {% set initials = ((conv.first_name[0] if conv.first_name else '') ~ (conv.last_name[0] if conv.last_name else '')) | upper %}
+          <a href="{{ url_for('emails.index', client_id=conv.client_id) }}"
+             class="em-item {% if active_id == conv.client_id %}active{% endif %}">
+            <div class="em-item-avatar">{{ initials or '?' }}</div>
+            <div class="em-item-body">
+              <div class="em-item-name">{{ conv.first_name }} {{ conv.last_name }}</div>
+              <div class="em-item-subject">{{ conv.last_subject }}</div>
+            </div>
+            <div class="em-item-time">{{ conv.last_at[11:16] if conv.last_at else '' }}</div>
+          </a>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ══ RIGHT: thread ══ -->
+  <div class="em-right">
+
+    {% if not connected %}
+      <!-- Gmail not connected — setup instructions -->
+      <div class="em-setup">
+        <i class="bi bi-envelope"></i>
+        <h3>Conecta tu cuenta de Gmail</h3>
+        <p>Para enviar emails directamente desde el CRM necesitas conectar tu cuenta de Google una sola vez.</p>
+        <a href="{{ url_for('emails.gmail_auth') }}" class="btn-wa-send" style="text-decoration:none;">
+          <i class="bi bi-google"></i> Conectar Gmail
+        </a>
+        <div style="margin-top:12px;font-size:11.5px;color:var(--c-text-3);max-width:340px;line-height:1.6;">
+          Necesitas tener <strong>GMAIL_CLIENT_ID</strong>, <strong>GMAIL_CLIENT_SECRET</strong>
+          y <strong>GMAIL_REDIRECT_URI</strong> configurados en tu archivo <code>.env</code>.
+        </div>
+      </div>
+
+    {% elif not active_client %}
+      <!-- No thread selected -->
+      <div class="em-no-chat">
+        <i class="bi bi-envelope-open"></i>
+        <p>Selecciona una conversación</p>
+        <p style="font-size:12px;">o <button class="em-link-btn" data-bs-toggle="modal" data-bs-target="#composeModal"><i class="bi bi-pencil-square"></i> redacta un nuevo email</button></p>
+      </div>
+
+    {% else %}
+      <!-- Thread header -->
+      <div class="em-chat-header">
+        <div>
+          <div class="em-chat-name">{{ active_client.first_name }} {{ active_client.last_name }}</div>
+          <div class="em-chat-sub">{{ active_client.email }}</div>
+        </div>
+        <div class="em-chat-actions">
+          <a href="{{ url_for('clients.detail', client_id=active_client.id) }}" class="em-link-btn">
+            <i class="bi bi-person"></i> Ver perfil
+          </a>
+          <button class="btn-wa-send" style="height:28px;font-size:12px;padding:0 12px;"
+                  onclick="openReply()">
+            <i class="bi bi-reply"></i> Responder
+          </button>
+        </div>
+      </div>
+
+      <!-- Thread -->
+      <div class="em-thread" id="emailThread">
+        {% if not active_thread %}
+          <div style="text-align:center;padding:40px;color:var(--c-text-3);font-size:13px;">
+            Sin emails con este cliente aún.
+          </div>
+        {% endif %}
+        {% for em in active_thread %}
+          <div class="em-bubble {{ em.direction }}">
+            <div class="em-bubble-subject">
+              <i class="bi bi-{% if em.direction == 'sent' %}send{% else %}inbox{% endif %}" style="font-size:11px;margin-right:4px;"></i>
+              {{ em.subject }}
+            </div>
+            <div class="em-bubble-body">{{ em.body }}</div>
+            <div class="em-bubble-meta">
+              <span>{% if em.direction == 'sent' %}Tú → {{ em.to_email }}{% else %}{{ em.to_email }}{% endif %}</span>
+              <span>{{ em.created_at[:16] }}</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<!-- ══ COMPOSE MODAL ══ -->
+{% if connected %}
+<div class="modal fade" id="composeModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2" style="color:var(--c-accent);"></i>Nuevo Email</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+
+        <!-- Para -->
+        <div>
+          <label class="form-label">Para</label>
+          <select class="form-select" id="composeClient" onchange="onClientChange()">
+            <option value="">Selecciona un cliente…</option>
+            {% for cl in all_clients %}
+              <option value="{{ cl.id }}"
+                      data-email="{{ cl.email }}"
+                      data-name="{{ cl.first_name }}"
+                      {% if active_client and active_client.id == cl.id %}selected{% endif %}>
+                {{ cl.first_name }} {{ cl.last_name }} — {{ cl.email }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Plantillas -->
+        {% if templates %}
+        <div>
+          <label class="form-label">Plantilla</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;" id="tplBtns">
+            {% for tpl in templates %}
+              <button class="wa-tpl-btn" onclick="applyTemplate({{ tpl.id }}, event)">{{ tpl.name }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Asunto -->
+        <div>
+          <label class="form-label">Asunto</label>
+          <input type="text" class="form-control" id="composeSubject" placeholder="Asunto del email" />
+        </div>
+
+        <!-- Cuerpo -->
+        <div>
+          <label class="form-label">Mensaje</label>
+          <textarea class="form-control" id="composeBody" rows="9"
+                    placeholder="Escribe tu mensaje aquí…"
+                    style="resize:vertical;min-height:140px;"></textarea>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="em-link-btn" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-wa-send" id="sendEmailBtn" onclick="sendEmail()">
+          <i class="bi bi-send"></i> Enviar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TEMPLATES = {{ templates | tojson }};
+const TPL_MAP   = {};
+TEMPLATES.forEach(t => TPL_MAP[t.id] = t);
+
+{% if active_client %}
+// Pre-select client when viewing a thread
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('composeClient');
+  if (sel) sel.value = '{{ active_client.id }}';
+});
+{% endif %}
+
+function openReply() {
+  const modal = new bootstrap.Modal(document.getElementById('composeModal'));
+  modal.show();
+}
+
+function onClientChange() {
+  // Clear template active states when client changes
+  document.querySelectorAll('#tplBtns .wa-tpl-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('composeSubject').value = '';
+  document.getElementById('composeBody').value    = '';
+}
+
+function applyTemplate(id, event) {
+  const tpl = TPL_MAP[id];
+  if (!tpl) return;
+
+  const sel  = document.getElementById('composeClient');
+  const opt  = sel.options[sel.selectedIndex];
+  const name = opt && opt.dataset.name ? opt.dataset.name : '{nombre}';
+
+  const replace = s => s.replace(/\{nombre\}/g, name);
+
+  document.getElementById('composeSubject').value = replace(tpl.subject);
+  document.getElementById('composeBody').value    = replace(tpl.body);
+
+  document.querySelectorAll('#tplBtns .wa-tpl-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+async function sendEmail() {
+  const btn       = document.getElementById('sendEmailBtn');
+  const sel       = document.getElementById('composeClient');
+  const opt       = sel.options[sel.selectedIndex];
+  const clientId  = sel.value || null;
+  const toEmail   = opt && opt.dataset.email ? opt.dataset.email : '';
+  const subject   = document.getElementById('composeSubject').value.trim();
+  const body      = document.getElementById('composeBody').value.trim();
+
+  if (!toEmail)  { alert('Selecciona un cliente.'); return; }
+  if (!subject)  { alert('Escribe un asunto.'); return; }
+  if (!body)     { alert('Escribe un mensaje.'); return; }
+
+  btn.disabled     = true;
+  btn.innerHTML    = '<i class="bi bi-hourglass-split"></i> Enviando…';
+
+  try {
+    const res  = await fetch('/emails/send', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ client_id: clientId, to_email: toEmail, subject, body }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      bootstrap.Modal.getInstance(document.getElementById('composeModal')).hide();
+      // Optimistic bubble
+      if (clientId) {
+        appendBubble(subject, body, toEmail);
+      }
+      document.getElementById('composeSubject').value = '';
+      document.getElementById('composeBody').value    = '';
+      document.querySelectorAll('#tplBtns .wa-tpl-btn').forEach(b => b.classList.remove('active'));
+      // Redirect to thread if client selected
+      if (clientId) {
+        setTimeout(() => { window.location.href = `/emails?client_id=${clientId}`; }, 800);
+      }
+    } else {
+      alert('Error: ' + (data.error || 'desconocido'));
+    }
+  } catch {
+    alert('Error de conexión.');
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="bi bi-send"></i> Enviar';
+  }
+}
+
+function appendBubble(subject, body, toEmail) {
+  const thread = document.getElementById('emailThread');
+  if (!thread) return;
+  const now  = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const div  = document.createElement('div');
+  div.className = 'em-bubble sent';
+  div.innerHTML = `
+    <div class="em-bubble-subject"><i class="bi bi-send" style="font-size:11px;margin-right:4px;"></i>${escHtml(subject)}</div>
+    <div class="em-bubble-body">${escHtml(body)}</div>
+    <div class="em-bubble-meta"><span>Tú → ${escHtml(toEmail)}</span><span>${now}</span></div>`;
+  thread.appendChild(div);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+</script>
+{% endblock %}

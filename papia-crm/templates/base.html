@@ -76,10 +76,10 @@
     </li>
 
     <li>
-      <a href="#" class="sb-link sb-disabled">
+      <a href="{{ url_for('emails.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('emails.') %}active{% endif %}">
         <i class="bi bi-envelope"></i>
         <span class="sb-label">Emails</span>
-        <span class="sb-pill">F2</span>
       </a>
     </li>
 

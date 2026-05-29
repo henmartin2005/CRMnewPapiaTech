@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Plantillas de Email{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <ul class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('emails.index') }}">Emails</a></li>
+      <li class="breadcrumb-item active">Plantillas</li>
+    </ul>
+    <h1 class="pg-title">Plantillas de Email</h1>
+  </div>
+  <div class="pg-actions">
+    <button class="btn-md btn-primary" onclick="openNew()">
+      <i class="bi bi-plus-lg"></i> Nueva plantilla
+    </button>
+  </div>
+</div>
+
+<!-- Templates table -->
+<div class="section-card" style="margin-top:0;">
+  {% if templates %}
+  <table class="crm-table">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Asunto</th>
+        <th style="width:90px;">Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="tplTableBody">
+      {% for tpl in templates %}
+      <tr id="row-{{ tpl.id }}">
+        <td style="font-weight:600;">{{ tpl.name }}</td>
+        <td style="color:var(--c-text-2);">{{ tpl.subject }}</td>
+        <td>
+          <div style="display:flex;gap:4px;">
+            <button class="btn-icon-xs" title="Editar" onclick="openEdit({{ tpl | tojson }})">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn-icon-xs" title="Eliminar"
+                    style="color:var(--c-danger);"
+                    onclick="deleteTpl({{ tpl.id }}, '{{ tpl.name }}')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:var(--c-text-3);">
+    <i class="bi bi-file-text" style="font-size:32px;opacity:.3;display:block;margin-bottom:8px;"></i>
+    No tienes plantillas aún. Crea la primera con el botón "Nueva plantilla".
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal: New / Edit -->
+<div class="modal fade" id="tplModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tplModalTitle">Nueva plantilla</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+        <input type="hidden" id="tplId" value="" />
+
+        <div>
+          <label class="form-label">Nombre de la plantilla</label>
+          <input type="text" class="form-control" id="tplName" placeholder="Ej: Saludo inicial" />
+        </div>
+        <div>
+          <label class="form-label">Asunto</label>
+          <input type="text" class="form-control" id="tplSubject"
+                 placeholder="Ej: Hola {nombre}, bienvenido a Papia Tech" />
+        </div>
+        <div>
+          <label class="form-label">Cuerpo del mensaje</label>
+          <textarea class="form-control" id="tplBody" rows="10"
+                    style="resize:vertical;min-height:180px;"
+                    placeholder="Hola {nombre},
+
+Soy Henrry de Papia Technology Solutions..."></textarea>
+          <div style="font-size:11.5px;color:var(--c-text-3);margin-top:6px;">
+            Variables disponibles: <code>{nombre}</code>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="em-link-btn" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-wa-send" id="tplSaveBtn" onclick="saveTemplate()">
+          <i class="bi bi-check-lg"></i> Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openNew() {
+  document.getElementById('tplId').value      = '';
+  document.getElementById('tplName').value    = '';
+  document.getElementById('tplSubject').value = '';
+  document.getElementById('tplBody').value    = '';
+  document.getElementById('tplModalTitle').textContent = 'Nueva plantilla';
+  new bootstrap.Modal(document.getElementById('tplModal')).show();
+}
+
+function openEdit(tpl) {
+  document.getElementById('tplId').value      = tpl.id;
+  document.getElementById('tplName').value    = tpl.name;
+  document.getElementById('tplSubject').value = tpl.subject;
+  document.getElementById('tplBody').value    = tpl.body;
+  document.getElementById('tplModalTitle').textContent = 'Editar plantilla';
+  new bootstrap.Modal(document.getElementById('tplModal')).show();
+}
+
+async function saveTemplate() {
+  const id      = document.getElementById('tplId').value;
+  const name    = document.getElementById('tplName').value.trim();
+  const subject = document.getElementById('tplSubject').value.trim();
+  const body    = document.getElementById('tplBody').value.trim();
+
+  if (!name || !subject || !body) { alert('Completa todos los campos.'); return; }
+
+  const btn = document.getElementById('tplSaveBtn');
+  btn.disabled  = true;
+
+  const url    = id ? `/emails/templates/${id}` : '/emails/templates';
+  const method = id ? 'PUT' : 'POST';
+
+  try {
+    const res  = await fetch(url, {
+      method,
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ name, subject, body }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      bootstrap.Modal.getInstance(document.getElementById('tplModal')).hide();
+      window.location.reload();
+    } else {
+      alert('Error: ' + data.error);
+    }
+  } catch {
+    alert('Error de conexión.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteTpl(id, name) {
+  if (!confirm(`¿Eliminar la plantilla "${name}"?`)) return;
+
+  try {
+    const res  = await fetch(`/emails/templates/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      const row = document.getElementById(`row-${id}`);
+      if (row) row.remove();
+    } else {
+      alert('Error al eliminar.');
+    }
+  } catch {
+    alert('Error de conexión.');
+  }
+}
+</script>
+
+<style>
+.em-link-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 28px; padding: 0 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border); background: var(--c-surface);
+  color: var(--c-text-2); font-family: 'Geist', sans-serif;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  text-decoration: none; transition: border-color var(--t), color var(--t);
+}
+.em-link-btn:hover { border-color: var(--c-accent); color: var(--c-accent); }
+</style>
+{% endblock %}
