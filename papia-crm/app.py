@@ -34,6 +34,9 @@ CORS(app, resources={r"/api/*": {"origins": [
 app.register_blueprint(auth_bp)
 app.register_blueprint(leads_bp)
 app.register_blueprint(emails_bp)
+
+# Init DB on every startup (safe: all statements use CREATE IF NOT EXISTS)
+init_db()
 app.register_blueprint(clients_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
