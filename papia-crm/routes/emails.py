@@ -4,7 +4,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from flask import (Blueprint, request, jsonify, render_template,
-                   redirect, url_for, flash)
+                   redirect, url_for, flash, session)
 from database import get_db
 
 emails_bp = Blueprint('emails', __name__)
@@ -153,11 +153,13 @@ def gmail_auth():
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES)
     flow.redirect_uri = os.getenv('GMAIL_REDIRECT_URI',
                                   url_for('emails.oauth2callback', _external=True))
-    auth_url, _ = flow.authorization_url(
+    auth_url, state = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true',
         prompt='consent',
     )
+    session['oauth_state']    = state
+    session['code_verifier']  = flow.code_verifier
     return redirect(auth_url)
 
 
@@ -171,9 +173,11 @@ def oauth2callback():
 
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-    flow = Flow.from_client_config(_client_config(), scopes=SCOPES)
-    flow.redirect_uri = os.getenv('GMAIL_REDIRECT_URI',
-                                  url_for('emails.oauth2callback', _external=True))
+    flow = Flow.from_client_config(_client_config(), scopes=SCOPES,
+                                   state=session.get('oauth_state'))
+    flow.redirect_uri    = os.getenv('GMAIL_REDIRECT_URI',
+                                     url_for('emails.oauth2callback', _external=True))
+    flow.code_verifier   = session.get('code_verifier')
     try:
         flow.fetch_token(authorization_response=request.url)
     except Exception as exc:
