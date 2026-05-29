@@ -131,7 +131,7 @@ def _all_templates():
     db   = get_db()
     rows = db.execute("SELECT * FROM email_templates ORDER BY id").fetchall()
     db.close()
-    return rows
+    return [dict(r) for r in rows]
 
 
 # ── OAuth2 ────────────────────────────────────────────────────────────────────
