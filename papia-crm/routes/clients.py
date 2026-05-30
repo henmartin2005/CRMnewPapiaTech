@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from models.client import (
     get_all_clients, get_client, create_client, update_client,
@@ -72,6 +74,7 @@ def detail(client_id):
         stage_labels=dict(PIPELINE_STAGES),
         stage_colors=STAGE_COLORS,
         project_labels=dict(PROJECT_TYPES),
+        now_str=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     )
 
 
@@ -133,13 +136,23 @@ def add_client_followup(client_id):
     method = request.form.get('method', 'phone')
     summary = request.form.get('summary', '').strip()
     result = request.form.get('result', '').strip()
-    next_date = request.form.get('next_date', '').strip()
+    reminder_at = request.form.get('reminder_at', '').strip()
+    reminder_comment = request.form.get('reminder_comment', '').strip()
 
     if not summary:
-        flash('El resumen del follow-up no puede estar vacío.', 'danger')
+        flash('La tarea del recordatorio no puede estar vacía.', 'danger')
+    elif not reminder_at:
+        flash('Selecciona una fecha y hora exacta para el recordatorio.', 'danger')
     else:
-        add_followup(client_id, method, summary, result, next_date or None)
-        flash('Follow-up registrado.', 'success')
+        add_followup(
+            client_id,
+            method,
+            summary,
+            result,
+            next_at=reminder_at,
+            reminder_comment=reminder_comment,
+        )
+        flash('Recordatorio creado.', 'success')
     return redirect(url_for('clients.detail', client_id=client_id))
 
 

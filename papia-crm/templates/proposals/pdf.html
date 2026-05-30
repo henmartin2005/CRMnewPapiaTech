@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ proposal.title }} - Proposal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    @page { size: letter; margin: 0.55in; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Geist, Arial, sans-serif; color: #111827; background: #fff; font-size: 12px; line-height: 1.45; }
+    .top { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom: 22px; border-bottom: 2px solid #2563EB; }
+    .mark { width:46px; height:46px; border-radius:10px; background:#2563EB; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; letter-spacing:.04em; margin-bottom:8px; }
+    .brand { font-size: 17px; font-weight: 800; }
+    .muted { color:#6B7280; }
+    .meta { text-align:right; color:#4B5563; }
+    .hero { padding: 28px 0 20px; }
+    .eyebrow { color:#2563EB; font-weight:700; text-transform:uppercase; letter-spacing:.08em; font-size:10px; }
+    h1 { margin: 6px 0 8px; font-size: 30px; line-height:1.08; letter-spacing:-.02em; }
+    h2 { font-size: 14px; margin: 24px 0 10px; padding-bottom: 6px; border-bottom:1px solid #E5E7EB; }
+    p { margin: 0 0 8px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .box { background:#F8FAFC; border:1px solid #E5E7EB; border-radius:8px; padding:10px; }
+    .box span { display:block; color:#6B7280; font-size:10px; text-transform:uppercase; letter-spacing:.06em; }
+    .box strong { display:block; margin-top:2px; font-size:12px; }
+    .service { display:flex; justify-content:space-between; gap:18px; padding:12px 0; border-bottom:1px solid #E5E7EB; }
+    .service:last-child { border-bottom:none; }
+    .service strong { display:block; font-size:12.5px; }
+    .service span, .service em { display:block; color:#6B7280; margin-top:3px; font-style:normal; }
+    .price { text-align:right; white-space:nowrap; }
+    .total { margin-top: 12px; margin-left:auto; width: 280px; border:1px solid #DBEAFE; border-radius:10px; overflow:hidden; }
+    .total div { display:flex; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #E5E7EB; }
+    .total div:last-child { border-bottom:none; background:#EFF6FF; font-weight:800; color:#1D4ED8; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .chips span { border:1px solid #BFDBFE; color:#1D4ED8; background:#EFF6FF; border-radius:999px; padding:4px 8px; font-size:10.5px; font-weight:600; }
+    ul { margin: 0; padding-left: 18px; color:#374151; }
+    li { margin-bottom: 5px; }
+    .sign { display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-top:32px; }
+    .line { border-top:1px solid #9CA3AF; padding-top:8px; color:#6B7280; }
+    .actions { position: fixed; right: 18px; top: 18px; display:flex; gap:8px; }
+    .actions button { border:0; background:#2563EB; color:#fff; border-radius:6px; padding:8px 12px; font-weight:700; cursor:pointer; }
+    @media print { .actions { display:none; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button onclick="window.print()">Download / Print PDF</button>
+  </div>
+
+  <header class="top">
+    <div>
+      <div class="mark">PT</div>
+      <div class="brand">Papia Technology Solutions LLC</div>
+      <div class="muted">Professional technology solutions, websites, CRM systems, and automation.</div>
+    </div>
+    <div class="meta">
+      <strong>Business Proposal</strong><br />
+      Proposal #{{ proposal.id }}<br />
+      {{ proposal.created_at[:10] }}<br />
+      Status: {{ proposal.status | title }}
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="eyebrow">{{ project_types.get(proposal.project_type, proposal.project_type) }}</div>
+    <h1>{{ proposal.title }}</h1>
+    <p class="muted">{{ proposal.project_description }}</p>
+  </section>
+
+  <section>
+    <h2>Client Information</h2>
+    <div class="grid">
+      <div class="box"><span>Client</span><strong>{{ proposal.client_name }}</strong></div>
+      <div class="box"><span>Business</span><strong>{{ proposal.business_name or '—' }}</strong></div>
+      <div class="box"><span>Email</span><strong>{{ proposal.email }}</strong></div>
+      <div class="box"><span>Phone</span><strong>{{ proposal.phone or '—' }}</strong></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Project Needs and Objective</h2>
+    <div class="grid">
+      <div><strong>Client needs / business problem</strong><p class="muted">{{ proposal.client_needs or '—' }}</p></div>
+      <div><strong>Main objective</strong><p class="muted">{{ proposal.project_objective or '—' }}</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Selected Services</h2>
+    {% for service in proposal.selected_services %}
+      <div class="service">
+        <div>
+          <strong>{{ service.name }}</strong>
+          <span>{{ service.description }}</span>
+          {% if service.notes %}<em>{{ service.notes }}</em>{% endif %}
+        </div>
+        <div class="price">
+          <span>{{ service.deliveryTime or 'TBD' }}</span>
+          <strong>{{ service.price | currency }}</strong>
+        </div>
+      </div>
+    {% endfor %}
+  </section>
+
+  <section>
+    <h2>Pricing Breakdown</h2>
+    <div class="total">
+      <div><span>Subtotal</span><strong>{{ proposal.subtotal | currency }}</strong></div>
+      <div><span>Discount</span><strong>-{{ proposal.discount | currency }}</strong></div>
+      <div><span>Taxes</span><strong>{{ proposal.taxes | currency }}</strong></div>
+      <div><span>Total project cost</span><strong>{{ proposal.total | currency }}</strong></div>
+    </div>
+    <p><strong>Initial payment required:</strong> {{ proposal.initial_payment | currency }}</p>
+    <p><strong>Remaining balance:</strong> {{ proposal.remaining_balance | currency }}</p>
+    <p><strong>Payment schedule:</strong> {{ proposal.payment_schedule }}</p>
+    <p><strong>Accepted payment methods:</strong> {{ proposal.payment_methods }}</p>
+  </section>
+
+  <section>
+    <h2>Timeline</h2>
+    <div class="grid">
+      <div class="box"><span>Estimated start</span><strong>{{ proposal.start_date or 'TBD' }}</strong></div>
+      <div class="box"><span>Estimated delivery</span><strong>{{ proposal.estimated_delivery_date or 'TBD' }}</strong></div>
+    </div>
+    <p><strong>Business days:</strong> {{ proposal.business_days or 'TBD' }}</p>
+    <div class="chips">
+      {% for milestone in proposal.milestones %}
+        <span>{{ milestone }}</span>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Terms and Conditions</h2>
+    <ul>
+      {% for term in proposal.terms_and_conditions %}
+        <li>{{ term }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section>
+    <h2>Approval</h2>
+    <p class="muted">By signing below, the client approves this proposal and authorizes Papia Technology Solutions LLC to begin the project under the terms described above.</p>
+    <div class="sign">
+      <div class="line">Client signature / date</div>
+      <div class="line">Papia Technology Solutions LLC / date</div>
+    </div>
+  </section>
+
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () { window.print(); }, 350);
+    });
+  </script>
+</body>
+</html>

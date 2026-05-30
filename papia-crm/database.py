@@ -49,6 +49,8 @@ def init_db():
             summary TEXT NOT NULL,
             result TEXT,
             next_date DATE,
+            next_at DATETIME,
+            reminder_comment TEXT,
             completed INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
@@ -106,7 +108,65 @@ def init_db():
             updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS proposals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+            client_name TEXT NOT NULL,
+            business_name TEXT,
+            email TEXT NOT NULL,
+            phone TEXT,
+            address TEXT,
+            title TEXT NOT NULL,
+            project_type TEXT NOT NULL,
+            proposal_language TEXT NOT NULL DEFAULT 'en',
+            proposal_purpose TEXT NOT NULL DEFAULT 'landing_page',
+            project_description TEXT,
+            client_needs TEXT,
+            project_objective TEXT,
+            selected_services TEXT NOT NULL DEFAULT '[]',
+            subtotal REAL NOT NULL DEFAULT 0,
+            discount REAL NOT NULL DEFAULT 0,
+            taxes REAL NOT NULL DEFAULT 0,
+            total REAL NOT NULL DEFAULT 0,
+            initial_payment REAL NOT NULL DEFAULT 0,
+            remaining_balance REAL NOT NULL DEFAULT 0,
+            payment_terms TEXT,
+            payment_schedule TEXT,
+            payment_methods TEXT,
+            start_date DATE,
+            estimated_delivery_date DATE,
+            business_days INTEGER NOT NULL DEFAULT 0,
+            milestones TEXT NOT NULL DEFAULT '[]',
+            terms_and_conditions TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'draft',
+            pdf_url TEXT,
+            email_draft_id INTEGER,
+            sent_at DATETIME,
+            accepted_via_whatsapp_at DATETIME,
+            whatsapp_acceptance_link TEXT,
+            client_approval_status TEXT NOT NULL DEFAULT 'pending',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS email_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            proposal_id INTEGER REFERENCES proposals(id) ON DELETE SET NULL,
+            client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+            to_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            attachment_name TEXT,
+            attachment_url TEXT,
+            status TEXT NOT NULL DEFAULT 'ready_to_send',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_emails_client ON emails(client_id);
+        CREATE INDEX IF NOT EXISTS idx_proposals_client ON proposals(client_id);
+        CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
+        CREATE INDEX IF NOT EXISTS idx_email_drafts_proposal ON email_drafts(proposal_id);
     """)
 
     conn.commit()
@@ -147,5 +207,34 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+
+    try:
+        conn.execute("ALTER TABLE follow_ups ADD COLUMN next_at DATETIME")
+        conn.commit()
+    except Exception:
+        pass
+
+    try:
+        conn.execute("ALTER TABLE follow_ups ADD COLUMN reminder_comment TEXT")
+        conn.commit()
+    except Exception:
+        pass
+
+    proposal_columns = [
+        ("proposal_language", "TEXT NOT NULL DEFAULT 'en'"),
+        ("proposal_purpose", "TEXT NOT NULL DEFAULT 'landing_page'"),
+        ("pdf_url", "TEXT"),
+        ("email_draft_id", "INTEGER"),
+        ("sent_at", "DATETIME"),
+        ("accepted_via_whatsapp_at", "DATETIME"),
+        ("whatsapp_acceptance_link", "TEXT"),
+        ("client_approval_status", "TEXT NOT NULL DEFAULT 'pending'"),
+    ]
+    for column, definition in proposal_columns:
+        try:
+            conn.execute(f"ALTER TABLE proposals ADD COLUMN {column} {definition}")
+            conn.commit()
+        except Exception:
+            pass
 
     conn.close()

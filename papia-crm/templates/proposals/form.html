@@ -1,0 +1,545 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if is_edit else 'New' }} Proposal{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('proposals.index') }}">Proposals</a></li>
+      <li class="breadcrumb-item active">{{ 'Edit proposal' if is_edit else 'New proposal' }}</li>
+    </ol>
+    <h1 class="pg-title">{{ 'Edit proposal' if is_edit else 'New proposal' }}</h1>
+    <p class="pg-sub">Build a personalized business proposal from client needs and selected services</p>
+  </div>
+  <div class="pg-actions">
+    {% if is_edit %}
+      <a href="{{ url_for('proposals.view', proposal_id=proposal.id) }}" class="btn btn-ghost btn-sm">
+        <i class="bi bi-eye"></i> Preview
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<form method="POST"
+      action="{{ url_for('proposals.edit', proposal_id=proposal.id) if is_edit else url_for('proposals.new') }}"
+      id="proposalForm">
+
+  <div class="proposal-builder">
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0;">
+
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-header-left"><i class="bi bi-magic"></i> Proposal template</span>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-grid-2">
+            <div>
+              <label class="form-label">Proposal Language</label>
+              <select name="proposal_language" id="proposalLanguage" class="form-select">
+                {% for value, label in languages %}
+                  <option value="{{ value }}" {% if proposal.proposal_language == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Proposal Purpose</label>
+              <select name="proposal_purpose" id="proposalPurpose" class="form-select">
+                {% for value, label in purposes %}
+                  <option value="{{ value }}" {% if proposal.proposal_purpose == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="proposal-template-grid">
+            {% for tpl in templates %}
+              <button type="button" class="proposal-template-btn"
+                      data-language="{{ tpl.language }}"
+                      data-purpose="{{ tpl.purpose }}">
+                <span>{{ tpl.name }}</span>
+                <small>{{ tpl.services | length }} recommended services · {{ tpl.language | upper }}</small>
+              </button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-header-left"><i class="bi bi-person"></i> Client information</span>
+        </div>
+        <div class="card-body form-grid-2">
+          <div style="grid-column:1/-1;">
+            <label class="form-label">Use CRM client</label>
+            <select name="client_id" id="clientSelect" class="form-select">
+              <option value="">Manual proposal client</option>
+              {% for client in clients %}
+                <option value="{{ client.id }}"
+                        data-name="{{ client.first_name }} {{ client.last_name }}"
+                        data-business="{{ client.company or '' }}"
+                        data-email="{{ client.email }}"
+                        data-phone="{{ client.phone or '' }}"
+                        {% if proposal.client_id == client.id %}selected{% endif %}>
+                  {{ client.first_name }} {{ client.last_name }} · {{ client.email }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Client name <span style="color:var(--c-danger);">*</span></label>
+            <input name="client_name" id="clientName" class="form-control" value="{{ proposal.client_name or '' }}" required />
+          </div>
+          <div>
+            <label class="form-label">Business name</label>
+            <input name="business_name" id="businessName" class="form-control" value="{{ proposal.business_name or '' }}" />
+          </div>
+          <div>
+            <label class="form-label">Email <span style="color:var(--c-danger);">*</span></label>
+            <input type="email" name="email" id="clientEmail" class="form-control" value="{{ proposal.email or '' }}" required />
+          </div>
+          <div>
+            <label class="form-label">Phone</label>
+            <input name="phone" id="clientPhone" class="form-control" value="{{ proposal.phone or '' }}" />
+          </div>
+          <div style="grid-column:1/-1;">
+            <label class="form-label">Address</label>
+            <input name="address" class="form-control" value="{{ proposal.address or '' }}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-header-left"><i class="bi bi-briefcase"></i> Project information</span>
+        </div>
+        <div class="card-body form-grid-2">
+          <div>
+            <label class="form-label">Proposal title <span style="color:var(--c-danger);">*</span></label>
+            <input name="title" id="proposalTitle" class="form-control" value="{{ proposal.title or '' }}" required />
+          </div>
+          <div>
+            <label class="form-label">Project type</label>
+            <select name="project_type" id="projectType" class="form-select">
+              {% for value, label in project_types %}
+                <option value="{{ value }}" {% if proposal.project_type == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <input type="hidden" name="client_approval_status" value="{{ proposal.client_approval_status or 'pending' }}" />
+          <div style="grid-column:1/-1;">
+            <label class="form-label">Project description</label>
+            <textarea name="project_description" id="projectDescription" class="form-control" rows="3">{{ proposal.project_description or '' }}</textarea>
+          </div>
+          <div>
+            <label class="form-label">Client needs / business problem</label>
+            <textarea name="client_needs" id="clientNeeds" class="form-control" rows="4">{{ proposal.client_needs or '' }}</textarea>
+          </div>
+          <div>
+            <label class="form-label">Main objective</label>
+            <textarea name="project_objective" id="projectObjective" class="form-control" rows="4">{{ proposal.project_objective or '' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-header-left"><i class="bi bi-list-check"></i> Services selection</span>
+          <span class="section-count" id="serviceCount">{{ proposal.selected_services | length }}</span>
+        </div>
+        <div class="card-body">
+          <div class="service-catalog">
+            {% for service in service_catalog %}
+              <button type="button" class="service-add-btn"
+                      data-id="{{ service.id }}"
+                      data-name="{{ service.name }}"
+                      data-category="{{ service.category }}"
+                      data-description="{{ service.description }}"
+                      data-delivery="{{ service.deliveryTime }}">
+                <i class="bi bi-plus"></i>
+                <span>{{ service.name }}</span>
+              </button>
+            {% endfor %}
+          </div>
+          <div id="selectedServices" class="selected-services"></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-header-left"><i class="bi bi-calendar-range"></i> Timeline</span>
+        </div>
+        <div class="card-body form-grid-3">
+          <div>
+            <label class="form-label">Estimated start date</label>
+            <input type="date" name="start_date" class="form-control" value="{{ proposal.start_date or '' }}" />
+          </div>
+          <div>
+            <label class="form-label">Estimated delivery date</label>
+            <input type="date" name="estimated_delivery_date" class="form-control" value="{{ proposal.estimated_delivery_date or '' }}" />
+          </div>
+          <div>
+            <label class="form-label">Business days</label>
+            <input type="number" name="business_days" class="form-control" value="{{ proposal.business_days or 0 }}" min="0" />
+          </div>
+          <div style="grid-column:1/-1;">
+            <label class="form-label">Milestones</label>
+            <div id="milestoneList" class="dynamic-list"></div>
+            <button type="button" class="btn btn-ghost btn-xs" id="addMilestone">
+              <i class="bi bi-plus"></i> Add milestone
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-header-left"><i class="bi bi-file-lock"></i> Terms and conditions</span>
+        </div>
+        <div class="card-body">
+          <div id="termsList" class="dynamic-list"></div>
+          <button type="button" class="btn btn-ghost btn-xs" id="addTerm">
+            <i class="bi bi-plus"></i> Add term
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <aside class="proposal-side">
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-header-left"><i class="bi bi-cash-stack"></i> Pricing</span>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="proposal-money-row">
+            <span>Subtotal</span>
+            <strong class="num" id="subtotalPreview">$0.00</strong>
+          </div>
+          <div>
+            <label class="form-label">Discount</label>
+            <input type="number" name="discount" id="discountInput" class="form-control" value="{{ proposal.discount or 0 }}" min="0" step="0.01" />
+          </div>
+          <div>
+            <label class="form-label">Taxes</label>
+            <input type="number" name="taxes" id="taxesInput" class="form-control" value="{{ proposal.taxes or 0 }}" min="0" step="0.01" />
+          </div>
+          <div>
+            <label class="form-label">Initial payment required</label>
+            <input type="number" name="initial_payment" id="initialPaymentInput" class="form-control" value="{{ proposal.initial_payment or 0 }}" min="0" step="0.01" />
+          </div>
+          <div class="proposal-total-box">
+            <span>Total project cost</span>
+            <strong class="num" id="totalPreview">$0.00</strong>
+            <small>Remaining balance: <span class="num" id="balancePreview">$0.00</span></small>
+          </div>
+          <div>
+            <label class="form-label">Payment schedule</label>
+            <textarea name="payment_schedule" class="form-control" rows="3">{{ proposal.payment_schedule or '' }}</textarea>
+          </div>
+          <div>
+            <label class="form-label">Accepted payment methods</label>
+            <textarea name="payment_methods" class="form-control" rows="2">{{ proposal.payment_methods or '' }}</textarea>
+          </div>
+          <div>
+            <label class="form-label">Payment terms</label>
+            <textarea name="payment_terms" class="form-control" rows="4">{{ proposal.payment_terms or '' }}</textarea>
+          </div>
+          <div>
+            <label class="form-label">Status</label>
+            <select name="status" class="form-select">
+              {% for value, label in statuses %}
+                <option value="{{ value }}" {% if proposal.status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-head">
+          <span class="section-head-label"><i class="bi bi-eye" style="margin-right:5px;"></i>Live preview</span>
+        </div>
+        <div class="proposal-mini-preview">
+          <div class="mini-brand">Papia Technology Solutions LLC · <span id="miniLanguage">{{ (proposal.proposal_language or 'en') | upper }}</span></div>
+          <h3 id="miniTitle">{{ proposal.title or 'Proposal title' }}</h3>
+          <p id="miniClient">{{ proposal.client_name or 'Client name' }}</p>
+          <div class="mini-line"><span>Services</span><strong id="miniServices">0</strong></div>
+          <div class="mini-line"><span>Total</span><strong class="num" id="miniTotal">$0.00</strong></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-head">
+          <span class="section-head-label"><i class="bi bi-whatsapp" style="margin-right:5px;"></i>WhatsApp acceptance</span>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+          <button type="button" class="btn btn-ghost btn-sm" id="copyDraftAcceptanceLink" style="justify-content:flex-start;">
+            <i class="bi bi-copy"></i> Copy draft acceptance link
+          </button>
+          <div id="draftAcceptanceLink" style="font-size:11px;color:var(--c-text-3);word-break:break-all;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:var(--radius-sm);padding:8px;"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <a href="{{ url_for('proposals.index') }}" class="btn btn-ghost btn-md">Cancel</a>
+        <button type="submit" class="btn btn-primary btn-md">
+          <i class="bi bi-check-lg"></i> Save proposal
+        </button>
+      </div>
+    </aside>
+  </div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const INITIAL_SERVICES = {{ (proposal.selected_services or []) | tojson }};
+const INITIAL_MILESTONES = {{ (proposal.milestones or []) | tojson }};
+const INITIAL_TERMS = {{ (proposal.terms_and_conditions or default_terms) | tojson }};
+let proposalDirty = false;
+let booting = true;
+
+const selected = new Map();
+const selectedWrap = document.getElementById('selectedServices');
+
+function money(n) {
+  return '$' + (Number(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function safeId(id) {
+  return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function addService(service) {
+  const id = safeId(service.id);
+  if (selected.has(id)) return;
+  service.id = id;
+  selected.set(id, service);
+  renderServices();
+}
+
+function removeService(id) {
+  selected.delete(id);
+  renderServices();
+}
+
+function renderServices() {
+  selectedWrap.innerHTML = '';
+  selected.forEach(service => {
+    const el = document.createElement('div');
+    el.className = 'selected-service-card';
+    el.innerHTML = `
+      <input type="hidden" name="service_id[]" value="${service.id}">
+      <input type="hidden" name="service_name_${service.id}" value="${escapeAttr(service.name)}">
+      <input type="hidden" name="service_category_${service.id}" value="${escapeAttr(service.category)}">
+      <div class="selected-service-head">
+        <div>
+          <div class="selected-service-title">${escapeHtml(service.name)}</div>
+          <div class="selected-service-cat">${escapeHtml(service.category || '')}</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-icon-xs" onclick="removeService('${service.id}')">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+      <div class="form-grid-2">
+        <div style="grid-column:1/-1;">
+          <label class="form-label">Custom description</label>
+          <textarea name="service_description_${service.id}" class="form-control service-description" rows="3">${escapeHtml(service.description || '')}</textarea>
+        </div>
+        <div>
+          <label class="form-label">Price</label>
+          <input type="number" name="service_price_${service.id}" class="form-control service-price" value="${Number(service.price || 0)}" min="0" step="0.01">
+        </div>
+        <div>
+          <label class="form-label">Estimated delivery time</label>
+          <input name="service_delivery_${service.id}" class="form-control" value="${escapeAttr(service.deliveryTime || '')}">
+        </div>
+        <div style="grid-column:1/-1;">
+          <label class="form-label">Optional notes</label>
+          <textarea name="service_notes_${service.id}" class="form-control" rows="2">${escapeHtml(service.notes || '')}</textarea>
+        </div>
+      </div>
+    `;
+    selectedWrap.appendChild(el);
+  });
+  document.getElementById('serviceCount').textContent = selected.size;
+  document.getElementById('miniServices').textContent = selected.size;
+  selectedWrap.querySelectorAll('.service-price').forEach(input => input.addEventListener('input', updateTotals));
+  updateTotals();
+}
+
+function renderDynamicList(id, inputName, values) {
+  const wrap = document.getElementById(id);
+  wrap.innerHTML = '';
+  values.forEach(value => appendDynamicItem(wrap, inputName, value));
+}
+
+function appendDynamicItem(wrap, inputName, value = '') {
+  const row = document.createElement('div');
+  row.className = 'dynamic-item';
+  row.innerHTML = `
+    <input name="${inputName}" class="form-control" value="${escapeAttr(value)}">
+    <button type="button" class="btn btn-ghost btn-icon-sm" aria-label="Remove">
+      <i class="bi bi-x"></i>
+    </button>
+  `;
+  row.querySelector('button').addEventListener('click', () => row.remove());
+  wrap.appendChild(row);
+}
+
+function updateTotals() {
+  let subtotal = 0;
+  document.querySelectorAll('.service-price').forEach(input => subtotal += Number(input.value) || 0);
+  const discount = Number(document.getElementById('discountInput').value) || 0;
+  const taxes = Number(document.getElementById('taxesInput').value) || 0;
+  const initial = Number(document.getElementById('initialPaymentInput').value) || 0;
+  const total = Math.max(0, subtotal - discount + taxes);
+  const balance = Math.max(0, total - initial);
+  document.getElementById('subtotalPreview').textContent = money(subtotal);
+  document.getElementById('totalPreview').textContent = money(total);
+  document.getElementById('balancePreview').textContent = money(balance);
+  document.getElementById('miniTotal').textContent = money(total);
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#096;');
+}
+
+document.querySelectorAll('.proposal-template-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    loadProposalTemplate(btn.dataset.language, btn.dataset.purpose, true);
+  });
+});
+
+function loadProposalTemplate(language, purpose, askBeforeReplace) {
+  if (askBeforeReplace && proposalDirty) {
+    const ok = confirm('This will replace the proposal text, selected services, milestones, and terms with the selected template. Continue?');
+    if (!ok) return;
+  }
+  fetch('/proposals/template/' + language + '/' + purpose)
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('proposalLanguage').value = data.proposal_language || language;
+        document.getElementById('proposalPurpose').value = data.proposal_purpose || purpose;
+        document.getElementById('proposalTitle').value = data.title || '';
+        document.getElementById('projectType').value = data.project_type || 'other';
+        document.getElementById('projectDescription').value = data.project_description || '';
+        document.getElementById('clientNeeds').value = data.client_needs || '';
+        document.getElementById('projectObjective').value = data.project_objective || '';
+        document.querySelector('[name="payment_terms"]').value = data.payment_terms || '';
+        document.querySelector('[name="payment_schedule"]').value = data.payment_schedule || '';
+        document.querySelector('[name="payment_methods"]').value = data.payment_methods || '';
+        selected.clear();
+        (data.selected_services || []).forEach(addService);
+        renderDynamicList('milestoneList', 'milestones[]', data.milestones || []);
+        renderDynamicList('termsList', 'terms[]', data.terms_and_conditions || []);
+        updateMiniText();
+        updateLanguageIndicator();
+        proposalDirty = false;
+      });
+}
+
+function refreshServiceCatalog(language) {
+  fetch('/proposals/services/' + language)
+    .then(r => r.json())
+    .then(services => {
+      document.querySelector('.service-catalog').innerHTML = services.map(service => `
+        <button type="button" class="service-add-btn"
+                data-id="${escapeAttr(service.id)}"
+                data-name="${escapeAttr(service.name)}"
+                data-category="${escapeAttr(service.category)}"
+                data-description="${escapeAttr(service.description)}"
+                data-delivery="${escapeAttr(service.deliveryTime)}">
+          <i class="bi bi-plus"></i>
+          <span>${escapeHtml(service.name)}</span>
+        </button>
+      `).join('');
+      bindServiceButtons();
+    });
+}
+
+document.getElementById('clientSelect').addEventListener('change', function () {
+  const opt = this.options[this.selectedIndex];
+  if (!this.value) return;
+  document.getElementById('clientName').value = opt.dataset.name || '';
+  document.getElementById('businessName').value = opt.dataset.business || '';
+  document.getElementById('clientEmail').value = opt.dataset.email || '';
+  document.getElementById('clientPhone').value = opt.dataset.phone || '';
+  updateMiniText();
+});
+
+document.getElementById('proposalLanguage').addEventListener('change', function () {
+  const language = this.value;
+  const purpose = document.getElementById('proposalPurpose').value;
+  refreshServiceCatalog(language);
+  loadProposalTemplate(language, purpose, true);
+});
+
+document.getElementById('proposalPurpose').addEventListener('change', function () {
+  loadProposalTemplate(document.getElementById('proposalLanguage').value, this.value, true);
+});
+
+function updateMiniText() {
+  document.getElementById('miniTitle').textContent = document.getElementById('proposalTitle').value || 'Proposal title';
+  document.getElementById('miniClient').textContent = document.getElementById('clientName').value || 'Client name';
+  updateDraftAcceptanceLink();
+}
+
+function updateLanguageIndicator() {
+  document.getElementById('miniLanguage').textContent = document.getElementById('proposalLanguage').value.toUpperCase();
+  updateDraftAcceptanceLink();
+}
+
+function updateDraftAcceptanceLink() {
+  const lang = document.getElementById('proposalLanguage').value;
+  const title = document.getElementById('proposalTitle').value || 'Proposal';
+  const client = document.getElementById('clientName').value || 'Client';
+  const msg = lang === 'es'
+    ? `Hola, revisé la propuesta para ${title} y me gustaría aceptarla. Mi nombre es ${client}.`
+    : `Hello, I reviewed the proposal for ${title} and I would like to accept it. My name is ${client}.`;
+  const link = 'https://wa.me/17869157096?text=' + encodeURIComponent(msg);
+  document.getElementById('draftAcceptanceLink').textContent = link;
+}
+
+['proposalTitle', 'clientName'].forEach(id => document.getElementById(id).addEventListener('input', updateMiniText));
+['discountInput', 'taxesInput', 'initialPaymentInput'].forEach(id => document.getElementById(id).addEventListener('input', updateTotals));
+
+function bindServiceButtons() {
+  document.querySelectorAll('.service-add-btn').forEach(btn => {
+    btn.addEventListener('click', () => addService({
+      id: btn.dataset.id,
+      name: btn.dataset.name,
+      category: btn.dataset.category,
+      description: btn.dataset.description,
+      deliveryTime: btn.dataset.delivery,
+      price: 0,
+      notes: '',
+    }));
+  });
+}
+
+document.getElementById('proposalForm').addEventListener('input', () => {
+  if (!booting) proposalDirty = true;
+});
+
+document.getElementById('addMilestone').addEventListener('click', () => appendDynamicItem(document.getElementById('milestoneList'), 'milestones[]'));
+document.getElementById('addTerm').addEventListener('click', () => appendDynamicItem(document.getElementById('termsList'), 'terms[]'));
+document.getElementById('copyDraftAcceptanceLink').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('draftAcceptanceLink').textContent);
+});
+
+INITIAL_SERVICES.forEach(addService);
+renderDynamicList('milestoneList', 'milestones[]', INITIAL_MILESTONES.length ? INITIAL_MILESTONES : ['Initial setup']);
+renderDynamicList('termsList', 'terms[]', INITIAL_TERMS);
+updateMiniText();
+updateLanguageIndicator();
+updateTotals();
+bindServiceButtons();
+booting = false;
+</script>
+{% endblock %}

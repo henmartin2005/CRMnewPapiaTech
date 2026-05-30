@@ -46,7 +46,7 @@
   </div>
 
   <div class="kpi-item">
-    <div class="kpi-label">Follow-ups hoy</div>
+    <div class="kpi-label">Recordatorios hoy</div>
     <div class="kpi-value" style="color:{% if todays_followups %}var(--c-danger){% else %}var(--c-text){% endif %};">
       {{ todays_followups | length }}
     </div>
@@ -97,10 +97,10 @@
 
 </div>
 
-<!-- ── TODAY'S FOLLOW-UPS ── -->
+<!-- ── TODAY'S REMINDERS ── -->
 <div class="section-card">
   <div class="section-head">
-    <span class="section-head-label">Follow-ups de hoy</span>
+    <span class="section-head-label">Recordatorios de hoy</span>
     {% if todays_followups %}
       <span class="section-count">{{ todays_followups | length }}</span>
     {% endif %}
@@ -131,7 +131,7 @@
   {% else %}
     <div class="empty">
       <i class="bi bi-check2-all"></i>
-      <p>Sin follow-ups pendientes para hoy</p>
+      <p>Sin recordatorios pendientes para hoy</p>
     </div>
   {% endif %}
 </div>

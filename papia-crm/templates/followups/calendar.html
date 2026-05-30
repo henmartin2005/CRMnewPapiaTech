@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Calendario{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Calendario</h1>
+    <p class="pg-sub">Vista de recordatorios programados</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('followups.tasks') }}" class="btn btn-ghost btn-sm">
+      <i class="bi bi-check2-square"></i> Tasks
+    </a>
+    <a href="{{ url_for('clients.list_clients') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus"></i> Nuevo recordatorio
+    </a>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="section-head">
+    <span class="section-head-label">
+      <i class="bi bi-calendar3" style="margin-right:5px;"></i>Eventos
+    </span>
+    <span class="section-count">{{ tasks | length }}</span>
+  </div>
+
+  {% if tasks %}
+    <div class="calendar-list">
+      {% set ns = namespace(day='') %}
+      {% for task in tasks %}
+        {% set task_day = task.next_at[:10] if task.next_at else task.next_date %}
+        {% if task_day != ns.day %}
+          {% set ns.day = task_day %}
+          <div class="calendar-day num">{{ task_day }}</div>
+        {% endif %}
+
+        <div class="calendar-event {% if task.id in due_ids and not task.completed %}calendar-event-now{% endif %}">
+          <div class="calendar-time num">
+            {% if task.next_at %}
+              {{ task.next_at[11:16] }}
+            {% else %}
+              Todo el día
+            {% endif %}
+          </div>
+          <div class="calendar-dot"></div>
+          <div class="calendar-body">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div class="calendar-title">{{ task.summary }}</div>
+              {% if task.completed %}
+                <span class="stage" style="background:rgba(22,163,74,.1);color:var(--c-success);">Completado</span>
+              {% elif task.id in due_ids %}
+                <span class="stage" style="background:rgba(220,38,38,.1);color:var(--c-danger);">Ahora</span>
+              {% else %}
+                <span class="stage" style="background:rgba(217,119,6,.1);color:var(--c-warning);">Pendiente</span>
+              {% endif %}
+            </div>
+            <div class="calendar-meta">
+              {{ task.first_name }} {{ task.last_name }} · {{ method_labels.get(task.method, task.method) }}
+            </div>
+            {% if task.reminder_comment %}
+              <div class="calendar-comment">{{ task.reminder_comment }}</div>
+            {% endif %}
+          </div>
+          <a href="{{ url_for('clients.detail', client_id=task.client_id) }}" class="btn btn-ghost btn-xs">
+            Cliente
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty">
+      <i class="bi bi-calendar"></i>
+      <p>Sin eventos en el calendario</p>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

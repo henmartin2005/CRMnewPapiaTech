@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}{{ proposal.title }}{% endblock %}
+
+{% block content %}
+{% set is_es = proposal.proposal_language == 'es' %}
+
+<div class="pg-header">
+  <div>
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('proposals.index') }}">Proposals</a></li>
+      <li class="breadcrumb-item active">#{{ proposal.id }}</li>
+    </ol>
+    <h1 class="pg-title" style="display:flex;align-items:center;gap:8px;">
+      {{ proposal.title }}
+      <span class="proposal-status status-{{ proposal.status }}">{{ proposal.status | title }}</span>
+    </h1>
+    <p class="pg-sub">{{ proposal.client_name }} · {{ proposal.email }}</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('proposals.edit', proposal_id=proposal.id) }}" class="btn btn-ghost btn-sm">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+    <form method="POST" action="{{ url_for('proposals.duplicate', proposal_id=proposal.id) }}">
+      <button type="submit" class="btn btn-ghost btn-sm">
+        <i class="bi bi-files"></i> Duplicate
+      </button>
+    </form>
+    <a href="{{ url_for('proposals.pdf', proposal_id=proposal.id) }}" target="_blank" class="btn btn-primary btn-sm">
+      <i class="bi bi-download"></i> Download PDF
+    </a>
+    <form method="POST" action="{{ url_for('proposals.email_draft', proposal_id=proposal.id) }}">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-envelope"></i> Send by Email
+      </button>
+    </form>
+    <button class="btn btn-ghost btn-sm" type="button" onclick="copyAcceptanceLink()">
+      <i class="bi bi-whatsapp"></i> WhatsApp Acceptance Link
+    </button>
+  </div>
+</div>
+
+<div class="proposal-detail-grid">
+  <div style="display:flex;flex-direction:column;gap:12px;min-width:0;">
+    <div class="proposal-doc">
+      <div class="proposal-doc-head">
+        <div>
+          <div class="proposal-logo-mark">PT</div>
+          <div class="proposal-brand">Papia Technology Solutions LLC</div>
+          <div style="font-size:11px;color:var(--c-text-3);margin-top:2px;">
+            {{ 'Español' if is_es else 'English' }} · {{ purposes.get(proposal.proposal_purpose, proposal.proposal_purpose) }}
+          </div>
+        </div>
+        <div class="proposal-doc-meta">
+          <span>{{ 'Propuesta' if is_es else 'Proposal' }} #{{ proposal.id }}</span>
+          <strong>{{ proposal.created_at[:10] }}</strong>
+        </div>
+      </div>
+
+      <div class="proposal-doc-hero">
+        <span>{{ project_types.get(proposal.project_type, proposal.project_type) }}</span>
+        <h2>{{ proposal.title }}</h2>
+        <p>{{ proposal.project_description }}</p>
+      </div>
+
+      <div class="proposal-doc-section">
+        <h3>{{ 'Información del cliente' if is_es else 'Client Information' }}</h3>
+        <div class="proposal-info-grid">
+          <div><span>{{ 'Cliente' if is_es else 'Client' }}</span><strong>{{ proposal.client_name }}</strong></div>
+          <div><span>{{ 'Negocio' if is_es else 'Business' }}</span><strong>{{ proposal.business_name or '—' }}</strong></div>
+          <div><span>Email</span><strong>{{ proposal.email }}</strong></div>
+          <div><span>{{ 'Teléfono' if is_es else 'Phone' }}</span><strong>{{ proposal.phone or '—' }}</strong></div>
+        </div>
+      </div>
+
+      <div class="proposal-doc-section">
+        <h3>{{ 'Necesidades y objetivo' if is_es else 'Needs and Objective' }}</h3>
+        <div class="proposal-two-col">
+          <div>
+            <span class="proposal-kicker">{{ 'Problema del negocio' if is_es else 'Business problem' }}</span>
+            <p>{{ proposal.client_needs or '—' }}</p>
+          </div>
+          <div>
+            <span class="proposal-kicker">{{ 'Objetivo principal' if is_es else 'Main objective' }}</span>
+            <p>{{ proposal.project_objective or '—' }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="proposal-doc-section">
+        <h3>{{ 'Servicios seleccionados' if is_es else 'Selected Services' }}</h3>
+        <div class="proposal-service-list">
+          {% for service in proposal.selected_services %}
+          <div class="proposal-service-row">
+            <div>
+              <strong>{{ service.name }}</strong>
+              <span>{{ service.description }}</span>
+              {% if service.notes %}<em>{{ service.notes }}</em>{% endif %}
+            </div>
+            <div>
+              <span>{{ service.deliveryTime or 'TBD' }}</span>
+              <strong class="num">{{ service.price | currency }}</strong>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="proposal-doc-section">
+        <h3>{{ 'Cronograma' if is_es else 'Timeline' }}</h3>
+        <div class="proposal-info-grid">
+          <div><span>{{ 'Inicio' if is_es else 'Start' }}</span><strong>{{ proposal.start_date or 'TBD' }}</strong></div>
+          <div><span>{{ 'Entrega' if is_es else 'Delivery' }}</span><strong>{{ proposal.estimated_delivery_date or 'TBD' }}</strong></div>
+          <div><span>{{ 'Días laborables' if is_es else 'Business days' }}</span><strong>{{ proposal.business_days or 'TBD' }}</strong></div>
+        </div>
+        <div class="proposal-milestones">
+          {% for milestone in proposal.milestones %}
+            <span>{{ milestone }}</span>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="proposal-doc-section">
+        <h3>{{ 'Términos y condiciones' if is_es else 'Terms and Conditions' }}</h3>
+        <ul class="proposal-terms">
+          {% for term in proposal.terms_and_conditions %}
+            <li>{{ term }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <aside style="display:flex;flex-direction:column;gap:12px;">
+    <div class="section-card">
+      <div class="card-header">
+        <span class="card-header-left"><i class="bi bi-cash-stack"></i> Pricing</span>
+      </div>
+      <div class="card-body">
+        <div class="proposal-money-row"><span>Subtotal</span><strong class="num">{{ proposal.subtotal | currency }}</strong></div>
+        <div class="proposal-money-row"><span>Discount</span><strong class="num">-{{ proposal.discount | currency }}</strong></div>
+        <div class="proposal-money-row"><span>Taxes</span><strong class="num">{{ proposal.taxes | currency }}</strong></div>
+        <div class="proposal-total-box" style="margin-top:10px;">
+          <span>{{ 'Costo total del proyecto' if is_es else 'Total project cost' }}</span>
+          <strong class="num">{{ proposal.total | currency }}</strong>
+          <small>{{ 'Pago inicial' if is_es else 'Initial payment' }}: {{ proposal.initial_payment | currency }}</small>
+          <small>{{ 'Balance restante' if is_es else 'Remaining balance' }}: {{ proposal.remaining_balance | currency }}</small>
+        </div>
+        <hr class="divider" />
+        <p style="font-size:12px;color:var(--c-text-2);margin:0 0 8px;">{{ proposal.payment_terms }}</p>
+        <p style="font-size:12px;color:var(--c-text-3);margin:0;">{{ proposal.payment_methods }}</p>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="card-header">
+        <span class="card-header-left"><i class="bi bi-lightning-charge"></i> Actions</span>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+        <a href="{{ proposal.whatsapp_acceptance_link }}" target="_blank" class="btn btn-ghost btn-sm" style="justify-content:flex-start;">
+          <i class="bi bi-whatsapp"></i> {{ 'Aceptar propuesta por WhatsApp' if is_es else 'Accept Proposal by WhatsApp' }}
+        </a>
+        <div style="padding:8px 10px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:var(--radius-sm);font-size:11.5px;color:var(--c-text-3);word-break:break-all;" id="acceptanceLink">
+          {{ proposal.whatsapp_acceptance_link }}
+        </div>
+        {% for value, label in statuses %}
+          {% if value != proposal.status %}
+          <form method="POST" action="{{ url_for('proposals.status', proposal_id=proposal.id) }}">
+            <input type="hidden" name="status" value="{{ value }}" />
+            <button type="submit" class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;">
+              <i class="bi bi-arrow-right-circle"></i> Mark as {{ label }}
+            </button>
+          </form>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </aside>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyAcceptanceLink() {
+  const link = {{ proposal.whatsapp_acceptance_link | tojson }};
+  navigator.clipboard.writeText(link).then(() => {
+    let wrap = document.querySelector('.flash-wrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'flash-wrap';
+      document.querySelector('.main-content').prepend(wrap);
+    }
+    const el = document.createElement('div');
+    el.className = 'flash-msg success';
+    el.innerHTML = '<i class="bi bi-check-circle"></i> WhatsApp acceptance link copied <button class="flash-close" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button>';
+    wrap.appendChild(el);
+  });
+}
+</script>
+{% endblock %}

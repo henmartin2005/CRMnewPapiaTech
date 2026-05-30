@@ -7,3 +7,4 @@ flask-cors==4.0.1
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-api-python-client==2.131.0
+reportlab==4.2.5

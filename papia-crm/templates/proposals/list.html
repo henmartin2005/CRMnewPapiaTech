@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Proposals{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Proposals</h1>
+    <p class="pg-sub">{{ proposals | length }} proposal{{ 's' if proposals | length != 1 }}</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('proposals.new') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus"></i> New proposal
+    </a>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <form method="GET" action="{{ url_for('proposals.index') }}">
+        <div class="search-wrap">
+          <i class="bi bi-search"></i>
+          <input type="text" name="q" id="searchInput" class="search-input"
+                 placeholder="Search proposals…" value="{{ search }}" autocomplete="off" />
+          {% if active_status %}<input type="hidden" name="status" value="{{ active_status }}" />{% endif %}
+        </div>
+      </form>
+      <div class="filter-chips">
+        <a href="{{ url_for('proposals.index', q=search) }}"
+           class="chip {% if not active_status %}active{% endif %}">All</a>
+        {% for val, label in statuses %}
+          <a href="{{ url_for('proposals.index', q=search, status=val) }}"
+             class="chip {% if active_status == val %}active{% endif %}">
+            <span class="chip-dot proposal-dot-{{ val }}"></span>{{ label }}
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="toolbar-right">
+      {% if search or active_status %}
+        <a href="{{ url_for('proposals.index') }}" class="btn btn-ghost btn-xs">
+          <i class="bi bi-x"></i> Clear
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if proposals %}
+    <div style="overflow-x:auto;">
+      <table class="crm-table">
+        <thead>
+          <tr>
+            <th style="padding-left:16px;">Proposal</th>
+            <th>Client</th>
+            <th>Project</th>
+            <th>Status</th>
+            <th style="text-align:right;">Total</th>
+            <th style="text-align:center;width:170px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for proposal in proposals %}
+          <tr data-href="{{ url_for('proposals.view', proposal_id=proposal.id) }}">
+            <td style="padding-left:16px;">
+              <div style="font-weight:650;font-size:13px;">{{ proposal.title }}</div>
+              <div style="font-size:11.5px;color:var(--c-text-3);">
+                #{{ proposal.id }} · Updated {{ proposal.updated_at[:10] if proposal.updated_at else proposal.created_at[:10] }}
+              </div>
+            </td>
+            <td>
+              <div style="font-weight:600;">{{ proposal.client_name }}</div>
+              <div style="font-size:11.5px;color:var(--c-text-3);">{{ proposal.email }}</div>
+            </td>
+            <td>
+              <span style="font-size:12px;color:var(--c-text-2);">
+                {{ project_types.get(proposal.project_type, proposal.project_type) }}
+              </span>
+            </td>
+            <td><span class="proposal-status status-{{ proposal.status }}">{{ proposal.status | title }}</span></td>
+            <td style="text-align:right;">
+              <span class="num" style="font-weight:700;">{{ proposal.total | currency }}</span>
+            </td>
+            <td style="text-align:center;">
+              <div style="display:flex;align-items:center;justify-content:center;gap:3px;">
+                <a href="{{ url_for('proposals.view', proposal_id=proposal.id) }}"
+                   class="btn btn-ghost btn-icon-xs" title="View" onclick="event.stopPropagation()">
+                  <i class="bi bi-eye" style="font-size:12px;"></i>
+                </a>
+                <a href="{{ url_for('proposals.edit', proposal_id=proposal.id) }}"
+                   class="btn btn-ghost btn-icon-xs" title="Edit" onclick="event.stopPropagation()">
+                  <i class="bi bi-pencil" style="font-size:12px;"></i>
+                </a>
+                <a href="{{ url_for('proposals.pdf', proposal_id=proposal.id) }}"
+                   class="btn btn-ghost btn-icon-xs" title="Download PDF" onclick="event.stopPropagation()" target="_blank">
+                  <i class="bi bi-download" style="font-size:12px;"></i>
+                </a>
+                <form method="POST" action="{{ url_for('proposals.duplicate', proposal_id=proposal.id) }}" onclick="event.stopPropagation()">
+                  <button type="submit" class="btn btn-ghost btn-icon-xs" title="Duplicate">
+                    <i class="bi bi-files" style="font-size:12px;"></i>
+                  </button>
+                </form>
+                <button type="button" class="btn btn-ghost btn-icon-xs" title="Delete"
+                        style="color:var(--c-danger);"
+                        onclick="event.stopPropagation();confirmProposalDelete({{ proposal.id }}, '{{ proposal.title | e }}')">
+                  <i class="bi bi-trash" style="font-size:12px;"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <i class="bi bi-file-earmark-text"></i>
+      <p>No proposals found</p>
+      <a href="{{ url_for('proposals.new') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus"></i> Create first proposal
+      </a>
+    </div>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="deleteProposalModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete proposal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--c-text-2);margin:0;">
+          Delete <strong id="deleteProposalTitle"></strong>? This cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <form id="deleteProposalForm" method="POST">
+          <button type="submit" class="btn btn-danger btn-sm">
+            <i class="bi bi-trash"></i> Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmProposalDelete(id, title) {
+  document.getElementById('deleteProposalTitle').textContent = title;
+  document.getElementById('deleteProposalForm').action = '/proposals/' + id + '/delete';
+  new bootstrap.Modal(document.getElementById('deleteProposalModal')).show();
+}
+
+const searchEl = document.getElementById('searchInput');
+if (searchEl) {
+  searchEl.addEventListener('input', function () {
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.form.submit(), 380);
+  });
+}
+
+document.querySelectorAll('.crm-table tbody tr[data-href]').forEach(row => {
+  row.addEventListener('click', function (e) {
+    if (!e.target.closest('button') && !e.target.closest('a') && !e.target.closest('form')) {
+      window.location.href = this.dataset.href;
+    }
+  });
+});
+</script>
+{% endblock %}

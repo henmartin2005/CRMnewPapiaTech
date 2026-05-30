@@ -11,7 +11,12 @@ except ImportError:
     pass
 
 from database import init_db
-from models.client import get_dashboard_stats, get_todays_followups, FOLLOW_UP_METHODS
+from models.client import (
+    get_dashboard_stats,
+    get_due_task_count,
+    get_todays_followups,
+    FOLLOW_UP_METHODS,
+)
 from flask_cors import CORS
 from routes.clients import clients_bp
 from routes.pipeline import pipeline_bp
@@ -20,6 +25,7 @@ from routes.whatsapp import whatsapp_bp, get_unread_count
 from routes.auth import auth_bp
 from routes.leads import leads_bp
 from routes.emails import emails_bp
+from routes.proposals import proposals_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -41,6 +47,7 @@ app.register_blueprint(clients_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
 app.register_blueprint(whatsapp_bp)
+app.register_blueprint(proposals_bp)
 
 
 # ── Auth guard: protect every route except login, logout, static, and webhook ──
@@ -59,9 +66,12 @@ def require_login():
 @app.context_processor
 def inject_wa_unread():
     try:
-        return {'wa_unread': get_unread_count()}
+        return {
+            'wa_unread': get_unread_count(),
+            'task_due_count': get_due_task_count(),
+        }
     except Exception:
-        return {'wa_unread': 0}
+        return {'wa_unread': 0, 'task_due_count': 0}
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Tasks{% endblock %}
+
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Tasks</h1>
+    <p class="pg-sub">Recordatorios pendientes por cliente</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('followups.calendar') }}" class="btn btn-ghost btn-sm">
+      <i class="bi bi-calendar3"></i> Calendario
+    </a>
+    <a href="{{ url_for('clients.list_clients') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus"></i> Nuevo recordatorio
+    </a>
+  </div>
+</div>
+
+{% if due_tasks %}
+<div class="section-card" style="margin-bottom:12px;border-color:rgba(220,38,38,.28);">
+  <div class="section-head">
+    <span class="section-head-label" style="color:var(--c-danger);">
+      <i class="bi bi-exclamation-circle" style="margin-right:5px;"></i>Ahora
+    </span>
+    <span class="section-count" style="background:rgba(220,38,38,.1);color:var(--c-danger);border-color:rgba(220,38,38,.2);">
+      {{ due_tasks | length }}
+    </span>
+  </div>
+  <div class="fu-list">
+    {% for task in due_tasks %}
+    <div class="fu-row task-row-now">
+      <div class="fu-avatar" style="background:var(--c-danger);">
+        {{ task.first_name[0] | upper }}{{ task.last_name[0] | upper }}
+      </div>
+      <div class="fu-body">
+        <div class="fu-name">{{ task.summary }}</div>
+        <div class="fu-summary">
+          {{ task.first_name }} {{ task.last_name }}
+          {% if task.reminder_comment %} · {{ task.reminder_comment }}{% endif %}
+        </div>
+      </div>
+      <div class="fu-method num">
+        <i class="bi bi-clock"></i>
+        {{ task.next_at[:16] if task.next_at else task.next_date }}
+      </div>
+      <a href="{{ url_for('clients.detail', client_id=task.client_id) }}" class="fu-link">
+        Cliente <i class="bi bi-arrow-right"></i>
+      </a>
+      <form method="POST" action="{{ url_for('followups.complete_task', followup_id=task.id) }}">
+        <button type="submit" class="btn btn-ghost btn-xs">
+          <i class="bi bi-check2"></i> Listo
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="section-card">
+  <div class="section-head">
+    <span class="section-head-label">
+      <i class="bi bi-check2-square" style="margin-right:5px;"></i>Todas las tareas
+    </span>
+    <span class="section-count">{{ all_tasks | length }}</span>
+  </div>
+
+  {% if all_tasks %}
+    <div style="overflow-x:auto;">
+      <table class="crm-table">
+        <thead>
+          <tr>
+            <th>Estado</th>
+            <th>Fecha y hora</th>
+            <th>Cliente</th>
+            <th>Tarea</th>
+            <th>Comentario</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in all_tasks %}
+          <tr>
+            <td>
+              {% if task.completed %}
+                <span class="stage" style="background:rgba(22,163,74,.1);color:var(--c-success);">Completado</span>
+              {% elif task.id in due_ids %}
+                <span class="stage" style="background:rgba(220,38,38,.1);color:var(--c-danger);">Ahora</span>
+              {% else %}
+                <span class="stage" style="background:rgba(217,119,6,.1);color:var(--c-warning);">Pendiente</span>
+              {% endif %}
+            </td>
+            <td class="num" style="white-space:nowrap;color:var(--c-text-2);">
+              {{ task.next_at[:16] if task.next_at else task.next_date }}
+            </td>
+            <td>
+              <div style="font-weight:600;">{{ task.first_name }} {{ task.last_name }}</div>
+              <div style="font-size:11.5px;color:var(--c-text-3);">{{ task.phone or task.email }}</div>
+            </td>
+            <td style="min-width:220px;">{{ task.summary }}</td>
+            <td style="font-size:12px;color:var(--c-text-3);min-width:220px;">
+              {{ task.reminder_comment or task.result or '—' }}
+            </td>
+            <td style="white-space:nowrap;">
+              <div style="display:flex;gap:6px;justify-content:flex-end;">
+                <a href="{{ url_for('clients.detail', client_id=task.client_id) }}" class="btn btn-ghost btn-xs">Ver</a>
+                {% if not task.completed %}
+                  <form method="POST" action="{{ url_for('followups.complete_task', followup_id=task.id) }}">
+                    <button type="submit" class="btn btn-primary btn-xs">Listo</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <i class="bi bi-check2-all"></i>
+      <p>Sin tareas programadas</p>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

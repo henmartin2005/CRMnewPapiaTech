@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from database import get_db
 
 PIPELINE_STAGES = [
@@ -154,21 +156,57 @@ def add_note(client_id, note_type, content):
     db.close()
 
 
+def _now_str():
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _normalize_reminder_at(value):
+    if not value:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, '%Y-%m-%dT%H:%M').strftime('%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(value, '%Y-%m-%d %H:%M').strftime('%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        return value
+
+
 def get_client_followups(client_id):
     db = get_db()
     rows = db.execute("""
-        SELECT * FROM follow_ups WHERE client_id=? ORDER BY created_at DESC
+        SELECT * FROM follow_ups
+        WHERE client_id=?
+        ORDER BY COALESCE(next_at, next_date, created_at) DESC
     """, (client_id,)).fetchall()
     db.close()
     return rows
 
 
-def add_followup(client_id, method, summary, result, next_date):
+def add_followup(client_id, method, summary, result, next_date=None, next_at=None, reminder_comment=''):
+    normalized_next_at = _normalize_reminder_at(next_at)
+    reminder_date = next_date
+    if normalized_next_at:
+        reminder_date = normalized_next_at[:10]
+
     db = get_db()
     db.execute("""
-        INSERT INTO follow_ups (client_id, method, summary, result, next_date)
-        VALUES (?, ?, ?, ?, ?)
-    """, (client_id, method, summary, result, next_date or None))
+        INSERT INTO follow_ups
+            (client_id, method, summary, result, next_date, next_at, reminder_comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        client_id,
+        method,
+        summary,
+        result,
+        reminder_date or None,
+        normalized_next_at,
+        reminder_comment or '',
+    ))
     db.commit()
     db.close()
 
@@ -179,11 +217,64 @@ def get_todays_followups():
         SELECT f.*, c.first_name, c.last_name, c.email, c.phone
         FROM follow_ups f
         JOIN clients c ON c.id = f.client_id
-        WHERE f.next_date = date('now') AND f.completed = 0
-        ORDER BY f.created_at
+        WHERE COALESCE(date(f.next_at), f.next_date) = date('now', 'localtime')
+          AND f.completed = 0
+        ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
     """).fetchall()
     db.close()
     return rows
+
+
+def get_due_tasks():
+    db = get_db()
+    rows = db.execute("""
+        SELECT f.*, c.first_name, c.last_name, c.email, c.phone
+        FROM follow_ups f
+        JOIN clients c ON c.id = f.client_id
+        WHERE f.completed = 0
+          AND (
+            (f.next_at IS NOT NULL AND f.next_at <= ?)
+            OR (f.next_at IS NULL AND f.next_date IS NOT NULL AND f.next_date <= date('now', 'localtime'))
+          )
+        ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
+    """, (_now_str(),)).fetchall()
+    db.close()
+    return rows
+
+
+def get_due_task_count():
+    db = get_db()
+    row = db.execute("""
+        SELECT COUNT(*)
+        FROM follow_ups
+        WHERE completed = 0
+          AND (
+            (next_at IS NOT NULL AND next_at <= ?)
+            OR (next_at IS NULL AND next_date IS NOT NULL AND next_date <= date('now', 'localtime'))
+          )
+    """, (_now_str(),)).fetchone()
+    db.close()
+    return row[0]
+
+
+def get_all_tasks():
+    db = get_db()
+    rows = db.execute("""
+        SELECT f.*, c.first_name, c.last_name, c.email, c.phone
+        FROM follow_ups f
+        JOIN clients c ON c.id = f.client_id
+        WHERE f.next_at IS NOT NULL OR f.next_date IS NOT NULL
+        ORDER BY f.completed ASC, COALESCE(f.next_at, f.next_date, f.created_at) ASC
+    """).fetchall()
+    db.close()
+    return rows
+
+
+def complete_followup(followup_id):
+    db = get_db()
+    db.execute("UPDATE follow_ups SET completed=1 WHERE id=?", (followup_id,))
+    db.commit()
+    db.close()
 
 
 def get_dashboard_stats():

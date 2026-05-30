@@ -65,13 +65,13 @@
       </a>
     </li>
 
-    <li class="sb-section" style="margin-top:4px;">Próximamente</li>
+    <li class="sb-section" style="margin-top:4px;">Operación</li>
 
     <li>
-      <a href="#" class="sb-link sb-disabled">
+      <a href="{{ url_for('followups.calendar') }}"
+         class="sb-link {% if request.endpoint == 'followups.calendar' %}active{% endif %}">
         <i class="bi bi-calendar3"></i>
         <span class="sb-label">Calendario</span>
-        <span class="sb-pill">F2</span>
       </a>
     </li>
 
@@ -84,18 +84,21 @@
     </li>
 
     <li>
-      <a href="#" class="sb-link sb-disabled">
+      <a href="{{ url_for('followups.tasks') }}"
+         class="sb-link {% if request.endpoint == 'followups.tasks' %}active{% endif %}">
         <i class="bi bi-check2-square"></i>
         <span class="sb-label">Tasks</span>
-        <span class="sb-pill">F2</span>
+        {% if task_due_count > 0 %}
+          <span class="sb-task-badge">{{ task_due_count }}</span>
+        {% endif %}
       </a>
     </li>
 
     <li>
-      <a href="#" class="sb-link sb-disabled">
+      <a href="{{ url_for('proposals.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('proposals.') %}active{% endif %}">
         <i class="bi bi-file-earmark-text"></i>
         <span class="sb-label">Propuestas</span>
-        <span class="sb-pill">F2</span>
       </a>
     </li>
 

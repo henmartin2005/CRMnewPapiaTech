@@ -6,6 +6,7 @@ from email.mime.multipart import MIMEMultipart
 from flask import (Blueprint, request, jsonify, render_template,
                    redirect, url_for, flash, session)
 from database import get_db
+from models.proposal_email import get_email_draft
 
 emails_bp = Blueprint('emails', __name__)
 
@@ -215,6 +216,10 @@ def index():
     connected     = _is_connected()
     conversations = _conversations() if connected else []
     templates     = _all_templates()
+    proposal_draft = None
+    draft_id = request.args.get('proposal_draft', type=int)
+    if draft_id:
+        proposal_draft = get_email_draft(draft_id)
 
     active_id     = request.args.get('client_id', type=int)
     active_thread = []
@@ -241,6 +246,7 @@ def index():
         active_thread=active_thread,
         active_client=active_client,
         all_clients=all_clients,
+        proposal_draft=proposal_draft,
     )
 
 

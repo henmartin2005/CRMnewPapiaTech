@@ -26,7 +26,7 @@
     </a>
     <button class="btn btn-primary btn-sm"
             data-bs-toggle="modal" data-bs-target="#followupModal">
-      <i class="bi bi-calendar-plus"></i> Follow-up
+      <i class="bi bi-bell"></i> Recordatorio
     </button>
   </div>
 </div>
@@ -250,17 +250,17 @@
       {% endif %}
     </div>
 
-    <!-- Follow-ups -->
+    <!-- Reminders -->
     <div class="section-card">
       <div class="section-head">
         <span class="section-head-label">
-          <i class="bi bi-calendar-check" style="margin-right:5px;"></i>Follow-ups
+          <i class="bi bi-bell" style="margin-right:5px;"></i>Recordatorios
         </span>
         <div style="display:flex;align-items:center;gap:6px;">
           <span class="section-count">{{ followups | length }}</span>
           <button class="btn btn-ghost btn-icon-xs"
                   data-bs-toggle="modal" data-bs-target="#followupModal"
-                  title="Nuevo follow-up">
+                  title="Nuevo recordatorio">
             <i class="bi bi-plus" style="font-size:13px;"></i>
           </button>
         </div>
@@ -270,18 +270,24 @@
           <table class="crm-table">
             <thead>
               <tr>
-                <th>Fecha</th>
-                <th>Método</th>
-                <th>Resumen</th>
-                <th>Resultado</th>
-                <th>Próxima fecha</th>
+                <th>Fecha y hora</th>
+                <th>Canal</th>
+                <th>Tarea</th>
+                <th>Comentario</th>
+                <th>Estado</th>
               </tr>
             </thead>
             <tbody>
               {% for fu in followups %}
               <tr style="cursor:default;">
                 <td class="num" style="font-size:11.5px;color:var(--c-text-3);white-space:nowrap;">
-                  {{ fu.created_at[:10] }}
+                  {% if fu.next_at %}
+                    {{ fu.next_at[:16] }}
+                  {% elif fu.next_date %}
+                    {{ fu.next_date }}
+                  {% else %}
+                    —
+                  {% endif %}
                 </td>
                 <td>
                   <span class="stage" style="background:var(--c-bg);color:var(--c-text-2);border:1px solid var(--c-border);">
@@ -289,14 +295,18 @@
                   </span>
                 </td>
                 <td style="font-size:12.5px;max-width:200px;">{{ fu.summary }}</td>
-                <td style="font-size:12px;color:var(--c-text-3);">{{ fu.result or '—' }}</td>
                 <td>
-                  {% if fu.next_date %}
-                    <span class="num" style="font-size:11.5px;color:var(--c-warning);font-weight:600;">
-                      {{ fu.next_date }}
-                    </span>
+                  <span style="font-size:12px;color:var(--c-text-3);">
+                    {{ fu.reminder_comment or fu.result or '—' }}
+                  </span>
+                </td>
+                <td>
+                  {% if fu.completed %}
+                    <span class="stage" style="background:rgba(22,163,74,.1);color:var(--c-success);">Completado</span>
+                  {% elif fu.next_at and fu.next_at <= now_str %}
+                    <span class="stage" style="background:rgba(220,38,38,.1);color:var(--c-danger);">Ahora</span>
                   {% else %}
-                    <span style="color:var(--c-text-3);">—</span>
+                    <span class="stage" style="background:rgba(217,119,6,.1);color:var(--c-warning);">Pendiente</span>
                   {% endif %}
                 </td>
               </tr>
@@ -307,7 +317,7 @@
       {% else %}
         <div class="empty" style="padding:24px;">
           <i class="bi bi-calendar"></i>
-          <p>Sin follow-ups registrados</p>
+          <p>Sin recordatorios registrados</p>
         </div>
       {% endif %}
     </div>
@@ -315,18 +325,18 @@
   </div>
 </div>
 
-<!-- ── FOLLOW-UP MODAL ── -->
+<!-- ── REMINDER MODAL ── -->
 <div class="modal fade" id="followupModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <form method="POST" action="{{ url_for('clients.add_client_followup', client_id=client.id) }}">
         <div class="modal-header">
-          <h5 class="modal-title">Registrar Follow-up</h5>
+          <h5 class="modal-title">Crear recordatorio</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
           <div>
-            <label class="form-label">Método de contacto</label>
+            <label class="form-label">Canal</label>
             <select name="method" class="form-select" required>
               {% for val, label in followup_methods %}
                 <option value="{{ val }}">{{ label }}</option>
@@ -334,19 +344,20 @@
             </select>
           </div>
           <div>
-            <label class="form-label">Resumen <span style="color:var(--c-danger);">*</span></label>
+            <label class="form-label">Tarea específica <span style="color:var(--c-danger);">*</span></label>
             <textarea name="summary" class="form-control" rows="3"
-                      placeholder="¿De qué trató el contacto?" required></textarea>
+                      placeholder="Ej. Llamar para revisar propuesta" required></textarea>
           </div>
           <div>
-            <label class="form-label">Resultado</label>
-            <textarea name="result" class="form-control" rows="2"
-                      placeholder="¿Cuál fue el resultado o próximo paso?"></textarea>
+            <label class="form-label">Fecha y hora exacta <span style="color:var(--c-danger);">*</span></label>
+            <input type="datetime-local" name="reminder_at" class="form-control" id="nextDateInput" required />
           </div>
           <div>
-            <label class="form-label">Próxima fecha de seguimiento</label>
-            <input type="date" name="next_date" class="form-control" id="nextDateInput" />
+            <label class="form-label">Comentario del recordatorio</label>
+            <textarea name="reminder_comment" class="form-control" rows="3"
+                      placeholder="Detalles útiles para completar la tarea"></textarea>
           </div>
+          <input type="hidden" name="result" value="" />
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -458,7 +469,12 @@ function changeStage(clientId, stage, btn) {
   });
 }
 
-document.getElementById('nextDateInput').min = new Date().toISOString().split('T')[0];
+const reminderInput = document.getElementById('nextDateInput');
+if (reminderInput) {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  reminderInput.min = now.toISOString().slice(0, 16);
+}
 
 // ══════════════════════════════════════════
 // WHATSAPP MODAL

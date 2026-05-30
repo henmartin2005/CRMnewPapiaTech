@@ -230,8 +230,15 @@
       <!-- No thread selected -->
       <div class="em-no-chat">
         <i class="bi bi-envelope-open"></i>
-        <p>Selecciona una conversación</p>
-        <p style="font-size:12px;">o <button class="em-link-btn" data-bs-toggle="modal" data-bs-target="#composeModal"><i class="bi bi-pencil-square"></i> redacta un nuevo email</button></p>
+        {% if proposal_draft %}
+          <p>Borrador de propuesta listo para revisar</p>
+          <button class="em-link-btn" data-bs-toggle="modal" data-bs-target="#composeModal">
+            <i class="bi bi-paperclip"></i> Abrir borrador
+          </button>
+        {% else %}
+          <p>Selecciona una conversación</p>
+          <p style="font-size:12px;">o <button class="em-link-btn" data-bs-toggle="modal" data-bs-target="#composeModal"><i class="bi bi-pencil-square"></i> redacta un nuevo email</button></p>
+        {% endif %}
       </div>
 
     {% else %}
@@ -303,6 +310,9 @@
               </option>
             {% endfor %}
           </select>
+          {% if proposal_draft %}
+            <div class="form-text">Proposal draft recipient: <span id="draftToEmail">{{ proposal_draft.to_email }}</span></div>
+          {% endif %}
         </div>
 
         <!-- Plantillas -->
@@ -331,6 +341,17 @@
                     style="resize:vertical;min-height:140px;"></textarea>
         </div>
 
+        {% if proposal_draft %}
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--c-border);border-radius:var(--radius-sm);background:var(--c-surface-2);">
+          <i class="bi bi-paperclip" style="color:var(--c-accent);"></i>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:700;">{{ proposal_draft.attachment_name }}</div>
+            <div style="font-size:11px;color:var(--c-text-3);">Mock attachment ready for backend integration</div>
+          </div>
+          <a href="{{ proposal_draft.attachment_url }}" class="btn btn-ghost btn-xs" target="_blank">View PDF</a>
+        </div>
+        {% endif %}
+
       </div>
       <div class="modal-footer">
         <button class="em-link-btn" data-bs-dismiss="modal">Cancelar</button>
@@ -349,6 +370,7 @@
 const TEMPLATES = {{ templates | tojson }};
 const TPL_MAP   = {};
 TEMPLATES.forEach(t => TPL_MAP[t.id] = t);
+const PROPOSAL_DRAFT = {{ proposal_draft | tojson if proposal_draft else 'null' }};
 
 {% if active_client %}
 // Pre-select client when viewing a thread
@@ -357,6 +379,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sel) sel.value = '{{ active_client.id }}';
 });
 {% endif %}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!PROPOSAL_DRAFT) return;
+  const subject = document.getElementById('composeSubject');
+  const body = document.getElementById('composeBody');
+  if (subject) subject.value = PROPOSAL_DRAFT.subject || '';
+  if (body) body.value = PROPOSAL_DRAFT.body || '';
+  const sel = document.getElementById('composeClient');
+  if (sel && PROPOSAL_DRAFT.client_id) sel.value = String(PROPOSAL_DRAFT.client_id);
+  const modalEl = document.getElementById('composeModal');
+  if (modalEl) new bootstrap.Modal(modalEl).show();
+});
 
 function openReply() {
   const modal = new bootstrap.Modal(document.getElementById('composeModal'));
@@ -392,7 +426,8 @@ async function sendEmail() {
   const sel       = document.getElementById('composeClient');
   const opt       = sel.options[sel.selectedIndex];
   const clientId  = sel.value || null;
-  const toEmail   = opt && opt.dataset.email ? opt.dataset.email : '';
+  const draftTo   = document.getElementById('draftToEmail');
+  const toEmail   = opt && opt.dataset.email ? opt.dataset.email : (draftTo ? draftTo.textContent.trim() : '');
   const subject   = document.getElementById('composeSubject').value.trim();
   const body      = document.getElementById('composeBody').value.trim();
 
