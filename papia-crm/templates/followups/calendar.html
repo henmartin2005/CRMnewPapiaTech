@@ -1,80 +1,588 @@
 {% extends "base.html" %}
 {% block title %}Calendario{% endblock %}
 
+{% block head %}
+<!-- FullCalendar v6 global build (includes dayGrid, timeGrid, list, interaction) -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/locales/es.global.min.js"></script>
+<style>
+/* ════════════════════════════════════════════════════════
+   FullCalendar — override to match Papia CRM design system
+════════════════════════════════════════════════════════ */
+
+/* ── Method color palette (source of truth) ── */
+:root {
+  --method-phone:     #2563EB;
+  --method-email:     #DC2626;
+  --method-meeting:   #059669;
+  --method-whatsapp:  #16A34A;
+  --method-other:     #475569;
+}
+
+/* ── FullCalendar base variables ── */
+.fc {
+  --fc-border-color:              var(--c-border);
+  --fc-today-bg-color:            rgba(42,91,255,.05);
+  --fc-neutral-bg-color:          var(--c-surface-2);
+  --fc-list-event-hover-bg-color: var(--c-bg);
+  --fc-page-bg-color:             var(--c-surface);
+  --fc-small-font-size:           11px;
+  font-family: 'Geist', sans-serif;
+  font-size: 13px;
+}
+
+/* Wrap card */
+.cal-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  padding: 0;
+}
+
+/* ── Custom toolbar ── */
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-surface);
+}
+
+.cal-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-text);
+  min-width: 160px;
+  text-align: center;
+}
+
+.cal-nav { display: flex; gap: 4px; align-items: center; }
+
+.cal-nav-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border); background: var(--c-surface);
+  color: var(--c-text-2); font-family: 'Geist', sans-serif;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+.cal-nav-btn:hover { background: var(--c-bg); border-color: var(--c-border-2); color: var(--c-text); }
+.cal-nav-btn.today { color: var(--c-accent); border-color: rgba(42,91,255,.3); }
+.cal-nav-btn.today:hover { background: rgba(42,91,255,.06); }
+
+.cal-view-group { display: flex; border: 1px solid var(--c-border); border-radius: var(--radius-sm); overflow: hidden; }
+
+.cal-view-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 12px;
+  border: none; border-right: 1px solid var(--c-border);
+  background: var(--c-surface); color: var(--c-text-2);
+  font-family: 'Geist', sans-serif; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: background var(--t), color var(--t);
+}
+.cal-view-btn:last-child { border-right: none; }
+.cal-view-btn:hover { background: var(--c-bg); color: var(--c-text); }
+.cal-view-btn.active { background: var(--c-accent); color: #fff; }
+
+/* ── Calendar cell ── */
+.fc .fc-daygrid-day-number,
+.fc .fc-col-header-cell-cushion {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11.5px;
+  color: var(--c-text-2);
+  text-decoration: none;
+}
+
+.fc .fc-col-header-cell-cushion {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: 10.5px;
+}
+
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  background: var(--c-accent);
+  color: #fff;
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.fc .fc-scrollgrid { border-radius: 0; }
+.fc .fc-scrollgrid-section-header { background: var(--c-surface-2); }
+
+/* time grid hours */
+.fc .fc-timegrid-slot-label-cushion {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10.5px;
+  color: var(--c-text-3);
+}
+
+/* ── Events per method ── */
+.fc .fc-event {
+  border-radius: 4px;
+  border: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .12s;
+}
+.fc .fc-event:hover { opacity: .85; }
+
+.fc .fc-method-phone    { --fc-event-bg-color: var(--method-phone);     --fc-event-border-color: var(--method-phone); }
+.fc .fc-method-email    { --fc-event-bg-color: var(--method-email);     --fc-event-border-color: var(--method-email); }
+.fc .fc-method-meeting  { --fc-event-bg-color: var(--method-meeting);   --fc-event-border-color: var(--method-meeting); }
+.fc .fc-method-whatsapp { --fc-event-bg-color: var(--method-whatsapp);  --fc-event-border-color: var(--method-whatsapp); }
+.fc .fc-method-other    { --fc-event-bg-color: var(--method-other);     --fc-event-border-color: var(--method-other); }
+.fc .fc-event-done      { opacity: .4; text-decoration: line-through; }
+
+/* ── List view ── */
+.fc .fc-list-event:hover td { background: var(--c-bg); }
+.fc .fc-list-day-cushion { background: var(--c-surface-2); }
+.fc .fc-list-day-text,
+.fc .fc-list-day-side-text {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--c-text-2);
+}
+.fc .fc-list-event-title a { color: var(--c-text); text-decoration: none; }
+.fc .fc-list-event-dot { border-color: currentColor; }
+
+/* ── "More" popover ── */
+.fc .fc-popover {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,.1);
+}
+.fc .fc-popover-header {
+  background: var(--c-surface-2);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-2);
+}
+
+/* ── Remove FullCalendar default header (we use custom) ── */
+.fc .fc-toolbar { display: none !important; }
+
+/* ── Scrollbar ── */
+.fc-scroller::-webkit-scrollbar { width: 4px; height: 4px; }
+.fc-scroller::-webkit-scrollbar-track { background: transparent; }
+.fc-scroller::-webkit-scrollbar-thumb { background: var(--c-border-2); border-radius: 99px; }
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  .cal-title { font-size: 13px; min-width: 120px; }
+  .cal-view-btn { padding: 0 8px; font-size: 11px; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
+<!-- ── Page header ── -->
 <div class="pg-header">
   <div>
     <h1 class="pg-title">Calendario</h1>
-    <p class="pg-sub">Vista de recordatorios programados</p>
+    <p class="pg-sub">Recordatorios y seguimientos programados</p>
   </div>
   <div class="pg-actions">
     <a href="{{ url_for('followups.tasks') }}" class="btn btn-ghost btn-sm">
       <i class="bi bi-check2-square"></i> Tasks
     </a>
-    <a href="{{ url_for('clients.list_clients') }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus"></i> Nuevo recordatorio
-    </a>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#reminderModal">
+      <i class="bi bi-plus-lg"></i> Nuevo
+    </button>
   </div>
 </div>
 
-<div class="section-card">
-  <div class="section-head">
-    <span class="section-head-label">
-      <i class="bi bi-calendar3" style="margin-right:5px;"></i>Eventos
-    </span>
-    <span class="section-count">{{ tasks | length }}</span>
+<!-- ── Calendar card ── -->
+<div class="cal-card">
+
+  <!-- Custom toolbar -->
+  <div class="cal-toolbar">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" id="btnPrev" title="Anterior">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <button class="cal-nav-btn today" id="btnToday">Hoy</button>
+      <button class="cal-nav-btn" id="btnNext" title="Siguiente">
+        <i class="bi bi-chevron-right"></i>
+      </button>
+    </div>
+
+    <span class="cal-title" id="calTitle"></span>
+
+    <div class="cal-view-group">
+      <button class="cal-view-btn active" data-view="dayGridMonth"  id="vMes">Mes</button>
+      <button class="cal-view-btn"        data-view="timeGridWeek"  id="vSemana">Semana</button>
+      <button class="cal-view-btn"        data-view="timeGridDay"   id="vDia">Día</button>
+      <button class="cal-view-btn"        data-view="listWeek"      id="vLista">Lista</button>
+    </div>
   </div>
 
-  {% if tasks %}
-    <div class="calendar-list">
-      {% set ns = namespace(day='') %}
-      {% for task in tasks %}
-        {% set task_day = task.next_at[:10] if task.next_at else task.next_date %}
-        {% if task_day != ns.day %}
-          {% set ns.day = task_day %}
-          <div class="calendar-day num">{{ task_day }}</div>
-        {% endif %}
+  <!-- FullCalendar mount point -->
+  <div id="calendar" style="padding:0 2px 2px;"></div>
 
-        <div class="calendar-event {% if task.id in due_ids and not task.completed %}calendar-event-now{% endif %}">
-          <div class="calendar-time num">
-            {% if task.next_at %}
-              {{ task.next_at[11:16] }}
-            {% else %}
-              Todo el día
-            {% endif %}
-          </div>
-          <div class="calendar-dot"></div>
-          <div class="calendar-body">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <div class="calendar-title">{{ task.summary }}</div>
-              {% if task.completed %}
-                <span class="stage" style="background:rgba(22,163,74,.1);color:var(--c-success);">Completado</span>
-              {% elif task.id in due_ids %}
-                <span class="stage" style="background:rgba(220,38,38,.1);color:var(--c-danger);">Ahora</span>
-              {% else %}
-                <span class="stage" style="background:rgba(217,119,6,.1);color:var(--c-warning);">Pendiente</span>
-              {% endif %}
-            </div>
-            <div class="calendar-meta">
-              {{ task.first_name }} {{ task.last_name }} · {{ method_labels.get(task.method, task.method) }}
-            </div>
-            {% if task.reminder_comment %}
-              <div class="calendar-comment">{{ task.reminder_comment }}</div>
-            {% endif %}
-          </div>
-          <a href="{{ url_for('clients.detail', client_id=task.client_id) }}" class="btn btn-ghost btn-xs">
-            Cliente
-          </a>
+</div>
+
+
+<!-- ════ NEW REMINDER MODAL ════ -->
+<div class="modal fade" id="reminderModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-calendar-plus me-2" style="color:var(--c-accent);"></i>Nuevo recordatorio
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+
+        <div>
+          <label class="form-label">Cliente</label>
+          <select class="form-select" id="remClient" required>
+            <option value="">Selecciona un cliente…</option>
+            {% for cl in clients %}
+              <option value="{{ cl.id }}">{{ cl.first_name }} {{ cl.last_name }}</option>
+            {% endfor %}
+          </select>
         </div>
-      {% endfor %}
+
+        <div>
+          <label class="form-label">Tarea / Resumen</label>
+          <input type="text" class="form-control" id="remSummary" placeholder="Ej: Llamar para hacer seguimiento" />
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label class="form-label">Canal</label>
+            <select class="form-select" id="remMethod">
+              <option value="phone">Teléfono</option>
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="meeting">Reunión</option>
+              <option value="other">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Fecha y hora</label>
+            <input type="datetime-local" class="form-control" id="remDatetime" />
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Comentario <span style="color:var(--c-text-3);font-weight:400;">(opcional)</span></label>
+          <input type="text" class="form-control" id="remComment" placeholder="Notas adicionales…" />
+        </div>
+
+        <div id="remError" style="display:none;" class="flash-msg danger"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="em-link-btn" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-wa-send" id="remSaveBtn" style="background:var(--c-accent);" onclick="saveReminder()">
+          <i class="bi bi-check-lg"></i> Guardar
+        </button>
+      </div>
     </div>
-  {% else %}
-    <div class="empty">
-      <i class="bi bi-calendar"></i>
-      <p>Sin eventos en el calendario</p>
-    </div>
-  {% endif %}
+  </div>
 </div>
 
+
+<!-- ════ EVENT DETAIL MODAL ════ -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header" style="padding-bottom:10px;">
+        <div style="flex:1;min-width:0;">
+          <div id="evMethodBadge" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;"></div>
+          <h5 class="modal-title" id="evTitle" style="font-size:14px;line-height:1.3;"></h5>
+        </div>
+        <button type="button" class="btn-close ms-2" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;padding-top:8px;">
+        <div style="display:flex;gap:8px;align-items:center;font-size:13px;">
+          <i class="bi bi-person" style="color:var(--c-text-3);"></i>
+          <span id="evClient" style="color:var(--c-text-2);"></span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;font-size:13px;">
+          <i class="bi bi-clock" style="color:var(--c-text-3);"></i>
+          <span id="evStart" class="num" style="color:var(--c-text-2);"></span>
+        </div>
+        <div id="evCommentWrap" style="display:none;gap:8px;align-items:flex-start;font-size:13px;">
+          <i class="bi bi-chat-left-text" style="color:var(--c-text-3);margin-top:1px;"></i>
+          <span id="evComment" style="color:var(--c-text-2);"></span>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between;">
+        <form id="evCompleteForm" method="POST" style="margin:0;">
+          <button type="submit" class="em-link-btn" id="evCompleteBtn">
+            <i class="bi bi-check2"></i> Marcar listo
+          </button>
+        </form>
+        <a id="evProfileLink" href="#" class="btn-wa-send" style="background:var(--c-accent);text-decoration:none;font-size:12px;height:28px;padding:0 12px;">
+          <i class="bi bi-person"></i> Ver cliente
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const METHOD_COLORS = {
+  phone:    { bg: '#2563EB', label: 'Teléfono',  icon: 'bi-telephone-fill' },
+  email:    { bg: '#DC2626', label: 'Email',      icon: 'bi-envelope-fill' },
+  meeting:  { bg: '#059669', label: 'Reunión',    icon: 'bi-camera-video-fill' },
+  whatsapp: { bg: '#16A34A', label: 'WhatsApp',   icon: 'bi-whatsapp' },
+  other:    { bg: '#475569', label: 'Otro',       icon: 'bi-three-dots' },
+};
+
+let cal;
+
+document.addEventListener('DOMContentLoaded', function () {
+  const el      = document.getElementById('calendar');
+  const isMobile = window.innerWidth < 640;
+
+  cal = new FullCalendar.Calendar(el, {
+    locale:        'es',
+    initialView:   isMobile ? 'listWeek' : 'dayGridMonth',
+    headerToolbar: false,
+    editable:      true,
+    selectable:    true,
+    selectMirror:  true,
+    dayMaxEvents:  true,
+    height:        isMobile ? 'auto' : 680,
+
+    events: '/calendar/events',
+
+    // Color events by method
+    eventClassNames: function (arg) {
+      const cls = [`fc-method-${arg.event.extendedProps.method || 'other'}`];
+      if (arg.event.extendedProps.completed) cls.push('fc-event-done');
+      return cls;
+    },
+
+    // Custom event content: icon + title + client
+    eventContent: function (arg) {
+      const m    = arg.event.extendedProps.method || 'other';
+      const icon = METHOD_COLORS[m]?.icon || 'bi-calendar';
+      const view = cal.view.type;
+
+      if (view === 'listWeek') return true; // default list rendering
+
+      const html = `
+        <div style="display:flex;align-items:center;gap:4px;padding:1px 3px;overflow:hidden;">
+          <i class="bi ${icon}" style="font-size:10px;flex-shrink:0;"></i>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(arg.event.title)}</span>
+        </div>`;
+      return { html };
+    },
+
+    // Update title on navigation
+    datesSet: function () {
+      document.getElementById('calTitle').textContent = cal.view.title;
+      syncViewBtns();
+    },
+
+    // Empty slot click → pre-fill modal
+    dateClick: function (info) {
+      openNewModal(info.dateStr);
+    },
+
+    // Event click → show detail
+    eventClick: function (info) {
+      showDetail(info.event);
+    },
+
+    // Drag & Drop
+    eventDrop: function (info) {
+      moveEvent(info.event, info.revert);
+    },
+    eventResize: function (info) {
+      moveEvent(info.event, info.revert);
+    },
+  });
+
+  cal.render();
+  document.getElementById('calTitle').textContent = cal.view.title;
+  syncViewBtns();
+
+  // ── Custom toolbar wiring ──
+  document.getElementById('btnPrev').addEventListener('click',  () => { cal.prev();  });
+  document.getElementById('btnNext').addEventListener('click',  () => { cal.next();  });
+  document.getElementById('btnToday').addEventListener('click', () => { cal.today(); });
+
+  document.querySelectorAll('.cal-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      cal.changeView(btn.dataset.view);
+      syncViewBtns();
+    });
+  });
+});
+
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function syncViewBtns() {
+  const current = cal.view.type;
+  document.querySelectorAll('.cal-view-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === current);
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── New reminder modal ─────────────────────────────────────────────────────
+
+function openNewModal(dateStr) {
+  // pre-fill date/time
+  let dt = dateStr;
+  if (!dt.includes('T')) dt = dt + 'T09:00';  // default 09:00 for all-day clicks
+  dt = dt.slice(0, 16);
+  document.getElementById('remDatetime').value = dt;
+  document.getElementById('remError').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('reminderModal')).show();
+}
+
+async function saveReminder() {
+  const btn      = document.getElementById('remSaveBtn');
+  const errEl    = document.getElementById('remError');
+  const clientId = document.getElementById('remClient').value;
+  const summary  = document.getElementById('remSummary').value.trim();
+  const method   = document.getElementById('remMethod').value;
+  const datetime = document.getElementById('remDatetime').value;
+  const comment  = document.getElementById('remComment').value.trim();
+
+  errEl.style.display = 'none';
+  if (!clientId)  { showErr('Selecciona un cliente.'); return; }
+  if (!summary)   { showErr('Escribe un resumen.'); return; }
+  if (!datetime)  { showErr('Selecciona fecha y hora.'); return; }
+
+  btn.disabled   = true;
+  btn.innerHTML  = '<i class="bi bi-hourglass-split"></i> Guardando…';
+
+  try {
+    const res  = await fetch('/calendar/events/new', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ client_id: clientId, summary, method, datetime, comment }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      bootstrap.Modal.getInstance(document.getElementById('reminderModal')).hide();
+      cal.refetchEvents();
+      // reset form
+      ['remClient','remSummary','remComment'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('remDatetime').value = '';
+    } else {
+      showErr(data.error || 'Error al guardar.');
+    }
+  } catch {
+    showErr('Error de conexión.');
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="bi bi-check-lg"></i> Guardar';
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('remError');
+  el.textContent = msg;
+  el.style.display = 'flex';
+}
+
+
+// ── Event detail modal ────────────────────────────────────────────────────
+
+function showDetail(event) {
+  const p = event.extendedProps;
+  const m = METHOD_COLORS[p.method] || METHOD_COLORS.other;
+
+  // Method badge
+  const badge = document.getElementById('evMethodBadge');
+  badge.innerHTML = `<i class="bi ${m.icon}" style="color:${m.bg}"></i><span style="color:${m.bg};">${m.label}</span>`;
+
+  document.getElementById('evTitle').textContent  = event.title;
+  document.getElementById('evClient').textContent = p.client;
+  document.getElementById('evStart').textContent  =
+    event.start ? event.start.toLocaleString('es', {dateStyle:'medium', timeStyle:'short'}) : '—';
+
+  const commentWrap = document.getElementById('evCommentWrap');
+  if (p.comment) {
+    document.getElementById('evComment').textContent = p.comment;
+    commentWrap.style.display = 'flex';
+  } else {
+    commentWrap.style.display = 'none';
+  }
+
+  // Complete button
+  const completeBtn  = document.getElementById('evCompleteBtn');
+  const completeForm = document.getElementById('evCompleteForm');
+  if (p.completed) {
+    completeBtn.style.display = 'none';
+  } else {
+    completeBtn.style.display = '';
+    completeForm.action = `/tasks/${event.id}/complete`;
+  }
+
+  document.getElementById('evProfileLink').href = `/clients/${p.client_id}`;
+
+  new bootstrap.Modal(document.getElementById('eventModal')).show();
+}
+
+
+// ── Drag & drop update ────────────────────────────────────────────────────
+
+async function moveEvent(event, revert) {
+  const start = event.start ? event.start.toISOString() : null;
+  if (!start) { revert(); return; }
+
+  // Use local ISO without timezone offset for storage
+  const localStart = toLocalISO(event.start);
+
+  try {
+    const res  = await fetch(`/calendar/events/${event.id}/move`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ start: localStart }),
+    });
+    const data = await res.json();
+    if (!data.success) revert();
+  } catch {
+    revert();
+  }
+}
+
+function toLocalISO(date) {
+  // Returns "YYYY-MM-DDTHH:MM:SS" in local time (no Z)
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}` +
+         `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+</script>
+
+<!-- shared modal btn style if not in stylesheet -->
+<style>
+.em-link-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 28px; padding: 0 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border); background: var(--c-surface);
+  color: var(--c-text-2); font-family: 'Geist', sans-serif;
+  font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none;
+  transition: border-color var(--t), color var(--t);
+}
+.em-link-btn:hover { border-color: var(--c-accent); color: var(--c-accent); }
+</style>
 {% endblock %}

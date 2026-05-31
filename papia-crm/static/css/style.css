@@ -40,6 +40,12 @@
   --radius-lg:      14px;
   /* Transitions */
   --t:              .14s ease;
+  /* Method palette — source of truth for calendar, history icons, etc. */
+  --method-phone:    #2563EB;
+  --method-email:    #DC2626;
+  --method-meeting:  #059669;
+  --method-whatsapp: #16A34A;
+  --method-other:    #475569;
 }
 
 /* ── Light sidebar theme ── */
