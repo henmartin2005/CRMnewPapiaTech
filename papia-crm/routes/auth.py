@@ -1,6 +1,8 @@
 import os
 import functools
 from flask import Blueprint, request, session, redirect, url_for, render_template
+from werkzeug.security import check_password_hash
+from database import get_db
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -24,13 +26,18 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
 
-        admin_user = os.getenv('ADMIN_USERNAME', 'admin').strip().lstrip('﻿')
-        admin_pass = os.getenv('ADMIN_PASSWORD', '').strip()
+        db   = get_db()
+        user = db.execute(
+            "SELECT * FROM users WHERE username=? AND is_active=1", (username,)
+        ).fetchone()
+        db.close()
 
-        if username == admin_user and password == admin_pass and admin_pass:
+        if user and check_password_hash(user['password_hash'], password):
             session.permanent = True
-            session['logged_in'] = True
-            session['username'] = username
+            session['logged_in']  = True
+            session['username']   = username
+            session['user_id']    = user['id']
+            session['user_role']  = user['role']
             next_url = request.args.get('next') or url_for('dashboard')
             return redirect(next_url)
         else:

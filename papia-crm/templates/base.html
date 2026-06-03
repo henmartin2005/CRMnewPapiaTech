@@ -67,6 +67,7 @@
 
     <li class="sb-section" style="margin-top:4px;">Operación</li>
 
+    {% if 'calendar' in enabled_modules %}
     <li>
       <a href="{{ url_for('followups.calendar') }}"
          class="sb-link {% if request.endpoint == 'followups.calendar' %}active{% endif %}">
@@ -74,7 +75,9 @@
         <span class="sb-label">Calendario</span>
       </a>
     </li>
+    {% endif %}
 
+    {% if 'emails' in enabled_modules %}
     <li>
       <a href="{{ url_for('emails.index') }}"
          class="sb-link {% if request.endpoint and request.endpoint.startswith('emails.') %}active{% endif %}">
@@ -82,7 +85,9 @@
         <span class="sb-label">Emails</span>
       </a>
     </li>
+    {% endif %}
 
+    {% if 'tasks' in enabled_modules %}
     <li>
       <a href="{{ url_for('followups.tasks') }}"
          class="sb-link {% if request.endpoint == 'followups.tasks' %}active{% endif %}">
@@ -93,7 +98,9 @@
         {% endif %}
       </a>
     </li>
+    {% endif %}
 
+    {% if 'proposals' in enabled_modules %}
     <li>
       <a href="{{ url_for('proposals.index') }}"
          class="sb-link {% if request.endpoint and request.endpoint.startswith('proposals.') %}active{% endif %}">
@@ -101,7 +108,9 @@
         <span class="sb-label">Propuestas</span>
       </a>
     </li>
+    {% endif %}
 
+    {% if 'whatsapp' in enabled_modules %}
     <li>
       <a href="{{ url_for('whatsapp.index') }}"
          class="sb-link {% if request.endpoint and request.endpoint.startswith('whatsapp.') %}active{% endif %}">
@@ -112,23 +121,19 @@
         {% endif %}
       </a>
     </li>
-
-    <li>
-      <a href="#" class="sb-link sb-disabled">
-        <i class="bi bi-stars"></i>
-        <span class="sb-label">AI Assistant</span>
-        <span class="sb-pill" style="background:rgba(168,85,247,.15);color:rgba(196,140,255,.6);">F3</span>
-      </a>
-    </li>
+    {% endif %}
 
     <li class="sb-section" style="margin-top:4px;">Sistema</li>
 
+    {% if is_admin %}
     <li>
-      <a href="#" class="sb-link sb-disabled">
+      <a href="{{ url_for('admin.settings') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('admin.') %}active{% endif %}">
         <i class="bi bi-sliders"></i>
         <span class="sb-label">Configuración</span>
       </a>
     </li>
+    {% endif %}
 
   </ul>
 

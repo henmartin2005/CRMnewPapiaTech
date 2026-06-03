@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Configuración del sistema{% endblock %}
+
+{% block head %}
+<style>
+.mod-toggle { position:relative; display:inline-block; width:36px; height:20px; }
+.mod-toggle input { opacity:0; width:0; height:0; }
+.mod-slider {
+  position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
+  background:var(--c-border-2); border-radius:20px; transition:.2s;
+}
+.mod-slider:before {
+  content:''; position:absolute; height:14px; width:14px; left:3px; bottom:3px;
+  background:#fff; border-radius:50%; transition:.2s;
+}
+input:checked + .mod-slider { background:var(--c-accent); }
+input:checked + .mod-slider:before { transform:translateX(16px); }
+.user-card {
+  background:var(--c-surface); border:1px solid var(--c-border);
+  border-radius:var(--radius); padding:20px 24px; margin-bottom:16px;
+}
+.user-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.user-avatar {
+  width:36px; height:36px; border-radius:50%;
+  background:linear-gradient(135deg,#2A5BFF,#8B5CF6);
+  color:#fff; font-weight:700; font-size:14px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.mod-grid { display:flex; flex-wrap:wrap; gap:10px; }
+.mod-item {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 12px; border-radius:var(--radius-sm);
+  border:1px solid var(--c-border); background:var(--c-bg);
+  font-size:12.5px; font-weight:500; color:var(--c-text-2);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Configuración del sistema</h1>
+    <p style="font-size:13px;color:var(--c-text-3);margin:4px 0 0;">Gestiona usuarios y permisos de módulos</p>
+  </div>
+  <div class="pg-actions">
+    <button class="btn-md btn-primary" data-bs-toggle="modal" data-bs-target="#newUserModal">
+      <i class="bi bi-person-plus"></i> Nuevo usuario
+    </button>
+  </div>
+</div>
+
+<div style="max-width:800px;">
+  {% for user in users %}
+  <div class="user-card">
+    <div class="user-card-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="user-avatar">{{ user.display_name[0] | upper }}</div>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--c-text);">{{ user.display_name }}</div>
+          <div style="font-size:12px;color:var(--c-text-3);">
+            @{{ user.username }}
+            <span style="margin-left:8px;padding:2px 7px;border-radius:99px;font-size:10.5px;font-weight:600;
+                  background:{% if user.role == 'admin' %}rgba(42,91,255,.1);color:var(--c-accent){% else %}rgba(16,185,129,.1);color:#059669{% endif %};">
+              {{ user.role }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-icon-xs" title="Cambiar contraseña"
+                onclick="openResetPwd({{ user.id }}, '{{ user.username }}')">
+          <i class="bi bi-key"></i>
+        </button>
+        {% if user.role != 'admin' %}
+        <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}"
+              onsubmit="return confirm('¿Eliminar al usuario {{ user.username }}?')">
+          <button type="submit" class="btn-icon-xs" style="color:var(--c-danger);" title="Eliminar">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if user.role == 'admin' %}
+    <div style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
+      <i class="bi bi-shield-check" style="color:var(--c-accent);"></i>
+      El administrador siempre tiene acceso a todos los módulos.
+    </div>
+    {% else %}
+    <div style="font-size:12px;font-weight:600;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">
+      Módulos habilitados
+    </div>
+    <div class="mod-grid">
+      {% for mod_key, mod_label, mod_icon in all_modules %}
+      {% set is_enabled = modules_by_user.get(user.id, {}).get(mod_key, 0) %}
+      <div class="mod-item">
+        <i class="bi {{ mod_icon }}" style="font-size:14px;{% if is_enabled %}color:var(--c-accent){% endif %}"></i>
+        <span>{{ mod_label }}</span>
+        <label class="mod-toggle" style="margin:0;">
+          <input type="checkbox"
+                 {% if is_enabled %}checked{% endif %}
+                 onchange="toggleModule({{ user.id }}, '{{ mod_key }}', this.checked)">
+          <span class="mod-slider"></span>
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Modal: New user -->
+<div class="modal fade" id="newUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2" style="color:var(--c-accent);"></i>Nuevo usuario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('admin.create_user') }}">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label class="form-label">Nombre visible</label>
+            <input type="text" name="display_name" class="form-control" placeholder="Ej: Juan Pérez" />
+          </div>
+          <div>
+            <label class="form-label">Usuario</label>
+            <input type="text" name="username" class="form-control" required placeholder="Ej: testing" />
+          </div>
+          <div>
+            <label class="form-label">Contraseña</label>
+            <input type="password" name="password" class="form-control" required placeholder="Mínimo 4 caracteres" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-wa-send"><i class="bi bi-check-lg"></i> Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Reset password -->
+<div class="modal fade" id="resetPwdModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-key me-2" style="color:var(--c-accent);"></i>Cambiar contraseña</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="resetPwdForm" method="POST">
+        <div class="modal-body">
+          <p style="font-size:13px;color:var(--c-text-2);">Usuario: <strong id="resetPwdUsername"></strong></p>
+          <label class="form-label">Nueva contraseña</label>
+          <input type="password" name="new_password" class="form-control" required placeholder="Nueva contraseña" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-wa-send"><i class="bi bi-check-lg"></i> Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function toggleModule(userId, module, enabled) {
+  await fetch(`/admin/users/${userId}/toggle-module`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ module, enabled }),
+  });
+}
+
+function openResetPwd(userId, username) {
+  document.getElementById('resetPwdUsername').textContent = username;
+  document.getElementById('resetPwdForm').action = `/admin/users/${userId}/reset-password`;
+  new bootstrap.Modal(document.getElementById('resetPwdModal')).show();
+}
+</script>
+{% endblock %}

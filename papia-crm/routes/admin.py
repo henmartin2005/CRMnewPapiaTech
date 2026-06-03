@@ -1,0 +1,134 @@
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from werkzeug.security import generate_password_hash as _gen_hash
+
+def generate_password_hash(p):
+    return _gen_hash(p, method='pbkdf2:sha256')
+from database import get_db
+from functools import wraps
+
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+ALL_MODULES = [
+    ('whatsapp',  'WhatsApp',   'bi-whatsapp'),
+    ('emails',    'Emails',     'bi-envelope'),
+    ('calendar',  'Calendario', 'bi-calendar3'),
+    ('proposals', 'Propuestas', 'bi-file-earmark-text'),
+    ('tasks',     'Tasks',      'bi-check2-square'),
+]
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('user_role') != 'admin':
+            flash('Acceso restringido a administradores.', 'danger')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@admin_bp.route('/settings')
+@admin_required
+def settings():
+    db    = get_db()
+    users = db.execute(
+        "SELECT id, username, display_name, role, is_active FROM users ORDER BY role DESC, username"
+    ).fetchall()
+
+    modules_by_user = {}
+    for u in users:
+        rows = db.execute(
+            "SELECT module, enabled FROM user_modules WHERE user_id=?", (u['id'],)
+        ).fetchall()
+        modules_by_user[u['id']] = {r['module']: r['enabled'] for r in rows}
+
+    db.close()
+    return render_template('admin/settings.html',
+        users=users,
+        modules_by_user=modules_by_user,
+        all_modules=ALL_MODULES,
+    )
+
+
+@admin_bp.route('/users/create', methods=['POST'])
+@admin_required
+def create_user():
+    username     = request.form.get('username', '').strip()
+    password     = request.form.get('password', '').strip()
+    display_name = request.form.get('display_name', '').strip()
+
+    if not username or not password:
+        flash('Usuario y contraseña son requeridos.', 'danger')
+        return redirect(url_for('admin.settings'))
+
+    db = get_db()
+    if db.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+        db.close()
+        flash(f'El usuario "{username}" ya existe.', 'danger')
+        return redirect(url_for('admin.settings'))
+
+    db.execute(
+        "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, 'user')",
+        (username, generate_password_hash(password), display_name or username),
+    )
+    db.commit()
+    new_id = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()['id']
+    db.executemany(
+        "INSERT OR IGNORE INTO user_modules (user_id, module, enabled) VALUES (?, ?, 0)",
+        [(new_id, m[0]) for m in ALL_MODULES],
+    )
+    db.commit()
+    db.close()
+    flash(f'Usuario "{username}" creado.', 'success')
+    return redirect(url_for('admin.settings'))
+
+
+@admin_bp.route('/users/<int:user_id>/toggle-module', methods=['POST'])
+@admin_required
+def toggle_module(user_id):
+    module  = request.json.get('module')
+    enabled = 1 if request.json.get('enabled') else 0
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO user_modules (user_id, module, enabled) VALUES (?, ?, ?) "
+        "ON CONFLICT(user_id, module) DO UPDATE SET enabled=excluded.enabled",
+        (user_id, module, enabled),
+    )
+    db.commit()
+    db.close()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    db   = get_db()
+    user = db.execute("SELECT username, role FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user or user['role'] == 'admin':
+        db.close()
+        flash('No se puede eliminar ese usuario.', 'danger')
+        return redirect(url_for('admin.settings'))
+    db.execute("DELETE FROM users WHERE id=?", (user_id,))
+    db.commit()
+    db.close()
+    flash(f'Usuario "{user["username"]}" eliminado.', 'success')
+    return redirect(url_for('admin.settings'))
+
+
+@admin_bp.route('/users/<int:user_id>/reset-password', methods=['POST'])
+@admin_required
+def reset_password(user_id):
+    new_pass = request.form.get('new_password', '').strip()
+    if not new_pass:
+        flash('La contraseña no puede estar vacía.', 'danger')
+        return redirect(url_for('admin.settings'))
+    db = get_db()
+    db.execute(
+        "UPDATE users SET password_hash=? WHERE id=?",
+        (generate_password_hash(new_pass), user_id),
+    )
+    db.commit()
+    db.close()
+    flash('Contraseña actualizada.', 'success')
+    return redirect(url_for('admin.settings'))

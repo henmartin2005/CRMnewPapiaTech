@@ -1,5 +1,6 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, session, redirect, url_for, request
 
 # Load .env from the same folder as this file, regardless of cwd
@@ -26,6 +27,7 @@ from routes.auth import auth_bp
 from routes.leads import leads_bp
 from routes.emails import emails_bp
 from routes.proposals import proposals_bp
+from routes.admin import admin_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -48,6 +50,7 @@ app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
 app.register_blueprint(whatsapp_bp)
 app.register_blueprint(proposals_bp)
+app.register_blueprint(admin_bp)
 
 
 # ── Auth guard: protect every route except login, logout, static, and webhook ──
@@ -62,16 +65,44 @@ def require_login():
         return redirect(url_for('auth.login', next=request.full_path))
 
 
-# ── Context processor: unread WhatsApp badge available in every template ──
+_ALL_MODULES = {'whatsapp', 'emails', 'calendar', 'proposals', 'tasks'}
+
+
+# ── Context processor: unread badge + enabled modules ──────────────────────
 @app.context_processor
-def inject_wa_unread():
+def inject_globals():
+    # WhatsApp badge & task count
     try:
-        return {
-            'wa_unread': get_unread_count(),
-            'task_due_count': get_due_task_count(),
-        }
+        wa_unread      = get_unread_count()
+        task_due_count = get_due_task_count()
     except Exception:
-        return {'wa_unread': 0, 'task_due_count': 0}
+        wa_unread = task_due_count = 0
+
+    # Module permissions
+    role    = session.get('user_role', 'user')
+    user_id = session.get('user_id')
+    if role == 'admin':
+        enabled_modules = _ALL_MODULES
+    elif user_id:
+        try:
+            from database import get_db
+            db   = get_db()
+            rows = db.execute(
+                "SELECT module FROM user_modules WHERE user_id=? AND enabled=1", (user_id,)
+            ).fetchall()
+            db.close()
+            enabled_modules = {r['module'] for r in rows}
+        except Exception:
+            enabled_modules = set()
+    else:
+        enabled_modules = set()
+
+    return {
+        'wa_unread':       wa_unread,
+        'task_due_count':  task_due_count,
+        'enabled_modules': enabled_modules,
+        'is_admin':        role == 'admin',
+    }
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -88,6 +119,23 @@ def dashboard():
 
 
 # ── Template filters ─────────────────────────────────────────────────────────
+@app.template_filter('localtime')
+def localtime_filter(value, fmt='%I:%M %p'):
+    if not value:
+        return ''
+    try:
+        dt = datetime.strptime(str(value)[:19], '%Y-%m-%d %H:%M:%S')
+        dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo('America/New_York')).strftime(fmt)
+    except Exception:
+        return str(value)[11:16] if len(str(value)) > 16 else str(value)
+
+
+@app.template_filter('localdatetime')
+def localdatetime_filter(value):
+    return localtime_filter(value, fmt='%b %d, %I:%M %p')
+
+
 @app.template_filter('currency')
 def currency_filter(value):
     try:

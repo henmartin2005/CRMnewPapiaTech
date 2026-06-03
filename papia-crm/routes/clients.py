@@ -8,7 +8,26 @@ from models.client import (
     FOLLOW_UP_METHODS, STAGE_COLORS
 )
 
+from database import get_db
+
 clients_bp = Blueprint('clients', __name__, url_prefix='/clients')
+
+
+@clients_bp.route('/search')
+def search_clients():
+    q  = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    db   = get_db()
+    like = f'%{q}%'
+    rows = db.execute("""
+        SELECT id, first_name, last_name, email, phone
+        FROM clients
+        WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?
+        ORDER BY first_name LIMIT 10
+    """, (like, like, like, like)).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
 
 
 @clients_bp.route('/')

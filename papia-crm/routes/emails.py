@@ -1,5 +1,7 @@
 import os
+import re
 import base64
+from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -14,6 +16,76 @@ SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
 ]
+
+
+# ── Company settings helpers ──────────────────────────────────────────────────
+
+def _get_settings():
+    db   = get_db()
+    rows = db.execute("SELECT key, value FROM settings").fetchall()
+    db.close()
+    return {r['key']: r['value'] for r in rows}
+
+
+def _build_html_email(body_text, settings):
+    logo_url   = settings.get('company_logo_url', '')
+    sig_name   = settings.get('signature_name', '')
+    sig_title  = settings.get('signature_title', '')
+    sig_phone  = settings.get('signature_phone', '')
+    sig_email  = settings.get('signature_email', '')
+    sig_web    = settings.get('signature_website', '')
+
+    logo_html = (
+        f'<div style="text-align:center;padding:28px 0 20px 0;">'
+        f'<img src="{logo_url}" alt="Papia Technology Solutions" '
+        f'style="height:180px;max-width:560px;object-fit:contain;display:inline-block;">'
+        f'</div>'
+        if logo_url else
+        '<div style="text-align:center;font-size:20px;font-weight:700;color:#2A5BFF;padding:28px 0 20px 0;">Papia Technology Solutions</div>'
+    )
+
+    phone_line   = f'<br><span style="color:#6B7280;">📞 {sig_phone}</span>' if sig_phone else ''
+    email_line   = f'<br><span style="color:#6B7280;">✉️ {sig_email}</span>'  if sig_email else ''
+    website_line = (
+        f'<br><a href="{sig_web}" style="color:#2A5BFF;text-decoration:none;">{sig_web}</a>'
+        if sig_web else ''
+    )
+
+    body_html = body_text.replace('\n', '<br>')
+
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;">
+        <tr>
+          <td style="padding:0 40px;border-bottom:1px solid #e5e7eb;">
+            {logo_html}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px;font-size:14px;line-height:1.7;color:#111827;">
+            {body_html}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 40px;border-top:1px solid #e5e7eb;background:#f9fafb;">
+            <div style="font-size:13px;line-height:1.6;">
+              <strong style="color:#111827;">{sig_name}</strong>
+              <br><span style="color:#6B7280;">{sig_title}</span>
+              <br><span style="color:#6B7280;">Papia Technology Solutions LLC</span>
+              {phone_line}{email_line}{website_line}
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 # ── Credentials ───────────────────────────────────────────────────────────────
@@ -87,24 +159,29 @@ def _is_connected():
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
-def _conversations():
+def _conversations_by_dir(direction):
     db   = get_db()
     rows = db.execute("""
         SELECT
             e.client_id,
-            c.first_name, c.last_name, c.email AS client_email,
+            e.to_email,
+            COALESCE(c.first_name, '') AS first_name,
+            COALESCE(c.last_name, '')  AS last_name,
             e.subject    AS last_subject,
             e.created_at AS last_at,
             COUNT(e.id)  AS total
         FROM emails e
         LEFT JOIN clients c ON c.id = e.client_id
-        WHERE e.id = (
-            SELECT id FROM emails
-            WHERE client_id = e.client_id ORDER BY created_at DESC LIMIT 1
-        )
+        WHERE e.direction = ?
+          AND e.client_id IS NOT NULL
+          AND e.id = (
+              SELECT id FROM emails e2
+              WHERE e2.client_id = e.client_id AND e2.direction = ?
+              ORDER BY e2.created_at DESC LIMIT 1
+          )
         GROUP BY e.client_id
         ORDER BY e.created_at DESC
-    """).fetchall()
+    """, (direction, direction)).fetchall()
     db.close()
     return rows
 
@@ -133,6 +210,113 @@ def _all_templates():
     rows = db.execute("SELECT * FROM email_templates ORDER BY id").fetchall()
     db.close()
     return [dict(r) for r in rows]
+
+
+# ── Gmail sync helpers ────────────────────────────────────────────────────────
+
+def _extract_email(addr):
+    if not addr:
+        return ''
+    m = re.search(r'<([^>]+)>', addr)
+    return m.group(1).strip() if m else addr.strip()
+
+
+def _extract_body(payload):
+    mime = payload.get('mimeType', '')
+    data = payload.get('body', {}).get('data', '')
+    if data:
+        try:
+            text = base64.urlsafe_b64decode(data).decode('utf-8', errors='replace')
+            if 'html' in mime:
+                text = re.sub(r'<[^>]+>', ' ', text)
+                text = re.sub(r'\s+', ' ', text).strip()
+            return text
+        except Exception:
+            pass
+    for part in payload.get('parts', []):
+        if part.get('mimeType') == 'text/plain':
+            body = _extract_body(part)
+            if body:
+                return body
+    for part in payload.get('parts', []):
+        body = _extract_body(part)
+        if body:
+            return body
+    return ''
+
+
+def _sync_gmail():
+    service = _gmail_service()
+    if not service:
+        return 0, 'Gmail no conectado'
+
+    db = get_db()
+    contacts = db.execute(
+        "SELECT id, email FROM clients WHERE email IS NOT NULL AND email != ''"
+    ).fetchall()
+    email_to_client = {r['email'].lower(): r['id'] for r in contacts}
+
+    if not email_to_client:
+        db.close()
+        return 0, 'No hay clientes con email registrado'
+
+    synced = 0
+
+    for label, direction in [('INBOX', 'received'), ('SENT', 'sent')]:
+        try:
+            result = _gmail_service().users().messages().list(
+                userId='me', labelIds=[label], maxResults=100
+            ).execute()
+            messages = result.get('messages', [])
+        except Exception:
+            continue
+
+        for msg_ref in messages:
+            msg_id = msg_ref['id']
+            if db.execute("SELECT 1 FROM emails WHERE gmail_message_id=?", (msg_id,)).fetchone():
+                continue
+
+            try:
+                msg = _gmail_service().users().messages().get(
+                    userId='me', id=msg_id, format='full'
+                ).execute()
+            except Exception:
+                continue
+
+            hdrs = {h['name'].lower(): h['value']
+                    for h in msg['payload'].get('headers', [])}
+            from_addr = _extract_email(hdrs.get('from', ''))
+            to_addr   = _extract_email(hdrs.get('to', ''))
+            subject   = hdrs.get('subject', '(sin asunto)')
+
+            internal_ms = int(msg.get('internalDate', 0))
+            created_at  = datetime.fromtimestamp(
+                internal_ms / 1000, tz=timezone.utc
+            ).strftime('%Y-%m-%d %H:%M:%S')
+
+            if direction == 'received':
+                contact_email = from_addr.lower()
+                other_email   = from_addr
+            else:
+                contact_email = to_addr.lower()
+                other_email   = to_addr
+
+            client_id = email_to_client.get(contact_email)
+            if not client_id:
+                continue
+
+            body = _extract_body(msg['payload'])[:4000]
+
+            db.execute("""
+                INSERT INTO emails
+                    (client_id, direction, to_email, subject, body, gmail_message_id, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'synced', ?)
+            """, (client_id, direction, other_email, subject, body, msg_id, created_at))
+            synced += 1
+
+    db.commit()
+    db.close()
+    return synced, None
 
 
 # ── OAuth2 ────────────────────────────────────────────────────────────────────
@@ -213,9 +397,10 @@ def disconnect():
 
 @emails_bp.route('/emails')
 def index():
-    connected     = _is_connected()
-    conversations = _conversations() if connected else []
-    templates     = _all_templates()
+    connected    = _is_connected()
+    sent_convos  = _conversations_by_dir('sent')     if connected else []
+    recv_convos  = _conversations_by_dir('received') if connected else []
+    templates    = _all_templates()
     proposal_draft = None
     draft_id = request.args.get('proposal_draft', type=int)
     if draft_id:
@@ -238,10 +423,13 @@ def index():
     ).fetchall()
     db.close()
 
+    email_settings = _get_settings()
     return render_template('emails/index.html',
         connected=connected,
-        conversations=conversations,
+        sent_convos=sent_convos,
+        recv_convos=recv_convos,
         templates=templates,
+        email_settings=email_settings,
         active_id=active_id,
         active_thread=active_thread,
         active_client=active_client,
@@ -268,15 +456,14 @@ def send():
         return jsonify({'success': False, 'error': 'Gmail no conectado. Ve a Emails → Conectar Gmail.'}), 503
 
     try:
+        settings   = _get_settings()
+        html_body  = _build_html_email(body, settings)
+
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['To']      = to_email
-        body_html      = body.replace('\n', '<br>')
         msg.attach(MIMEText(body, 'plain'))
-        msg.attach(MIMEText(
-            f'<div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#0B0E14">{body_html}</div>',
-            'html',
-        ))
+        msg.attach(MIMEText(html_body, 'html'))
 
         raw  = base64.urlsafe_b64encode(msg.as_bytes()).decode()
         sent = service.users().messages().send(userId='me', body={'raw': raw}).execute()
@@ -353,3 +540,59 @@ def delete_template(tid):
     db.commit()
     db.close()
     return jsonify({'success': True})
+
+
+# ── Company / Signature settings ──────────────────────────────────────────────
+
+@emails_bp.route('/emails/settings')
+def email_settings():
+    settings = _get_settings()
+    return render_template('emails/settings.html', settings=settings)
+
+
+@emails_bp.route('/emails/settings', methods=['POST'])
+def save_email_settings():
+    keys = ['company_logo_url', 'signature_name', 'signature_title',
+            'signature_phone', 'signature_email', 'signature_website']
+    db = get_db()
+    for key in keys:
+        value = request.form.get(key, '').strip()
+        db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+    db.commit()
+    db.close()
+    flash('Configuración guardada correctamente.', 'success')
+    return redirect(url_for('emails.email_settings'))
+
+
+@emails_bp.route('/emails/sync', methods=['POST'])
+def sync_emails():
+    synced, error = _sync_gmail()
+    if error:
+        return jsonify({'success': False, 'error': error}), 503
+    return jsonify({'success': True, 'synced': synced})
+
+
+@emails_bp.route('/emails/templates/<int:tid>/preview')
+def template_preview(tid):
+    db  = get_db()
+    row = db.execute("SELECT * FROM email_templates WHERE id=?", (tid,)).fetchone()
+    db.close()
+    if not row:
+        return 'Plantilla no encontrada', 404
+    settings = _get_settings()
+    html = _build_html_email(row['body'], settings)
+    return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+
+@emails_bp.route('/emails/settings/preview')
+def signature_preview():
+    settings = _get_settings()
+    html = _build_html_email(
+        'Hola {nombre},\n\nEste es un ejemplo de cómo se verán tus emails con la firma y el logo de la empresa.\n\n¡Saludos!',
+        settings,
+    )
+    return html, 200, {'Content-Type': 'text/html; charset=utf-8'}

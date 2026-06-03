@@ -68,6 +68,31 @@
 .em-empty-left i { font-size: 28px; opacity: .35; }
 .em-empty-left p { font-size: 12.5px; margin: 0; }
 
+/* Tabs */
+.em-tabs {
+  display: flex; border-bottom: 1px solid var(--c-border); flex-shrink: 0;
+}
+.em-tab-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  gap: 5px; padding: 9px 6px; font-size: 12px; font-weight: 600;
+  color: var(--c-text-3); background: none; border: none;
+  border-bottom: 2px solid transparent; cursor: pointer;
+  transition: color var(--t), border-color var(--t);
+}
+.em-tab-btn:hover { color: var(--c-text); }
+.em-tab-btn.active { color: var(--c-accent); border-bottom-color: var(--c-accent); }
+.em-tab-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 99px; background: var(--c-surface-2);
+  font-size: 10px; font-weight: 700; color: var(--c-text-3);
+}
+.em-tab-btn.active .em-tab-badge { background: rgba(42,91,255,.12); color: var(--c-accent); }
+
+/* Sync button spin */
+@keyframes em-spin { to { transform: rotate(360deg); } }
+.em-syncing { animation: em-spin .8s linear infinite; display: inline-block; }
+
 /* ── RIGHT PANEL ── */
 .em-right {
   flex: 1; display: flex; flex-direction: column;
@@ -129,7 +154,14 @@
   font-size: 11.5px; font-weight: 700; color: var(--c-text-2);
   padding-bottom: 6px; border-bottom: 1px solid var(--c-border);
 }
-.em-bubble-body { font-size: 13px; color: var(--c-text); white-space: pre-wrap; line-height: 1.55; }
+.em-bubble-body {
+  font-size: 13px; color: var(--c-text); white-space: pre-wrap; line-height: 1.55;
+  overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.em-bubble-body.expanded { -webkit-line-clamp: unset; display: block; }
+.em-bubble { cursor: pointer; }
+.em-expand-hint { font-size: 11px; color: var(--c-accent); margin-top: 4px; }
 .em-bubble-meta {
   display: flex; justify-content: space-between; gap: 8px;
   font-size: 10.5px; color: var(--c-text-3); font-family: 'Geist Mono', monospace;
@@ -159,13 +191,23 @@
 
   <!-- ══ LEFT: list ══ -->
   <div class="em-left">
+
+    <!-- Header -->
     <div class="em-left-header">
       <div class="em-left-title">
         <i class="bi bi-envelope"></i> Emails
       </div>
       <div style="display:flex;gap:5px;align-items:center;">
+        {% if connected %}
+        <button class="em-link-btn" id="syncBtn" onclick="syncEmails()" title="Sincronizar con Gmail">
+          <i class="bi bi-arrow-clockwise" id="syncIcon"></i>
+        </button>
+        {% endif %}
         <a href="{{ url_for('emails.templates_page') }}" class="em-link-btn" title="Plantillas">
           <i class="bi bi-file-text"></i>
+        </a>
+        <a href="{{ url_for('emails.email_settings') }}" class="em-link-btn" title="Firma y logo">
+          <i class="bi bi-gear"></i>
         </a>
         {% if connected %}
         <button class="btn-wa" style="border-color:var(--c-accent);color:var(--c-accent);"
@@ -176,23 +218,69 @@
       </div>
     </div>
 
-    <div class="em-convos">
+    {% if connected %}
+    <!-- Tabs -->
+    <div class="em-tabs">
+      <button class="em-tab-btn active" id="tabRecibidos" onclick="switchTab('recibidos')">
+        <i class="bi bi-inbox"></i> Recibidos
+        <span class="em-tab-badge">{{ recv_convos | length }}</span>
+      </button>
+      <button class="em-tab-btn" id="tabEnviados" onclick="switchTab('enviados')">
+        <i class="bi bi-send"></i> Enviados
+        <span class="em-tab-badge">{{ sent_convos | length }}</span>
+      </button>
+    </div>
+    {% endif %}
+
+    <!-- Recibidos -->
+    <div class="em-convos" id="listRecibidos">
       {% if not connected %}
         <div class="em-empty-left">
           <i class="bi bi-envelope-slash"></i>
           <p>Gmail no conectado</p>
-          <a href="{{ url_for('emails.gmail_auth') }}" class="btn-wa" style="margin-top:4px;border-color:var(--c-accent);color:var(--c-accent);">
+          <a href="{{ url_for('emails.gmail_auth') }}" class="btn-wa"
+             style="margin-top:4px;border-color:var(--c-accent);color:var(--c-accent);">
             <i class="bi bi-google"></i> Conectar
           </a>
         </div>
-      {% elif not conversations %}
+      {% elif not recv_convos %}
         <div class="em-empty-left">
           <i class="bi bi-inbox"></i>
+          <p>Sin emails recibidos</p>
+          <p style="font-size:11px;">Usa <strong>↺ Sincronizar</strong> para importar desde Gmail</p>
+        </div>
+      {% else %}
+        {% for conv in recv_convos %}
+          {% set initials = ((conv.first_name[0] if conv.first_name else '') ~ (conv.last_name[0] if conv.last_name else '')) | upper %}
+          <a href="{{ url_for('emails.index', client_id=conv.client_id) }}"
+             class="em-item {% if active_id == conv.client_id %}active{% endif %}">
+            <div class="em-item-avatar" style="background:linear-gradient(135deg,#059669,#10B981);">
+              {{ initials or '?' }}
+            </div>
+            <div class="em-item-body">
+              <div class="em-item-name">{{ conv.first_name }} {{ conv.last_name }}</div>
+              <div class="em-item-subject">{{ conv.last_subject }}</div>
+              <div style="font-size:10.5px;color:var(--c-text-3);margin-top:1px;">
+                <i class="bi bi-arrow-down-left" style="color:#059669;font-size:10px;"></i>
+                {{ conv.to_email }}
+              </div>
+            </div>
+            <div class="em-item-time">{{ conv.last_at | localtime }}</div>
+          </a>
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    <!-- Enviados -->
+    <div class="em-convos" id="listEnviados" style="display:none;">
+      {% if not sent_convos %}
+        <div class="em-empty-left">
+          <i class="bi bi-send"></i>
           <p>Sin emails enviados aún</p>
           <p style="font-size:11px;">Redacta el primero con el botón "Nuevo"</p>
         </div>
       {% else %}
-        {% for conv in conversations %}
+        {% for conv in sent_convos %}
           {% set initials = ((conv.first_name[0] if conv.first_name else '') ~ (conv.last_name[0] if conv.last_name else '')) | upper %}
           <a href="{{ url_for('emails.index', client_id=conv.client_id) }}"
              class="em-item {% if active_id == conv.client_id %}active{% endif %}">
@@ -200,12 +288,17 @@
             <div class="em-item-body">
               <div class="em-item-name">{{ conv.first_name }} {{ conv.last_name }}</div>
               <div class="em-item-subject">{{ conv.last_subject }}</div>
+              <div style="font-size:10.5px;color:var(--c-text-3);margin-top:1px;">
+                <i class="bi bi-arrow-up-right" style="color:var(--c-accent);font-size:10px;"></i>
+                {{ conv.to_email }}
+              </div>
             </div>
-            <div class="em-item-time">{{ conv.last_at[11:16] if conv.last_at else '' }}</div>
+            <div class="em-item-time">{{ conv.last_at | localtime }}</div>
           </a>
         {% endfor %}
       {% endif %}
     </div>
+
   </div>
 
   <!-- ══ RIGHT: thread ══ -->
@@ -267,15 +360,16 @@
           </div>
         {% endif %}
         {% for em in active_thread %}
-          <div class="em-bubble {{ em.direction }}">
+          <div class="em-bubble {{ em.direction }}" onclick="toggleBubble(this)">
             <div class="em-bubble-subject">
               <i class="bi bi-{% if em.direction == 'sent' %}send{% else %}inbox{% endif %}" style="font-size:11px;margin-right:4px;"></i>
               {{ em.subject }}
             </div>
             <div class="em-bubble-body">{{ em.body }}</div>
+            <div class="em-expand-hint">Toca para {% if True %}expandir / colapsar{% endif %}</div>
             <div class="em-bubble-meta">
               <span>{% if em.direction == 'sent' %}Tú → {{ em.to_email }}{% else %}{{ em.to_email }}{% endif %}</span>
-              <span>{{ em.created_at[:16] }}</span>
+              <span>{{ em.created_at | localdatetime }}</span>
             </div>
           </div>
         {% endfor %}
@@ -296,22 +390,60 @@
       </div>
       <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
 
-        <!-- Para -->
+        <!-- Para: toggle cliente / email libre -->
         <div>
           <label class="form-label">Para</label>
-          <select class="form-select" id="composeClient" onchange="onClientChange()">
-            <option value="">Selecciona un cliente…</option>
-            {% for cl in all_clients %}
-              <option value="{{ cl.id }}"
-                      data-email="{{ cl.email }}"
-                      data-name="{{ cl.first_name }}"
-                      {% if active_client and active_client.id == cl.id %}selected{% endif %}>
-                {{ cl.first_name }} {{ cl.last_name }} — {{ cl.email }}
-              </option>
-            {% endfor %}
-          </select>
+          <div style="display:flex;gap:0;border:1px solid var(--c-border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:10px;width:fit-content;">
+            <button type="button" id="tabCliente"
+                    onclick="setRecipientMode('cliente')"
+                    style="padding:5px 14px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--c-accent);color:#fff;">
+              <i class="bi bi-person-check"></i> Cliente
+            </button>
+            <button type="button" id="tabLibre"
+                    onclick="setRecipientMode('libre')"
+                    style="padding:5px 14px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--c-surface);color:var(--c-text-2);">
+              <i class="bi bi-envelope-plus"></i> Email libre
+            </button>
+          </div>
+
+          <!-- Modo cliente — autocomplete -->
+          <div id="modoCliente" style="position:relative;">
+            <input type="text" class="form-control" id="clientSearch"
+                   placeholder="Buscar por nombre, email o teléfono…"
+                   oninput="searchClients()" autocomplete="off"
+                   {% if active_client %}value="{{ active_client.first_name }} {{ active_client.last_name }}"{% endif %} />
+            <input type="hidden" id="composeClientId"
+                   {% if active_client %}value="{{ active_client.id }}"{% endif %} />
+            <input type="hidden" id="composeClientEmail"
+                   {% if active_client %}value="{{ active_client.email }}"{% endif %} />
+            <div id="clientDropdown"
+                 style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1050;
+                        background:var(--c-surface);border:1px solid var(--c-border);
+                        border-radius:var(--radius-sm);max-height:200px;overflow-y:auto;
+                        box-shadow:0 6px 20px rgba(0,0,0,.12);margin-top:2px;"></div>
+            <div id="clientSelectedBadge" style="display:{% if active_client %}flex{% else %}none{% endif %};
+                 align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--c-text-3);">
+              <i class="bi bi-person-check" style="color:var(--c-accent);"></i>
+              <span id="clientSelectedName">{% if active_client %}{{ active_client.first_name }} {{ active_client.last_name }}{% endif %}</span>
+              <span style="color:var(--c-border-2);">—</span>
+              <span id="clientSelectedEmail">{% if active_client %}{{ active_client.email }}{% endif %}</span>
+              <button type="button" onclick="clearClientSearch()"
+                      style="border:none;background:none;color:var(--c-danger);padding:0;margin-left:4px;cursor:pointer;line-height:1;">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Modo libre -->
+          <div id="modoLibre" style="display:none;display:flex;flex-direction:column;gap:8px;">
+            <input type="text" class="form-control" id="freeEmail"
+                   placeholder="correo@ejemplo.com" style="display:none;" />
+            <input type="text" class="form-control" id="freeName"
+                   placeholder="Nombre del destinatario (opcional)" style="display:none;" />
+          </div>
+
           {% if proposal_draft %}
-            <div class="form-text">Proposal draft recipient: <span id="draftToEmail">{{ proposal_draft.to_email }}</span></div>
+            <div class="form-text" style="margin-top:4px;">Borrador: <span id="draftToEmail">{{ proposal_draft.to_email }}</span></div>
           {% endif %}
         </div>
 
@@ -335,10 +467,25 @@
 
         <!-- Cuerpo -->
         <div>
-          <label class="form-label">Mensaje</label>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <label class="form-label" style="margin:0;">Mensaje</label>
+            <div style="display:flex;border:1px solid var(--c-border);border-radius:var(--radius-sm);overflow:hidden;">
+              <button type="button" id="editModeBtn" onclick="setComposeMode('edit')"
+                      style="padding:3px 11px;font-size:11.5px;font-weight:600;border:none;cursor:pointer;background:var(--c-accent);color:#fff;display:flex;align-items:center;gap:4px;">
+                <i class="bi bi-pencil"></i> Editar
+              </button>
+              <button type="button" id="previewModeBtn" onclick="setComposeMode('preview')"
+                      style="padding:3px 11px;font-size:11.5px;font-weight:600;border:none;cursor:pointer;background:var(--c-surface);color:var(--c-text-2);display:flex;align-items:center;gap:4px;">
+                <i class="bi bi-eye"></i> Vista previa
+              </button>
+            </div>
+          </div>
           <textarea class="form-control" id="composeBody" rows="9"
                     placeholder="Escribe tu mensaje aquí…"
                     style="resize:vertical;min-height:140px;"></textarea>
+          <iframe id="composePreviewFrame"
+                  style="display:none;width:100%;height:360px;border:1px solid var(--c-border);border-radius:var(--radius-sm);"
+                  sandbox="allow-same-origin"></iframe>
         </div>
 
         {% if proposal_draft %}
@@ -367,10 +514,113 @@
 
 {% block scripts %}
 <script>
-const TEMPLATES = {{ templates | tojson }};
-const TPL_MAP   = {};
+const TEMPLATES        = {{ templates | tojson }};
+const TPL_MAP          = {};
 TEMPLATES.forEach(t => TPL_MAP[t.id] = t);
-const PROPOSAL_DRAFT = {{ proposal_draft | tojson if proposal_draft else 'null' }};
+const PROPOSAL_DRAFT   = {{ proposal_draft | tojson if proposal_draft else 'null' }};
+const COMPANY_SETTINGS = {{ email_settings | tojson }};
+
+// ── Email preview builder ─────────────────────────────────────────────────────
+function buildPreviewHtml(body) {
+  const s          = COMPANY_SETTINGS;
+  const logoUrl    = s.company_logo_url || '';
+  const bodyHtml   = escHtml(body).replace(/\n/g, '<br>');
+
+  const logoBlock = logoUrl
+    ? `<div style="text-align:center;padding:28px 0 20px 0;">
+         <img src="${logoUrl}" style="height:180px;max-width:560px;object-fit:contain;">
+       </div>`
+    : `<div style="text-align:center;font-size:20px;font-weight:700;color:#2A5BFF;padding:28px 0 20px 0;">
+         Papia Technology Solutions
+       </div>`;
+
+  const phoneL   = s.signature_phone   ? `<br><span style="color:#6B7280;">📞 ${s.signature_phone}</span>`   : '';
+  const emailL   = s.signature_email   ? `<br><span style="color:#6B7280;">✉️ ${s.signature_email}</span>`   : '';
+  const webL     = s.signature_website
+    ? `<br><a href="${s.signature_website}" style="color:#2A5BFF;text-decoration:none;">${s.signature_website}</a>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table width="580" cellpadding="0" cellspacing="0"
+             style="background:#fff;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;">
+        <tr><td style="padding:0 36px;border-bottom:1px solid #e5e7eb;">${logoBlock}</td></tr>
+        <tr><td style="padding:28px 36px;font-size:14px;line-height:1.75;color:#111827;">${bodyHtml}</td></tr>
+        <tr>
+          <td style="padding:20px 36px;border-top:1px solid #e5e7eb;background:#f9fafb;font-size:13px;line-height:1.65;">
+            <strong style="color:#111827;">${s.signature_name || ''}</strong>
+            <br><span style="color:#6B7280;">${s.signature_title || ''}</span>
+            <br><span style="color:#6B7280;">Papia Technology Solutions LLC</span>
+            ${phoneL}${emailL}${webL}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+function setComposeMode(mode) {
+  const isEdit   = mode === 'edit';
+  const textarea = document.getElementById('composeBody');
+  const iframe   = document.getElementById('composePreviewFrame');
+  const editBtn  = document.getElementById('editModeBtn');
+  const prevBtn  = document.getElementById('previewModeBtn');
+
+  textarea.style.display = isEdit ? 'block' : 'none';
+  iframe.style.display   = isEdit ? 'none'  : 'block';
+
+  editBtn.style.background = isEdit ? 'var(--c-accent)'   : 'var(--c-surface)';
+  editBtn.style.color      = isEdit ? '#fff'              : 'var(--c-text-2)';
+  prevBtn.style.background = isEdit ? 'var(--c-surface)'  : 'var(--c-accent)';
+  prevBtn.style.color      = isEdit ? 'var(--c-text-2)'   : '#fff';
+
+  if (!isEdit) {
+    iframe.srcdoc = buildPreviewHtml(textarea.value || '');
+  }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const isRecibidos = tab === 'recibidos';
+  document.getElementById('listRecibidos').style.display = isRecibidos ? 'flex' : 'none';
+  document.getElementById('listEnviados').style.display  = isRecibidos ? 'none' : 'flex';
+  document.getElementById('tabRecibidos').classList.toggle('active',  isRecibidos);
+  document.getElementById('tabEnviados').classList.toggle('active', !isRecibidos);
+  localStorage.setItem('emailsTab', tab);
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function syncEmails() {
+  const btn  = document.getElementById('syncBtn');
+  const icon = document.getElementById('syncIcon');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  icon.classList.add('em-syncing');
+
+  try {
+    const res  = await fetch('/emails/sync', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      const msg = data.synced > 0
+        ? `${data.synced} email(s) importado(s)`
+        : 'Todo al día, no hay emails nuevos';
+      // show a brief toast-like alert in the button
+      btn.title = msg;
+      if (data.synced > 0) window.location.reload();
+    } else {
+      alert('Error al sincronizar: ' + data.error);
+    }
+  } catch {
+    alert('Error de conexión.');
+  } finally {
+    btn.disabled = false;
+    icon.classList.remove('em-syncing');
+  }
+}
 
 {% if active_client %}
 // Pre-select client when viewing a thread
@@ -381,6 +631,10 @@ document.addEventListener('DOMContentLoaded', () => {
 {% endif %}
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Restore last active tab
+  const savedTab = localStorage.getItem('emailsTab') || 'recibidos';
+  if (document.getElementById('tabRecibidos')) switchTab(savedTab);
+
   if (!PROPOSAL_DRAFT) return;
   const subject = document.getElementById('composeSubject');
   const body = document.getElementById('composeBody');
@@ -397,8 +651,85 @@ function openReply() {
   modal.show();
 }
 
+// ── Bubble expand/collapse ────────────────────────────────────────────────────
+function toggleBubble(el) {
+  el.querySelector('.em-bubble-body').classList.toggle('expanded');
+}
+
+// ── Client autocomplete ───────────────────────────────────────────────────────
+let _searchTimer = null;
+let _selectedClient = null;
+
+async function searchClients() {
+  const q        = document.getElementById('clientSearch').value.trim();
+  const dropdown = document.getElementById('clientDropdown');
+  clearTimeout(_searchTimer);
+  if (q.length < 2) { dropdown.style.display = 'none'; return; }
+  _searchTimer = setTimeout(async () => {
+    try {
+      const res     = await fetch(`/clients/search?q=${encodeURIComponent(q)}`);
+      const clients = await res.json();
+      if (!clients.length) { dropdown.style.display = 'none'; return; }
+      dropdown.innerHTML = clients.map(c => `
+        <div onclick="selectClient(${c.id},'${(c.first_name||'').replace(/'/g,"\\'")} ${(c.last_name||'').replace(/'/g,"\\'")}','${(c.email||'').replace(/'/g,"\\'")}')"
+             style="padding:8px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--c-border);
+                    transition:background .15s;"
+             onmouseover="this.style.background='var(--c-surface-2)'"
+             onmouseout="this.style.background=''">
+          <strong>${escHtml(c.first_name||'')} ${escHtml(c.last_name||'')}</strong>
+          <span style="color:var(--c-text-3);margin-left:6px;font-size:12px;">${escHtml(c.email||'')}</span>
+          ${c.phone ? `<span style="color:var(--c-text-3);margin-left:6px;font-size:11px;">${escHtml(c.phone)}</span>` : ''}
+        </div>`).join('');
+      dropdown.style.display = 'block';
+    } catch {}
+  }, 220);
+}
+
+function selectClient(id, name, email) {
+  _selectedClient = { id, name, email };
+  document.getElementById('composeClientId').value       = id;
+  document.getElementById('composeClientEmail').value    = email;
+  document.getElementById('clientSearch').value          = name;
+  document.getElementById('clientDropdown').style.display = 'none';
+  document.getElementById('clientSelectedBadge').style.display = 'flex';
+  document.getElementById('clientSelectedName').textContent  = name;
+  document.getElementById('clientSelectedEmail').textContent = email;
+}
+
+function clearClientSearch() {
+  _selectedClient = null;
+  document.getElementById('composeClientId').value       = '';
+  document.getElementById('composeClientEmail').value    = '';
+  document.getElementById('clientSearch').value          = '';
+  document.getElementById('clientSelectedBadge').style.display = 'none';
+  document.getElementById('clientDropdown').style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#modoCliente')) {
+    const dd = document.getElementById('clientDropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+let recipientMode = 'cliente';
+
+function setRecipientMode(mode) {
+  recipientMode = mode;
+  const isCliente = mode === 'cliente';
+  document.getElementById('modoCliente').style.display = isCliente ? 'block' : 'none';
+  const freeEmail = document.getElementById('freeEmail');
+  const freeName  = document.getElementById('freeName');
+  freeEmail.style.display = isCliente ? 'none' : 'block';
+  freeName.style.display  = isCliente ? 'none' : 'block';
+  document.getElementById('tabCliente').style.background = isCliente ? 'var(--c-accent)' : 'var(--c-surface)';
+  document.getElementById('tabCliente').style.color      = isCliente ? '#fff' : 'var(--c-text-2)';
+  document.getElementById('tabLibre').style.background   = isCliente ? 'var(--c-surface)' : 'var(--c-accent)';
+  document.getElementById('tabLibre').style.color        = isCliente ? 'var(--c-text-2)' : '#fff';
+}
+
 function onClientChange() {
-  // Clear template active states when client changes
   document.querySelectorAll('#tplBtns .wa-tpl-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('composeSubject').value = '';
   document.getElementById('composeBody').value    = '';
@@ -408,12 +739,16 @@ function applyTemplate(id, event) {
   const tpl = TPL_MAP[id];
   if (!tpl) return;
 
-  const sel  = document.getElementById('composeClient');
-  const opt  = sel.options[sel.selectedIndex];
-  const name = opt && opt.dataset.name ? opt.dataset.name : '{nombre}';
+  let name = '{nombre}';
+  if (recipientMode === 'cliente') {
+    const n = document.getElementById('clientSelectedName').textContent.trim();
+    if (n) name = n.split(' ')[0];
+  } else {
+    const freeName = document.getElementById('freeName').value.trim();
+    if (freeName) name = freeName;
+  }
 
   const replace = s => s.replace(/\{nombre\}/g, name);
-
   document.getElementById('composeSubject').value = replace(tpl.subject);
   document.getElementById('composeBody').value    = replace(tpl.body);
 
@@ -422,18 +757,26 @@ function applyTemplate(id, event) {
 }
 
 async function sendEmail() {
-  const btn       = document.getElementById('sendEmailBtn');
-  const sel       = document.getElementById('composeClient');
-  const opt       = sel.options[sel.selectedIndex];
-  const clientId  = sel.value || null;
-  const draftTo   = document.getElementById('draftToEmail');
-  const toEmail   = opt && opt.dataset.email ? opt.dataset.email : (draftTo ? draftTo.textContent.trim() : '');
-  const subject   = document.getElementById('composeSubject').value.trim();
-  const body      = document.getElementById('composeBody').value.trim();
+  const btn     = document.getElementById('sendEmailBtn');
+  const subject = document.getElementById('composeSubject').value.trim();
+  const body    = document.getElementById('composeBody').value.trim();
 
-  if (!toEmail)  { alert('Selecciona un cliente.'); return; }
-  if (!subject)  { alert('Escribe un asunto.'); return; }
-  if (!body)     { alert('Escribe un mensaje.'); return; }
+  let toEmail  = '';
+  let clientId = null;
+
+  if (recipientMode === 'cliente') {
+    clientId = document.getElementById('composeClientId').value || null;
+    toEmail  = document.getElementById('composeClientEmail').value.trim();
+    const draftTo = document.getElementById('draftToEmail');
+    if (!toEmail && draftTo) toEmail = draftTo.textContent.trim();
+    if (!toEmail) { alert('Selecciona un cliente de la lista.'); return; }
+  } else {
+    toEmail = document.getElementById('freeEmail').value.trim();
+    if (!toEmail || !toEmail.includes('@')) { alert('Ingresa un email válido.'); return; }
+  }
+
+  if (!subject) { alert('Escribe un asunto.'); return; }
+  if (!body)    { alert('Escribe un mensaje.'); return; }
 
   btn.disabled     = true;
   btn.innerHTML    = '<i class="bi bi-hourglass-split"></i> Enviando…';

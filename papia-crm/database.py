@@ -1,5 +1,9 @@
 import sqlite3
 import os
+from werkzeug.security import generate_password_hash as _gen_hash
+
+def generate_password_hash(password):
+    return _gen_hash(password, method='pbkdf2:sha256')
 
 DATABASE = os.path.join(os.path.dirname(__file__), 'papia_crm.db')
 
@@ -163,6 +167,28 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name  TEXT NOT NULL DEFAULT '',
+            role          TEXT NOT NULL DEFAULT 'user',
+            is_active     INTEGER NOT NULL DEFAULT 1,
+            created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_modules (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            module  TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (user_id, module)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_emails_client ON emails(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_client ON proposals(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
@@ -236,5 +262,45 @@ def init_db():
             conn.commit()
         except Exception:
             pass
+
+    # ── Seed users ───────────────────────────────────────────────────────────
+    ALL_MODULES = ['whatsapp', 'emails', 'calendar', 'proposals', 'tasks']
+
+    admin_user = os.getenv('ADMIN_USERNAME', 'admin').strip()
+    admin_pass = os.getenv('ADMIN_PASSWORD', 'admin').strip()
+    if not conn.execute("SELECT 1 FROM users WHERE username=?", (admin_user,)).fetchone():
+        conn.execute(
+            "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, 'Admin', 'admin')",
+            (admin_user, generate_password_hash(admin_pass)),
+        )
+        conn.commit()
+
+    if not conn.execute("SELECT 1 FROM users WHERE username='Testing'").fetchone():
+        conn.execute(
+            "INSERT INTO users (username, password_hash, display_name, role) VALUES ('Testing', ?, 'Testing', 'user')",
+            (generate_password_hash('Testing'),),
+        )
+        conn.commit()
+        testing_id = conn.execute("SELECT id FROM users WHERE username='Testing'").fetchone()['id']
+        conn.executemany(
+            "INSERT OR IGNORE INTO user_modules (user_id, module, enabled) VALUES (?, ?, 1)",
+            [(testing_id, m) for m in ALL_MODULES],
+        )
+        conn.commit()
+
+    # ── Seed default company settings ────────────────────────────────────────
+    defaults = [
+        ('company_logo_url',  ''),
+        ('signature_name',    'Henrry Martín'),
+        ('signature_title',   'CEO & Founder'),
+        ('signature_phone',   ''),
+        ('signature_email',   ''),
+        ('signature_website', 'https://papiatech.com'),
+    ]
+    for key, value in defaults:
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value)
+        )
+    conn.commit()
 
     conn.close()

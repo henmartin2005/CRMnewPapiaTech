@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Firma y Logo — Emails{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <ul class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('emails.index') }}">Emails</a></li>
+      <li class="breadcrumb-item active">Firma y Logo</li>
+    </ul>
+    <h1 class="pg-title">Firma y Logo de empresa</h1>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('emails.signature_preview') }}" target="_blank" class="btn-md"
+       style="border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:0 14px;height:32px;border-radius:var(--radius-sm);font-size:13px;">
+      <i class="bi bi-eye"></i> Vista previa
+    </a>
+  </div>
+</div>
+
+<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
+
+  <!-- Form -->
+  <div class="section-card" style="flex:1;min-width:320px;margin-top:0;">
+    <form method="POST" action="{{ url_for('emails.save_email_settings') }}"
+          style="display:flex;flex-direction:column;gap:18px;">
+
+      <div>
+        <label class="form-label">URL del logo de la empresa</label>
+        <input type="url" name="company_logo_url" class="form-control"
+               value="{{ settings.get('company_logo_url', '') }}"
+               placeholder="https://papiatech.com/logo.png" />
+        <div class="form-text">Usa una URL pública de tu logo (PNG o SVG recomendado). Altura ideal: 48px.</div>
+      </div>
+
+      <hr style="border-color:var(--c-border);margin:0;">
+
+      <div style="font-size:12px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;">
+        Información de firma
+      </div>
+
+      <div>
+        <label class="form-label">Nombre</label>
+        <input type="text" name="signature_name" class="form-control"
+               value="{{ settings.get('signature_name', '') }}"
+               placeholder="Henrry Martín" />
+      </div>
+
+      <div>
+        <label class="form-label">Cargo / Título</label>
+        <input type="text" name="signature_title" class="form-control"
+               value="{{ settings.get('signature_title', '') }}"
+               placeholder="CEO & Founder" />
+      </div>
+
+      <div>
+        <label class="form-label">Teléfono</label>
+        <input type="text" name="signature_phone" class="form-control"
+               value="{{ settings.get('signature_phone', '') }}"
+               placeholder="+1 (555) 000-0000" />
+      </div>
+
+      <div>
+        <label class="form-label">Email de contacto</label>
+        <input type="email" name="signature_email" class="form-control"
+               value="{{ settings.get('signature_email', '') }}"
+               placeholder="hola@papiatech.com" />
+      </div>
+
+      <div>
+        <label class="form-label">Sitio web</label>
+        <input type="url" name="signature_website" class="form-control"
+               value="{{ settings.get('signature_website', '') }}"
+               placeholder="https://papiatech.com" />
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px;">
+        <a href="{{ url_for('emails.index') }}"
+           style="display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 12px;border-radius:var(--radius-sm);border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:12px;text-decoration:none;">
+          Cancelar
+        </a>
+        <button type="submit" class="btn-wa-send" style="height:32px;font-size:13px;padding:0 18px;">
+          <i class="bi bi-check-lg"></i> Guardar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Live preview -->
+  <div style="flex:1;min-width:300px;">
+    <div style="font-size:12px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">
+      Vista previa de firma
+    </div>
+    <div style="border:1px solid var(--c-border);border-radius:8px;overflow:hidden;background:#f9fafb;">
+      <iframe src="{{ url_for('emails.signature_preview') }}"
+              style="width:100%;height:420px;border:none;display:block;"
+              id="previewFrame"></iframe>
+    </div>
+    <div style="font-size:11.5px;color:var(--c-text-3);margin-top:8px;">
+      <a href="{{ url_for('emails.signature_preview') }}" target="_blank"
+         style="color:var(--c-accent);text-decoration:none;">
+        <i class="bi bi-box-arrow-up-right"></i> Abrir en nueva pestaña
+      </a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Reload preview iframe on form submit
+document.querySelector('form').addEventListener('submit', () => {
+  setTimeout(() => {
+    const frame = document.getElementById('previewFrame');
+    if (frame) frame.src = frame.src;
+  }, 800);
+});
+</script>
+{% endblock %}
