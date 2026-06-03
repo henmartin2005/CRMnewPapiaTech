@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, g
 
 from models.client import get_all_clients, get_client
 from models.proposal import (
@@ -25,11 +25,16 @@ from models.proposal_template import get_service_catalog, get_templates_for_ui
 proposals_bp = Blueprint('proposals', __name__, url_prefix='/proposals')
 
 
+def _get_org_id():
+    return g.org_id if hasattr(g, 'org_id') else 1
+
+
 @proposals_bp.route('/')
 def index():
+    org_id = _get_org_id()
     search = request.args.get('q', '').strip()
     status = request.args.get('status', '').strip()
-    proposals = list_proposals(search or None, status or None)
+    proposals = list_proposals(search or None, status or None, org_id=org_id)
     return render_template(
         'proposals/list.html',
         proposals=proposals,
@@ -42,14 +47,15 @@ def index():
 
 @proposals_bp.route('/new', methods=['GET', 'POST'])
 def new():
+    org_id = _get_org_id()
     if request.method == 'POST':
         data = _proposal_from_form(request.form)
         errors = _validate_proposal(data)
         if errors:
             for error in errors:
                 flash(error, 'danger')
-            return _render_form(data, is_edit=False)
-        proposal_id = create_proposal(data)
+            return _render_form(data, is_edit=False, org_id=org_id)
+        proposal_id = create_proposal(data, org_id=org_id)
         flash('Proposal created.', 'success')
         return redirect(url_for('proposals.view', proposal_id=proposal_id))
 
@@ -58,7 +64,7 @@ def new():
     data = get_template_payload(purpose, language)
     client_id = request.args.get('client_id', type=int)
     if client_id:
-        client = get_client(client_id)
+        client = get_client(client_id, org_id=org_id)
         if client:
             data.update({
                 'client_id': client['id'],
@@ -71,12 +77,13 @@ def new():
     data.setdefault('discount', 0)
     data.setdefault('taxes', 0)
     data.setdefault('initial_payment', 0)
-    return _render_form(data, is_edit=False)
+    return _render_form(data, is_edit=False, org_id=org_id)
 
 
 @proposals_bp.route('/<int:proposal_id>')
 def view(proposal_id):
-    proposal = get_proposal(proposal_id)
+    org_id = _get_org_id()
+    proposal = get_proposal(proposal_id, org_id=org_id)
     if not proposal:
         flash('Proposal not found.', 'danger')
         return redirect(url_for('proposals.index'))
@@ -92,7 +99,8 @@ def view(proposal_id):
 
 @proposals_bp.route('/<int:proposal_id>/edit', methods=['GET', 'POST'])
 def edit(proposal_id):
-    proposal = get_proposal(proposal_id)
+    org_id = _get_org_id()
+    proposal = get_proposal(proposal_id, org_id=org_id)
     if not proposal:
         flash('Proposal not found.', 'danger')
         return redirect(url_for('proposals.index'))
@@ -104,12 +112,12 @@ def edit(proposal_id):
             for error in errors:
                 flash(error, 'danger')
             data['id'] = proposal_id
-            return _render_form(data, is_edit=True)
+            return _render_form(data, is_edit=True, org_id=org_id)
         update_proposal(proposal_id, data)
         flash('Proposal updated.', 'success')
         return redirect(url_for('proposals.view', proposal_id=proposal_id))
 
-    return _render_form(proposal, is_edit=True)
+    return _render_form(proposal, is_edit=True, org_id=org_id)
 
 
 @proposals_bp.route('/<int:proposal_id>/delete', methods=['POST'])
@@ -141,7 +149,8 @@ def status(proposal_id):
 
 @proposals_bp.route('/<int:proposal_id>/pdf')
 def pdf(proposal_id):
-    proposal = get_proposal(proposal_id)
+    org_id = _get_org_id()
+    proposal = get_proposal(proposal_id, org_id=org_id)
     if not proposal:
         flash('Proposal not found.', 'danger')
         return redirect(url_for('proposals.index'))
@@ -152,7 +161,8 @@ def pdf(proposal_id):
 
 @proposals_bp.route('/<int:proposal_id>/email-draft', methods=['POST'])
 def email_draft(proposal_id):
-    proposal = get_proposal(proposal_id)
+    org_id = _get_org_id()
+    proposal = get_proposal(proposal_id, org_id=org_id)
     if not proposal:
         flash('Proposal not found.', 'danger')
         return redirect(url_for('proposals.index'))
@@ -163,7 +173,8 @@ def email_draft(proposal_id):
 
 @proposals_bp.route('/<int:proposal_id>/print')
 def print_view(proposal_id):
-    proposal = get_proposal(proposal_id)
+    org_id = _get_org_id()
+    proposal = get_proposal(proposal_id, org_id=org_id)
     if not proposal:
         flash('Proposal not found.', 'danger')
         return redirect(url_for('proposals.index'))
@@ -184,12 +195,12 @@ def services_payload(language):
     return jsonify(get_service_catalog(language))
 
 
-def _render_form(proposal, is_edit):
+def _render_form(proposal, is_edit, org_id=1):
     return render_template(
         'proposals/form.html',
         proposal=proposal,
         is_edit=is_edit,
-        clients=get_all_clients(),
+        clients=get_all_clients(org_id),
         statuses=PROPOSAL_STATUSES,
         languages=PROPOSAL_LANGUAGES,
         purposes=PROPOSAL_PURPOSES,

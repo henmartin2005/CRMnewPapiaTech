@@ -6,7 +6,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from flask import (Blueprint, request, jsonify, render_template,
-                   redirect, url_for, flash, session)
+                   redirect, url_for, flash, session, g)
 from database import get_db
 from models.proposal_email import get_email_draft
 
@@ -20,9 +20,9 @@ SCOPES = [
 
 # ── Company settings helpers ──────────────────────────────────────────────────
 
-def _get_settings():
+def _get_settings(org_id=1):
     db   = get_db()
-    rows = db.execute("SELECT key, value FROM settings").fetchall()
+    rows = db.execute("SELECT key, value FROM settings WHERE org_id=?", (org_id,)).fetchall()
     db.close()
     return {r['key']: r['value'] for r in rows}
 
@@ -102,7 +102,7 @@ def _client_config():
     }
 
 
-def _load_creds():
+def _load_creds(org_id=1):
     try:
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
@@ -110,7 +110,7 @@ def _load_creds():
         return None
 
     db  = get_db()
-    row = db.execute("SELECT * FROM gmail_tokens WHERE id=1").fetchone()
+    row = db.execute("SELECT * FROM gmail_tokens WHERE org_id=?", (org_id,)).fetchone()
     db.close()
 
     if not row or not row['refresh_token']:
@@ -130,8 +130,8 @@ def _load_creds():
             creds.refresh(Request())
             db = get_db()
             db.execute(
-                "UPDATE gmail_tokens SET access_token=?, updated_at=CURRENT_TIMESTAMP WHERE id=1",
-                (creds.token,),
+                "UPDATE gmail_tokens SET access_token=?, updated_at=CURRENT_TIMESTAMP WHERE org_id=?",
+                (creds.token, org_id),
             )
             db.commit()
             db.close()
@@ -141,25 +141,29 @@ def _load_creds():
     return creds
 
 
-def _gmail_service():
+def _gmail_service(org_id=1):
     try:
         from googleapiclient.discovery import build
     except ImportError:
         return None
-    creds = _load_creds()
+    creds = _load_creds(org_id)
     return build('gmail', 'v1', credentials=creds) if creds else None
 
 
-def _is_connected():
+def _is_connected(org_id=1):
     db  = get_db()
-    row = db.execute("SELECT refresh_token FROM gmail_tokens WHERE id=1").fetchone()
+    row = db.execute("SELECT refresh_token FROM gmail_tokens WHERE org_id=?", (org_id,)).fetchone()
     db.close()
     return bool(row and row['refresh_token'])
 
 
+def _get_org_id():
+    return g.org_id if hasattr(g, 'org_id') else 1
+
+
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
-def _conversations_by_dir(direction):
+def _conversations_by_dir(direction, org_id=1):
     db   = get_db()
     rows = db.execute("""
         SELECT
@@ -173,6 +177,7 @@ def _conversations_by_dir(direction):
         FROM emails e
         LEFT JOIN clients c ON c.id = e.client_id
         WHERE e.direction = ?
+          AND e.org_id = ?
           AND e.client_id IS NOT NULL
           AND e.id = (
               SELECT id FROM emails e2
@@ -181,33 +186,34 @@ def _conversations_by_dir(direction):
           )
         GROUP BY e.client_id
         ORDER BY e.created_at DESC
-    """, (direction, direction)).fetchall()
+    """, (direction, org_id, direction)).fetchall()
     db.close()
     return rows
 
 
-def _thread(client_id):
+def _thread(client_id, org_id=1):
     db   = get_db()
     rows = db.execute(
-        "SELECT * FROM emails WHERE client_id=? ORDER BY created_at ASC", (client_id,)
+        "SELECT * FROM emails WHERE client_id=? AND org_id=? ORDER BY created_at ASC",
+        (client_id, org_id)
     ).fetchall()
     db.close()
     return rows
 
 
-def _save_sent(client_id, to_email, subject, body, gmail_id):
+def _save_sent(client_id, to_email, subject, body, gmail_id, org_id=1):
     db = get_db()
     db.execute("""
-        INSERT INTO emails (client_id, direction, to_email, subject, body, gmail_message_id, status)
-        VALUES (?, 'sent', ?, ?, ?, ?, 'sent')
-    """, (client_id, to_email, subject, body, gmail_id))
+        INSERT INTO emails (client_id, direction, to_email, subject, body, gmail_message_id, status, org_id)
+        VALUES (?, 'sent', ?, ?, ?, ?, 'sent', ?)
+    """, (client_id, to_email, subject, body, gmail_id, org_id))
     db.commit()
     db.close()
 
 
-def _all_templates():
+def _all_templates(org_id=1):
     db   = get_db()
-    rows = db.execute("SELECT * FROM email_templates ORDER BY id").fetchall()
+    rows = db.execute("SELECT * FROM email_templates WHERE org_id=? ORDER BY id", (org_id,)).fetchall()
     db.close()
     return [dict(r) for r in rows]
 
@@ -245,14 +251,15 @@ def _extract_body(payload):
     return ''
 
 
-def _sync_gmail():
-    service = _gmail_service()
+def _sync_gmail(org_id=1):
+    service = _gmail_service(org_id)
     if not service:
         return 0, 'Gmail no conectado'
 
     db = get_db()
     contacts = db.execute(
-        "SELECT id, email FROM clients WHERE email IS NOT NULL AND email != ''"
+        "SELECT id, email FROM clients WHERE email IS NOT NULL AND email != '' AND org_id=?",
+        (org_id,)
     ).fetchall()
     email_to_client = {r['email'].lower(): r['id'] for r in contacts}
 
@@ -264,7 +271,7 @@ def _sync_gmail():
 
     for label, direction in [('INBOX', 'received'), ('SENT', 'sent')]:
         try:
-            result = _gmail_service().users().messages().list(
+            result = _gmail_service(org_id).users().messages().list(
                 userId='me', labelIds=[label], maxResults=100
             ).execute()
             messages = result.get('messages', [])
@@ -273,11 +280,11 @@ def _sync_gmail():
 
         for msg_ref in messages:
             msg_id = msg_ref['id']
-            if db.execute("SELECT 1 FROM emails WHERE gmail_message_id=?", (msg_id,)).fetchone():
+            if db.execute("SELECT 1 FROM emails WHERE gmail_message_id=? AND org_id=?", (msg_id, org_id)).fetchone():
                 continue
 
             try:
-                msg = _gmail_service().users().messages().get(
+                msg = _gmail_service(org_id).users().messages().get(
                     userId='me', id=msg_id, format='full'
                 ).execute()
             except Exception:
@@ -309,9 +316,9 @@ def _sync_gmail():
 
             db.execute("""
                 INSERT INTO emails
-                    (client_id, direction, to_email, subject, body, gmail_message_id, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'synced', ?)
-            """, (client_id, direction, other_email, subject, body, msg_id, created_at))
+                    (client_id, direction, to_email, subject, body, gmail_message_id, status, created_at, org_id)
+                VALUES (?, ?, ?, ?, ?, ?, 'synced', ?, ?)
+            """, (client_id, direction, other_email, subject, body, msg_id, created_at, org_id))
             synced += 1
 
     db.commit()
@@ -357,6 +364,7 @@ def oauth2callback():
         return redirect(url_for('emails.index'))
 
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+    org_id = _get_org_id()
 
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES,
                                    state=session.get('oauth_state'))
@@ -371,10 +379,10 @@ def oauth2callback():
 
     creds = flow.credentials
     db    = get_db()
-    db.execute("DELETE FROM gmail_tokens WHERE id=1")
+    db.execute("DELETE FROM gmail_tokens WHERE org_id=?", (org_id,))
     db.execute(
-        "INSERT INTO gmail_tokens (id, access_token, refresh_token) VALUES (1, ?, ?)",
-        (creds.token, creds.refresh_token),
+        "INSERT INTO gmail_tokens (access_token, refresh_token, org_id) VALUES (?, ?, ?)",
+        (creds.token, creds.refresh_token, org_id),
     )
     db.commit()
     db.close()
@@ -385,8 +393,9 @@ def oauth2callback():
 
 @emails_bp.route('/emails/disconnect', methods=['POST'])
 def disconnect():
+    org_id = _get_org_id()
     db = get_db()
-    db.execute("DELETE FROM gmail_tokens WHERE id=1")
+    db.execute("DELETE FROM gmail_tokens WHERE org_id=?", (org_id,))
     db.commit()
     db.close()
     flash('Gmail desconectado.', 'success')
@@ -397,10 +406,11 @@ def disconnect():
 
 @emails_bp.route('/emails')
 def index():
-    connected    = _is_connected()
-    sent_convos  = _conversations_by_dir('sent')     if connected else []
-    recv_convos  = _conversations_by_dir('received') if connected else []
-    templates    = _all_templates()
+    org_id = _get_org_id()
+    connected    = _is_connected(org_id)
+    sent_convos  = _conversations_by_dir('sent', org_id)     if connected else []
+    recv_convos  = _conversations_by_dir('received', org_id) if connected else []
+    templates    = _all_templates(org_id)
     proposal_draft = None
     draft_id = request.args.get('proposal_draft', type=int)
     if draft_id:
@@ -411,19 +421,22 @@ def index():
     active_client = None
 
     if active_id:
-        active_thread = _thread(active_id)
+        active_thread = _thread(active_id, org_id)
         db            = get_db()
-        active_client = db.execute("SELECT * FROM clients WHERE id=?", (active_id,)).fetchone()
+        active_client = db.execute(
+            "SELECT * FROM clients WHERE id=? AND org_id=?", (active_id, org_id)
+        ).fetchone()
         db.close()
 
     db          = get_db()
     all_clients = db.execute(
         "SELECT id, first_name, last_name, email FROM clients "
-        "WHERE email IS NOT NULL AND email != '' ORDER BY first_name"
+        "WHERE email IS NOT NULL AND email != '' AND org_id=? ORDER BY first_name",
+        (org_id,)
     ).fetchall()
     db.close()
 
-    email_settings = _get_settings()
+    email_settings = _get_settings(org_id)
     return render_template('emails/index.html',
         connected=connected,
         sent_convos=sent_convos,
@@ -442,6 +455,7 @@ def index():
 
 @emails_bp.route('/emails/send', methods=['POST'])
 def send():
+    org_id    = _get_org_id()
     data      = request.get_json(silent=True) or {}
     client_id = data.get('client_id')
     to_email  = (data.get('to_email')  or '').strip()
@@ -451,12 +465,12 @@ def send():
     if not to_email or not subject or not body:
         return jsonify({'success': False, 'error': 'to_email, subject y body son requeridos'}), 400
 
-    service = _gmail_service()
+    service = _gmail_service(org_id)
     if not service:
         return jsonify({'success': False, 'error': 'Gmail no conectado. Ve a Emails → Conectar Gmail.'}), 503
 
     try:
-        settings   = _get_settings()
+        settings   = _get_settings(org_id)
         html_body  = _build_html_email(body, settings)
 
         msg = MIMEMultipart('alternative')
@@ -468,7 +482,7 @@ def send():
         raw  = base64.urlsafe_b64encode(msg.as_bytes()).decode()
         sent = service.users().messages().send(userId='me', body={'raw': raw}).execute()
 
-        _save_sent(client_id, to_email, subject, body, sent.get('id'))
+        _save_sent(client_id, to_email, subject, body, sent.get('id'), org_id)
 
         if client_id:
             db = get_db()
@@ -489,11 +503,13 @@ def send():
 
 @emails_bp.route('/emails/templates')
 def templates_page():
-    return render_template('emails/templates.html', templates=_all_templates())
+    org_id = _get_org_id()
+    return render_template('emails/templates.html', templates=_all_templates(org_id))
 
 
 @emails_bp.route('/emails/templates', methods=['POST'])
 def create_template():
+    org_id  = _get_org_id()
     data    = request.get_json(silent=True) or {}
     name    = (data.get('name')    or '').strip()
     subject = (data.get('subject') or '').strip()
@@ -504,8 +520,8 @@ def create_template():
 
     db  = get_db()
     cur = db.execute(
-        "INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)",
-        (name, subject, body),
+        "INSERT INTO email_templates (name, subject, body, org_id) VALUES (?, ?, ?, ?)",
+        (name, subject, body, org_id),
     )
     db.commit()
     new_id = cur.lastrowid
@@ -515,6 +531,7 @@ def create_template():
 
 @emails_bp.route('/emails/templates/<int:tid>', methods=['PUT'])
 def update_template(tid):
+    org_id  = _get_org_id()
     data    = request.get_json(silent=True) or {}
     name    = (data.get('name')    or '').strip()
     subject = (data.get('subject') or '').strip()
@@ -525,8 +542,8 @@ def update_template(tid):
 
     db = get_db()
     db.execute(
-        "UPDATE email_templates SET name=?, subject=?, body=? WHERE id=?",
-        (name, subject, body, tid),
+        "UPDATE email_templates SET name=?, subject=?, body=? WHERE id=? AND org_id=?",
+        (name, subject, body, tid, org_id),
     )
     db.commit()
     db.close()
@@ -535,8 +552,9 @@ def update_template(tid):
 
 @emails_bp.route('/emails/templates/<int:tid>', methods=['DELETE'])
 def delete_template(tid):
+    org_id = _get_org_id()
     db = get_db()
-    db.execute("DELETE FROM email_templates WHERE id=?", (tid,))
+    db.execute("DELETE FROM email_templates WHERE id=? AND org_id=?", (tid, org_id))
     db.commit()
     db.close()
     return jsonify({'success': True})
@@ -546,21 +564,23 @@ def delete_template(tid):
 
 @emails_bp.route('/emails/settings')
 def email_settings():
-    settings = _get_settings()
+    org_id = _get_org_id()
+    settings = _get_settings(org_id)
     return render_template('emails/settings.html', settings=settings)
 
 
 @emails_bp.route('/emails/settings', methods=['POST'])
 def save_email_settings():
+    org_id = _get_org_id()
     keys = ['company_logo_url', 'signature_name', 'signature_title',
             'signature_phone', 'signature_email', 'signature_website']
     db = get_db()
     for key in keys:
         value = request.form.get(key, '').strip()
         db.execute(
-            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "INSERT INTO settings (key, value, org_id) VALUES (?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, value),
+            (key, value, org_id),
         )
     db.commit()
     db.close()
@@ -570,7 +590,8 @@ def save_email_settings():
 
 @emails_bp.route('/emails/sync', methods=['POST'])
 def sync_emails():
-    synced, error = _sync_gmail()
+    org_id = _get_org_id()
+    synced, error = _sync_gmail(org_id)
     if error:
         return jsonify({'success': False, 'error': error}), 503
     return jsonify({'success': True, 'synced': synced})
@@ -578,19 +599,21 @@ def sync_emails():
 
 @emails_bp.route('/emails/templates/<int:tid>/preview')
 def template_preview(tid):
+    org_id = _get_org_id()
     db  = get_db()
-    row = db.execute("SELECT * FROM email_templates WHERE id=?", (tid,)).fetchone()
+    row = db.execute("SELECT * FROM email_templates WHERE id=? AND org_id=?", (tid, org_id)).fetchone()
     db.close()
     if not row:
         return 'Plantilla no encontrada', 404
-    settings = _get_settings()
+    settings = _get_settings(org_id)
     html = _build_html_email(row['body'], settings)
     return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 
 @emails_bp.route('/emails/settings/preview')
 def signature_preview():
-    settings = _get_settings()
+    org_id = _get_org_id()
+    settings = _get_settings(org_id)
     html = _build_html_email(
         'Hola {nombre},\n\nEste es un ejemplo de cómo se verán tus emails con la firma y el logo de la empresa.\n\n¡Saludos!',
         settings,

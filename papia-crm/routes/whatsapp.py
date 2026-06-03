@@ -1,6 +1,6 @@
 import os
 import re
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, g
 from database import get_db
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
@@ -23,9 +23,12 @@ def phones_match(p1: str, p2: str) -> bool:
 
 # ── DB helpers ───────────────────────────────────────────────────────────────
 
-def find_client_by_phone(phone: str):
+def find_client_by_phone(phone: str, org_id=1):
     db = get_db()
-    clients = db.execute("SELECT * FROM clients WHERE phone IS NOT NULL AND phone != ''").fetchall()
+    clients = db.execute(
+        "SELECT * FROM clients WHERE phone IS NOT NULL AND phone != '' AND org_id=?",
+        (org_id,)
+    ).fetchall()
     db.close()
     for c in clients:
         if phones_match(phone, c['phone']):
@@ -34,21 +37,21 @@ def find_client_by_phone(phone: str):
 
 
 def save_message(phone, direction, message, wa_message_id=None, client_id=None,
-                 status=None):
+                 status=None, org_id=1):
     if status is None:
         status = 'received' if direction == 'inbound' else 'sent'
     db = get_db()
     db.execute(
         """INSERT INTO whatsapp_messages
-               (client_id, phone, direction, message, status, wa_message_id)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (client_id, phone, direction, message, status, wa_message_id),
+               (client_id, phone, direction, message, status, wa_message_id, org_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (client_id, phone, direction, message, status, wa_message_id, org_id),
     )
     db.commit()
     db.close()
 
 
-def get_conversations():
+def get_conversations(org_id=1):
     """Return one row per unique phone: last message + unread count."""
     db = get_db()
     rows = db.execute("""
@@ -63,42 +66,50 @@ def get_conversations():
         FROM whatsapp_messages w
         LEFT JOIN whatsapp_messages w2 ON w2.phone = w.phone
         LEFT JOIN clients c ON c.id = w.client_id
-        WHERE w.id = (
+        WHERE w.org_id = ?
+          AND w.id = (
             SELECT id FROM whatsapp_messages
-            WHERE phone = w.phone ORDER BY created_at DESC LIMIT 1
-        )
+            WHERE phone = w.phone AND org_id = ?
+            ORDER BY created_at DESC LIMIT 1
+          )
         GROUP BY w.phone
         ORDER BY w.created_at DESC
-    """).fetchall()
+    """, (org_id, org_id)).fetchall()
     db.close()
     return rows
 
 
-def get_conversation(phone: str):
+def get_conversation(phone: str, org_id=1):
     db = get_db()
     rows = db.execute(
-        "SELECT * FROM whatsapp_messages WHERE phone = ? ORDER BY created_at ASC",
-        (phone,),
+        "SELECT * FROM whatsapp_messages WHERE phone = ? AND org_id = ? ORDER BY created_at ASC",
+        (phone, org_id),
     ).fetchall()
     db.close()
     return rows
 
 
-def mark_read(phone: str):
+def mark_read(phone: str, org_id=1):
     db = get_db()
     db.execute(
-        "UPDATE whatsapp_messages SET status='read' WHERE phone=? AND direction='inbound' AND status='received'",
-        (phone,),
+        "UPDATE whatsapp_messages SET status='read' WHERE phone=? AND org_id=? AND direction='inbound' AND status='received'",
+        (phone, org_id),
     )
     db.commit()
     db.close()
 
 
-def get_unread_count() -> int:
+def get_unread_count(org_id=None) -> int:
     db = get_db()
-    count = db.execute(
-        "SELECT COUNT(*) FROM whatsapp_messages WHERE direction='inbound' AND status='received'"
-    ).fetchone()[0]
+    if org_id is not None:
+        count = db.execute(
+            "SELECT COUNT(*) FROM whatsapp_messages WHERE direction='inbound' AND status='received' AND org_id=?",
+            (org_id,)
+        ).fetchone()[0]
+    else:
+        count = db.execute(
+            "SELECT COUNT(*) FROM whatsapp_messages WHERE direction='inbound' AND status='received'"
+        ).fetchone()[0]
     db.close()
     return count
 
@@ -129,19 +140,24 @@ def messages_to_dicts(rows):
     ]
 
 
+def _get_org_id():
+    return g.org_id if hasattr(g, 'org_id') else 1
+
+
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 @whatsapp_bp.route('/whatsapp')
 def index():
-    conversations = get_conversations()
+    org_id        = _get_org_id()
+    conversations = get_conversations(org_id)
     active_phone  = request.args.get('phone', '').strip()
     active_msgs   = []
     active_client = None
 
     if active_phone:
-        mark_read(active_phone)
-        active_msgs   = get_conversation(active_phone)
-        active_client = find_client_by_phone(active_phone)
+        mark_read(active_phone, org_id)
+        active_msgs   = get_conversation(active_phone, org_id)
+        active_client = find_client_by_phone(active_phone, org_id)
 
     return render_template(
         'whatsapp/index.html',
@@ -160,7 +176,9 @@ def webhook():
     wa_id     = request.form.get('MessageSid', '')
 
     phone  = normalize_phone(raw_from)
-    client = find_client_by_phone(phone)
+    # For inbound webhooks, default to org_id=1 (PapiaTech)
+    org_id = 1
+    client = find_client_by_phone(phone, org_id)
 
     save_message(
         phone=phone,
@@ -168,6 +186,7 @@ def webhook():
         message=body,
         wa_message_id=wa_id,
         client_id=client['id'] if client else None,
+        org_id=org_id,
     )
 
     # Empty TwiML — no auto-reply
@@ -177,6 +196,7 @@ def webhook():
 @whatsapp_bp.route('/whatsapp/send', methods=['POST'])
 def send_message():
     """Send a WhatsApp message from the CRM."""
+    org_id    = _get_org_id()
     data      = request.get_json(silent=True) or {}
     phone     = data.get('phone', '').strip()
     message   = data.get('message', '').strip()
@@ -204,7 +224,7 @@ def send_message():
         # Resolve client_id from phone if not provided explicitly
         resolved_client_id = client_id
         if not resolved_client_id:
-            matched = find_client_by_phone(phone)
+            matched = find_client_by_phone(phone, org_id)
             resolved_client_id = matched['id'] if matched else None
 
         save_message(
@@ -214,6 +234,7 @@ def send_message():
             wa_message_id=msg.sid,
             client_id=resolved_client_id,
             status='sent',
+            org_id=org_id,
         )
 
         # Register in client activity history when client_id is known
@@ -232,10 +253,11 @@ def send_message():
 @whatsapp_bp.route('/whatsapp/conversation/<path:phone>')
 def conversation_json(phone):
     """Return conversation as JSON for polling."""
+    org_id = _get_org_id()
     phone = normalize_phone(phone)
-    mark_read(phone)
-    msgs   = get_conversation(phone)
-    client = find_client_by_phone(phone)
+    mark_read(phone, org_id)
+    msgs   = get_conversation(phone, org_id)
+    client = find_client_by_phone(phone, org_id)
     return jsonify({
         'messages': messages_to_dicts(msgs),
         'client': {
@@ -249,6 +271,7 @@ def conversation_json(phone):
 @whatsapp_bp.route('/whatsapp/new-conversation', methods=['GET', 'POST'])
 def new_conversation():
     """Start a conversation with any phone number."""
+    org_id = _get_org_id()
     if request.method == 'POST':
         phone   = normalize_phone(request.form.get('phone', ''))
         message = request.form.get('message', '').strip()
@@ -270,12 +293,13 @@ def new_conversation():
                         to=f'whatsapp:{phone}',
                         body=message,
                     )
-                    client = find_client_by_phone(phone)
+                    client = find_client_by_phone(phone, org_id)
                     save_message(
                         phone=phone, direction='outbound', message=message,
                         wa_message_id=msg.sid,
                         client_id=client['id'] if client else None,
                         status='sent',
+                        org_id=org_id,
                     )
                 except Exception as exc:
                     flash(f'Error al enviar: {exc}', 'danger')

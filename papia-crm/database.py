@@ -20,6 +20,15 @@ def init_db():
     cursor = conn.cursor()
 
     cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            slug TEXT UNIQUE NOT NULL,
+            plan TEXT NOT NULL DEFAULT 'starter',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first_name TEXT NOT NULL,
@@ -197,6 +206,52 @@ def init_db():
 
     conn.commit()
 
+    # ── Seed PapiaTech as org_id=1 ────────────────────────────────────────────
+    if not conn.execute("SELECT 1 FROM organizations WHERE id=1").fetchone():
+        conn.execute(
+            "INSERT INTO organizations (id, name, slug, plan) VALUES (1, 'Papia Technology Solutions', 'papiatech', 'enterprise')"
+        )
+        conn.commit()
+
+    # ── Multi-tenant migrations: add org_id columns ───────────────────────────
+    migrations = [
+        "ALTER TABLE clients ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE follow_ups ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE whatsapp_messages ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE emails ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE email_templates ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE proposals ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE users ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE gmail_tokens ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE settings ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE clients ADD COLUMN source TEXT DEFAULT ''",
+        "ALTER TABLE follow_ups ADD COLUMN next_at DATETIME",
+        "ALTER TABLE follow_ups ADD COLUMN reminder_comment TEXT",
+    ]
+    for sql in migrations:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            pass
+
+    proposal_columns = [
+        ("proposal_language", "TEXT NOT NULL DEFAULT 'en'"),
+        ("proposal_purpose", "TEXT NOT NULL DEFAULT 'landing_page'"),
+        ("pdf_url", "TEXT"),
+        ("email_draft_id", "INTEGER"),
+        ("sent_at", "DATETIME"),
+        ("accepted_via_whatsapp_at", "DATETIME"),
+        ("whatsapp_acceptance_link", "TEXT"),
+        ("client_approval_status", "TEXT NOT NULL DEFAULT 'pending'"),
+    ]
+    for column, definition in proposal_columns:
+        try:
+            conn.execute(f"ALTER TABLE proposals ADD COLUMN {column} {definition}")
+            conn.commit()
+        except Exception:
+            pass
+
     # ── Seed default email templates ──────────────────────────────────────────
     existing = conn.execute("SELECT COUNT(*) FROM email_templates").fetchone()[0]
     if existing == 0:
@@ -227,42 +282,6 @@ def init_db():
         )
         conn.commit()
 
-    # ── Migrations: columns added after initial deploy ────────────────────────
-    try:
-        conn.execute("ALTER TABLE clients ADD COLUMN source TEXT DEFAULT ''")
-        conn.commit()
-    except Exception:
-        pass
-
-    try:
-        conn.execute("ALTER TABLE follow_ups ADD COLUMN next_at DATETIME")
-        conn.commit()
-    except Exception:
-        pass
-
-    try:
-        conn.execute("ALTER TABLE follow_ups ADD COLUMN reminder_comment TEXT")
-        conn.commit()
-    except Exception:
-        pass
-
-    proposal_columns = [
-        ("proposal_language", "TEXT NOT NULL DEFAULT 'en'"),
-        ("proposal_purpose", "TEXT NOT NULL DEFAULT 'landing_page'"),
-        ("pdf_url", "TEXT"),
-        ("email_draft_id", "INTEGER"),
-        ("sent_at", "DATETIME"),
-        ("accepted_via_whatsapp_at", "DATETIME"),
-        ("whatsapp_acceptance_link", "TEXT"),
-        ("client_approval_status", "TEXT NOT NULL DEFAULT 'pending'"),
-    ]
-    for column, definition in proposal_columns:
-        try:
-            conn.execute(f"ALTER TABLE proposals ADD COLUMN {column} {definition}")
-            conn.commit()
-        except Exception:
-            pass
-
     # ── Seed users ───────────────────────────────────────────────────────────
     ALL_MODULES = ['whatsapp', 'emails', 'calendar', 'proposals', 'tasks']
 
@@ -270,14 +289,21 @@ def init_db():
     admin_pass = os.getenv('ADMIN_PASSWORD', 'admin').strip()
     if not conn.execute("SELECT 1 FROM users WHERE username=?", (admin_user,)).fetchone():
         conn.execute(
-            "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, 'Admin', 'admin')",
+            "INSERT INTO users (username, password_hash, display_name, role, org_id) VALUES (?, ?, 'Admin', 'superadmin', 1)",
             (admin_user, generate_password_hash(admin_pass)),
+        )
+        conn.commit()
+    else:
+        # Migrate existing admin to superadmin if they are currently 'admin'
+        conn.execute(
+            "UPDATE users SET role='superadmin', org_id=1 WHERE username=? AND role='admin'",
+            (admin_user,),
         )
         conn.commit()
 
     if not conn.execute("SELECT 1 FROM users WHERE username='Testing'").fetchone():
         conn.execute(
-            "INSERT INTO users (username, password_hash, display_name, role) VALUES ('Testing', ?, 'Testing', 'user')",
+            "INSERT INTO users (username, password_hash, display_name, role, org_id) VALUES ('Testing', ?, 'Testing', 'user', 1)",
             (generate_password_hash('Testing'),),
         )
         conn.commit()

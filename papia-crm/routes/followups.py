@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, jsonify, request
+from flask import Blueprint, render_template, redirect, url_for, flash, jsonify, request, g
 from database import get_db
 from models.client import (
     complete_followup,
@@ -16,7 +16,8 @@ followups_bp = Blueprint('followups', __name__)
 
 @followups_bp.route('/followups/')
 def index():
-    todays = get_todays_followups()
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    todays = get_todays_followups(org_id)
     return render_template(
         'followups/index.html',
         followups=todays,
@@ -26,8 +27,9 @@ def index():
 
 @followups_bp.route('/tasks/')
 def tasks():
-    due       = get_due_tasks()
-    all_tasks = get_all_tasks()
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    due       = get_due_tasks(org_id)
+    all_tasks = get_all_tasks(org_id)
     return render_template(
         'followups/tasks.html',
         due_tasks=due,
@@ -39,9 +41,11 @@ def tasks():
 
 @followups_bp.route('/calendar/')
 def calendar():
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
     db      = get_db()
     clients = db.execute(
-        "SELECT id, first_name, last_name FROM clients ORDER BY first_name"
+        "SELECT id, first_name, last_name FROM clients WHERE org_id=? ORDER BY first_name",
+        (org_id,)
     ).fetchall()
     db.close()
     return render_template('followups/calendar.html', clients=clients)
@@ -59,6 +63,7 @@ def complete_task(followup_id):
 @followups_bp.route('/calendar/events')
 def calendar_events():
     """Return all follow_ups with a date as FullCalendar event objects."""
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
     db   = get_db()
     rows = db.execute("""
         SELECT f.id, f.summary, f.method, f.next_at, f.next_date,
@@ -66,9 +71,10 @@ def calendar_events():
                c.first_name, c.last_name
         FROM follow_ups f
         JOIN clients c ON c.id = f.client_id
-        WHERE f.next_at IS NOT NULL OR f.next_date IS NOT NULL
+        WHERE (f.next_at IS NOT NULL OR f.next_date IS NOT NULL)
+          AND c.org_id = ?
         ORDER BY COALESCE(f.next_at, f.next_date)
-    """).fetchall()
+    """, (org_id,)).fetchall()
     db.close()
 
     events = []

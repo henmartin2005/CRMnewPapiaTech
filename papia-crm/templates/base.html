@@ -135,6 +135,26 @@
     </li>
     {% endif %}
 
+    {% if is_superadmin %}
+    <li class="sb-section" style="margin-top:4px;">Super Admin</li>
+    <li>
+      <a href="{{ url_for('super.organizations') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('super.') %}active{% endif %}">
+        <i class="bi bi-building"></i>
+        <span class="sb-label">Organizaciones</span>
+      </a>
+    </li>
+    {% endif %}
+
+    {% if session.get('viewed_org_id') %}
+    <li>
+      <div style="padding:8px 12px;background:rgba(255,165,0,.15);border-radius:var(--radius-sm);font-size:11px;color:orange;margin:4px 0;">
+        Viendo Org #{{ session.get('viewed_org_id') }}
+        <a href="{{ url_for('super.exit_view') }}" style="color:orange;margin-left:6px;text-decoration:none;">&#x2715; Salir</a>
+      </div>
+    </li>
+    {% endif %}
+
   </ul>
 
   <!-- Footer -->

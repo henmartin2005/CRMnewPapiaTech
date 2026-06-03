@@ -38,6 +38,8 @@ def login():
             session['username']   = username
             session['user_id']    = user['id']
             session['user_role']  = user['role']
+            session['org_id']     = user['org_id'] if 'org_id' in user.keys() else 1
+            session.pop('viewed_org_id', None)
             next_url = request.args.get('next') or url_for('dashboard')
             return redirect(next_url)
         else:

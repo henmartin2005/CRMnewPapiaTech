@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g
 from models.client import (
     get_all_clients, get_client, create_client, update_client,
     delete_client, get_client_notes, add_note, get_client_followups,
@@ -18,22 +18,25 @@ def search_clients():
     q  = request.args.get('q', '').strip()
     if len(q) < 2:
         return jsonify([])
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
     db   = get_db()
     like = f'%{q}%'
     rows = db.execute("""
         SELECT id, first_name, last_name, email, phone
         FROM clients
-        WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?
+        WHERE org_id = ?
+          AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?)
         ORDER BY first_name LIMIT 10
-    """, (like, like, like, like)).fetchall()
+    """, (org_id, like, like, like, like)).fetchall()
     db.close()
     return jsonify([dict(r) for r in rows])
 
 
 @clients_bp.route('/')
 def list_clients():
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
     search = request.args.get('q', '').strip()
-    clients = get_all_clients(search if search else None)
+    clients = get_all_clients(org_id, search if search else None)
     return render_template(
         'clients/list.html',
         clients=clients,
@@ -46,6 +49,7 @@ def list_clients():
 
 @clients_bp.route('/new', methods=['GET', 'POST'])
 def new_client():
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
     if request.method == 'POST':
         errors = _validate_client_form(request.form)
         if errors:
@@ -58,7 +62,7 @@ def new_client():
                 project_types=PROJECT_TYPES,
                 is_edit=False,
             )
-        client_id = create_client(request.form)
+        client_id = create_client(request.form, org_id=org_id)
         flash('Cliente creado exitosamente.', 'success')
         return redirect(url_for('clients.detail', client_id=client_id))
 
@@ -73,7 +77,8 @@ def new_client():
 
 @clients_bp.route('/<int:client_id>')
 def detail(client_id):
-    client = get_client(client_id)
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    client = get_client(client_id, org_id=org_id)
     if not client:
         flash('Cliente no encontrado.', 'danger')
         return redirect(url_for('clients.list_clients'))
@@ -99,7 +104,8 @@ def detail(client_id):
 
 @clients_bp.route('/<int:client_id>/edit', methods=['GET', 'POST'])
 def edit_client(client_id):
-    client = get_client(client_id)
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    client = get_client(client_id, org_id=org_id)
     if not client:
         flash('Cliente no encontrado.', 'danger')
         return redirect(url_for('clients.list_clients'))
@@ -117,7 +123,7 @@ def edit_client(client_id):
                 is_edit=True,
                 client_id=client_id,
             )
-        update_client(client_id, request.form)
+        update_client(client_id, request.form, org_id=org_id)
         flash('Cliente actualizado exitosamente.', 'success')
         return redirect(url_for('clients.detail', client_id=client_id))
 
@@ -133,7 +139,8 @@ def edit_client(client_id):
 
 @clients_bp.route('/<int:client_id>/delete', methods=['POST'])
 def delete(client_id):
-    delete_client(client_id)
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    delete_client(client_id, org_id=org_id)
     flash('Cliente eliminado.', 'success')
     return redirect(url_for('clients.list_clients'))
 
@@ -178,10 +185,11 @@ def add_client_followup(client_id):
 @clients_bp.route('/<int:client_id>/stage', methods=['POST'])
 def update_stage(client_id):
     from models.client import update_pipeline_stage
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
     stage = request.form.get('stage')
     valid_stages = [s for s, _ in PIPELINE_STAGES]
     if stage in valid_stages:
-        update_pipeline_stage(client_id, stage)
+        update_pipeline_stage(client_id, stage, org_id=org_id)
         return jsonify({'ok': True})
     return jsonify({'ok': False, 'error': 'Invalid stage'}), 400
 

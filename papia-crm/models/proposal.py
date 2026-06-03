@@ -66,10 +66,13 @@ def serialize_proposal(row):
     return data
 
 
-def list_proposals(search=None, status=None):
+def list_proposals(search=None, status=None, org_id=None):
     db = get_db()
     sql = "SELECT * FROM proposals WHERE 1=1"
     params = []
+    if org_id is not None:
+        sql += " AND org_id=?"
+        params.append(org_id)
     if search:
         q = f"%{search}%"
         sql += " AND (client_name LIKE ? OR business_name LIKE ? OR email LIKE ? OR phone LIKE ? OR project_type LIKE ? OR status LIKE ?)"
@@ -83,9 +86,12 @@ def list_proposals(search=None, status=None):
     return [serialize_proposal(row) for row in rows]
 
 
-def get_proposal(proposal_id):
+def get_proposal(proposal_id, org_id=None):
     db = get_db()
-    row = db.execute("SELECT * FROM proposals WHERE id=?", (proposal_id,)).fetchone()
+    if org_id is not None:
+        row = db.execute("SELECT * FROM proposals WHERE id=? AND org_id=?", (proposal_id, org_id)).fetchone()
+    else:
+        row = db.execute("SELECT * FROM proposals WHERE id=?", (proposal_id,)).fetchone()
     db.close()
     return serialize_proposal(row)
 
@@ -137,7 +143,7 @@ def _proposal_values(data):
     )
 
 
-def create_proposal(data):
+def create_proposal(data, org_id=1):
     db = get_db()
     cursor = db.execute("""
         INSERT INTO proposals (
@@ -147,10 +153,10 @@ def create_proposal(data):
             remaining_balance, payment_terms, payment_schedule, payment_methods,
             start_date, estimated_delivery_date, business_days, milestones,
             terms_and_conditions, status, pdf_url, email_draft_id, sent_at,
-            accepted_via_whatsapp_at, whatsapp_acceptance_link, client_approval_status
+            accepted_via_whatsapp_at, whatsapp_acceptance_link, client_approval_status, org_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, _proposal_values(data))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, _proposal_values(data) + (org_id,))
     db.commit()
     proposal_id = cursor.lastrowid
     db.close()

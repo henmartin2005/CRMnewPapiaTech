@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Super Admin — Organizaciones{% endblock %}
+
+{% block head %}
+<style>
+.org-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.org-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.org-badge.active   { background: rgba(16,185,129,.12); color: #059669; }
+.org-badge.inactive { background: rgba(239,68,68,.12);  color: #dc2626; }
+.org-badge.plan     { background: rgba(42,91,255,.1);   color: var(--c-accent); }
+.org-actions { display: flex; gap: 8px; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title"><i class="bi bi-building me-2" style="color:var(--c-accent);"></i>Organizaciones</h1>
+    <p style="font-size:13px;color:var(--c-text-3);margin:4px 0 0;">Gestiona todos los tenants del sistema</p>
+  </div>
+  <div class="pg-actions">
+    <button class="btn-md btn-primary" data-bs-toggle="modal" data-bs-target="#newOrgModal">
+      <i class="bi bi-plus-lg"></i> Nueva organización
+    </button>
+    {% if session.get('viewed_org_id') %}
+    <a href="{{ url_for('super.exit_view') }}" class="btn-md btn-secondary" style="border-color:orange;color:orange;">
+      <i class="bi bi-x-circle"></i> Salir de org #{{ session.get('viewed_org_id') }}
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div style="max-width:900px;">
+  {% for org in orgs %}
+  <div class="org-card">
+    <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">
+      <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#2A5BFF,#8B5CF6);
+                  color:#fff;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        {{ org.name[0] | upper }}
+      </div>
+      <div style="min-width:0;">
+        <div style="font-weight:700;font-size:15px;color:var(--c-text);">
+          {{ org.name }}
+          <span class="org-badge {{ 'active' if org.is_active else 'inactive' }}" style="margin-left:8px;">
+            {{ 'Activa' if org.is_active else 'Inactiva' }}
+          </span>
+        </div>
+        <div style="font-size:12px;color:var(--c-text-3);margin-top:3px;">
+          <span style="color:var(--c-text-2);">slug:</span> {{ org.slug }}
+          &nbsp;·&nbsp;
+          <span class="org-badge plan">{{ org.plan }}</span>
+          &nbsp;·&nbsp;
+          <i class="bi bi-people"></i> {{ org.user_count }} usuario{{ 's' if org.user_count != 1 else '' }}
+          &nbsp;·&nbsp;
+          <i class="bi bi-calendar3"></i> {{ org.created_at[:10] if org.created_at else '—' }}
+        </div>
+      </div>
+    </div>
+    <div class="org-actions">
+      <a href="{{ url_for('super.view_as_org', org_id=org.id) }}"
+         class="btn-icon-xs" title="Ver como esta org"
+         style="color:var(--c-accent);border-color:var(--c-accent);">
+        <i class="bi bi-eye"></i>
+      </a>
+      <button class="btn-icon-xs" title="{{ 'Desactivar' if org.is_active else 'Activar' }}"
+              onclick="toggleOrg({{ org.id }}, this)"
+              style="{{ 'color:#dc2626;border-color:#dc2626;' if org.is_active else 'color:#059669;border-color:#059669;' }}">
+        <i class="bi bi-{{ 'pause-circle' if org.is_active else 'play-circle' }}"></i>
+      </button>
+    </div>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:60px;color:var(--c-text-3);">
+    <i class="bi bi-building" style="font-size:48px;opacity:.3;"></i>
+    <p style="margin-top:16px;">No hay organizaciones todavía.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Modal: Nueva organización -->
+<div class="modal fade" id="newOrgModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-building-add me-2" style="color:var(--c-accent);"></i>Nueva organización</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('super.create_org') }}">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label class="form-label">Nombre de la organización</label>
+            <input type="text" name="name" class="form-control" required placeholder="Ej: Acme Corp" />
+          </div>
+          <hr style="margin:4px 0;">
+          <p style="font-size:12px;color:var(--c-text-3);margin:0;">
+            <i class="bi bi-info-circle"></i> Se creará un usuario administrador para esta org.
+          </p>
+          <div>
+            <label class="form-label">Usuario admin</label>
+            <input type="text" name="admin_username" class="form-control" required placeholder="Ej: admin_acme" />
+          </div>
+          <div>
+            <label class="form-label">Contraseña admin</label>
+            <input type="password" name="admin_password" class="form-control" required placeholder="Contraseña segura" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-md btn-primary"><i class="bi bi-check-lg"></i> Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function toggleOrg(orgId, btn) {
+  const resp = await fetch(`/super/organizations/${orgId}/toggle`, { method: 'POST' });
+  if (resp.ok) {
+    location.reload();
+  }
+}
+</script>
+{% endblock %}

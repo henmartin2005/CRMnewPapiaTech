@@ -15,14 +15,14 @@ def _find_client_by_email(email: str):
     return row
 
 
-def _insert_client(data: dict) -> int:
+def _insert_client(data: dict, org_id: int = 1) -> int:
     db = get_db()
     cursor = db.execute("""
         INSERT INTO clients
             (first_name, last_name, email, phone, company,
              project_type, project_details, pipeline_stage, source,
-             total_cost, amount_paid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'new_lead', 'website', 0, 0)
+             total_cost, amount_paid, org_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'new_lead', 'website', 0, 0, ?)
     """, (
         data['first_name'],
         data['last_name'],
@@ -31,6 +31,7 @@ def _insert_client(data: dict) -> int:
         data.get('company', ''),
         data['project_type'],
         data.get('project_details', ''),
+        org_id,
     ))
     db.commit()
     new_id = cursor.lastrowid

@@ -20,7 +20,8 @@ ALL_MODULES = [
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if session.get('user_role') != 'admin':
+        role = session.get('user_role')
+        if role not in ('admin', 'superadmin'):
             flash('Acceso restringido a administradores.', 'danger')
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
@@ -30,9 +31,11 @@ def admin_required(f):
 @admin_bp.route('/settings')
 @admin_required
 def settings():
+    org_id = session.get('org_id', 1)
     db    = get_db()
     users = db.execute(
-        "SELECT id, username, display_name, role, is_active FROM users ORDER BY role DESC, username"
+        "SELECT id, username, display_name, role, is_active FROM users WHERE org_id=? ORDER BY role DESC, username",
+        (org_id,)
     ).fetchall()
 
     modules_by_user = {}
@@ -53,6 +56,7 @@ def settings():
 @admin_bp.route('/users/create', methods=['POST'])
 @admin_required
 def create_user():
+    org_id       = session.get('org_id', 1)
     username     = request.form.get('username', '').strip()
     password     = request.form.get('password', '').strip()
     display_name = request.form.get('display_name', '').strip()
@@ -68,8 +72,8 @@ def create_user():
         return redirect(url_for('admin.settings'))
 
     db.execute(
-        "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, 'user')",
-        (username, generate_password_hash(password), display_name or username),
+        "INSERT INTO users (username, password_hash, display_name, role, org_id) VALUES (?, ?, ?, 'user', ?)",
+        (username, generate_password_hash(password), display_name or username, org_id),
     )
     db.commit()
     new_id = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()['id']
@@ -103,9 +107,10 @@ def toggle_module(user_id):
 @admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
 @admin_required
 def delete_user(user_id):
+    org_id = session.get('org_id', 1)
     db   = get_db()
-    user = db.execute("SELECT username, role FROM users WHERE id=?", (user_id,)).fetchone()
-    if not user or user['role'] == 'admin':
+    user = db.execute("SELECT username, role FROM users WHERE id=? AND org_id=?", (user_id, org_id)).fetchone()
+    if not user or user['role'] in ('admin', 'superadmin'):
         db.close()
         flash('No se puede eliminar ese usuario.', 'danger')
         return redirect(url_for('admin.settings'))

@@ -1,7 +1,7 @@
 import os
 from datetime import timedelta, datetime, timezone
 from zoneinfo import ZoneInfo
-from flask import Flask, render_template, session, redirect, url_for, request
+from flask import Flask, render_template, session, redirect, url_for, request, g
 
 # Load .env from the same folder as this file, regardless of cwd
 try:
@@ -28,6 +28,7 @@ from routes.leads import leads_bp
 from routes.emails import emails_bp
 from routes.proposals import proposals_bp
 from routes.admin import admin_bp
+from routes.super import super_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -51,6 +52,17 @@ app.register_blueprint(followups_bp)
 app.register_blueprint(whatsapp_bp)
 app.register_blueprint(proposals_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(super_bp)
+
+
+# ── Set org context on each request ─────────────────────────────────────────
+@app.before_request
+def set_org_context():
+    if session.get('logged_in'):
+        # superadmin can "view as" another org
+        g.org_id = session.get('viewed_org_id') or session.get('org_id', 1)
+    else:
+        g.org_id = 1
 
 
 # ── Auth guard: protect every route except login, logout, static, and webhook ──
@@ -63,6 +75,9 @@ def require_login():
         return
     if not session.get('logged_in'):
         return redirect(url_for('auth.login', next=request.full_path))
+    # Super routes only for superadmin
+    if request.path.startswith('/super/') and session.get('user_role') != 'superadmin':
+        return redirect(url_for('dashboard'))
 
 
 _ALL_MODULES = {'whatsapp', 'emails', 'calendar', 'proposals', 'tasks'}
@@ -71,17 +86,19 @@ _ALL_MODULES = {'whatsapp', 'emails', 'calendar', 'proposals', 'tasks'}
 # ── Context processor: unread badge + enabled modules ──────────────────────
 @app.context_processor
 def inject_globals():
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+
     # WhatsApp badge & task count
     try:
         wa_unread      = get_unread_count()
-        task_due_count = get_due_task_count()
+        task_due_count = get_due_task_count(org_id)
     except Exception:
         wa_unread = task_due_count = 0
 
     # Module permissions
     role    = session.get('user_role', 'user')
     user_id = session.get('user_id')
-    if role == 'admin':
+    if role in ('admin', 'superadmin'):
         enabled_modules = _ALL_MODULES
     elif user_id:
         try:
@@ -98,18 +115,21 @@ def inject_globals():
         enabled_modules = set()
 
     return {
-        'wa_unread':       wa_unread,
-        'task_due_count':  task_due_count,
-        'enabled_modules': enabled_modules,
-        'is_admin':        role == 'admin',
+        'wa_unread':        wa_unread,
+        'task_due_count':   task_due_count,
+        'enabled_modules':  enabled_modules,
+        'is_admin':         role in ('admin', 'superadmin'),
+        'is_superadmin':    role == 'superadmin',
+        'current_org_id':   org_id,
     }
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 @app.route('/')
 def dashboard():
-    stats = get_dashboard_stats()
-    todays_followups = get_todays_followups()
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    stats = get_dashboard_stats(org_id)
+    todays_followups = get_todays_followups(org_id)
     return render_template(
         'dashboard.html',
         stats=stats,
