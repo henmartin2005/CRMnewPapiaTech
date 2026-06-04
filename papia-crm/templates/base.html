@@ -123,6 +123,16 @@
     </li>
     {% endif %}
 
+    {% if is_superadmin %}
+    <li>
+      <a href="#" class="sb-link sb-disabled">
+        <i class="bi bi-stars" style="color:rgba(168,85,247,.7);"></i>
+        <span class="sb-label">AI Assistant</span>
+        <span class="sb-pill" style="background:rgba(168,85,247,.15);color:rgba(196,140,255,.7);font-size:9px;padding:1px 6px;">Pronto</span>
+      </a>
+    </li>
+    {% endif %}
+
     <li class="sb-section" style="margin-top:4px;">Sistema</li>
 
     {% if is_admin %}
