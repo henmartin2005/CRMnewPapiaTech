@@ -88,12 +88,26 @@ _ALL_MODULES = {'whatsapp', 'emails', 'calendar', 'proposals', 'tasks'}
 def inject_globals():
     org_id = g.org_id if hasattr(g, 'org_id') else 1
 
-    # WhatsApp badge & task count — always scoped to current org
+    # Badges & counts — always scoped to current org
     try:
         wa_unread      = get_unread_count(org_id)
         task_due_count = get_due_task_count(org_id)
     except Exception:
         wa_unread = task_due_count = 0
+
+    try:
+        from database import get_db as _gdb
+        _cdb = _gdb()
+        client_count = _cdb.execute(
+            "SELECT COUNT(*) FROM clients WHERE org_id=?", (org_id,)
+        ).fetchone()[0]
+        org_name = (_cdb.execute(
+            "SELECT name FROM organizations WHERE id=?", (org_id,)
+        ).fetchone() or {}).get('name', '')
+        _cdb.close()
+    except Exception:
+        client_count = 0
+        org_name     = ''
 
     # Module permissions: org-level ∩ user-level
     role    = session.get('user_role', 'user')
@@ -129,6 +143,8 @@ def inject_globals():
         'is_admin':         role in ('admin', 'superadmin'),
         'is_superadmin':    role == 'superadmin',
         'current_org_id':   org_id,
+        'client_count':     client_count,
+        'current_org_name': org_name,
     }
 
 

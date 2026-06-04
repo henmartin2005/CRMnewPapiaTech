@@ -43,7 +43,6 @@
          class="sb-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
         <i class="bi bi-house-door"></i>
         <span class="sb-label">Dashboard</span>
-        <span class="sb-kbd">1</span>
       </a>
     </li>
 
@@ -52,7 +51,9 @@
          class="sb-link {% if request.endpoint and request.endpoint.startswith('clients.') %}active{% endif %}">
         <i class="bi bi-people"></i>
         <span class="sb-label">Clientes</span>
-        <span class="sb-kbd">2</span>
+        {% if client_count is defined and client_count > 0 %}
+          <span class="sb-wa-badge">{{ client_count }}</span>
+        {% endif %}
       </a>
     </li>
 
@@ -61,7 +62,6 @@
          class="sb-link {% if request.endpoint and request.endpoint.startswith('pipeline.') %}active{% endif %}">
         <i class="bi bi-kanban"></i>
         <span class="sb-label">Pipeline</span>
-        <span class="sb-kbd">3</span>
       </a>
     </li>
 

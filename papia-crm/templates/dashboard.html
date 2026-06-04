@@ -6,7 +6,7 @@
 <div class="pg-header">
   <div>
     <h1 class="pg-title">Dashboard</h1>
-    <p class="pg-sub">Papia Technology Solutions &mdash; resumen general</p>
+    <p class="pg-sub">{{ current_org_name or 'Mi organización' }} &mdash; resumen general</p>
   </div>
   <div class="pg-actions">
     <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
