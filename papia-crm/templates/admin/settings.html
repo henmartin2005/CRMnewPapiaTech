@@ -60,7 +60,9 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
           <div style="font-size:12px;color:var(--c-text-3);">
             @{{ user.username }}
             <span style="margin-left:8px;padding:2px 7px;border-radius:99px;font-size:10.5px;font-weight:600;
-                  background:{% if user.role == 'admin' %}rgba(42,91,255,.1);color:var(--c-accent){% else %}rgba(16,185,129,.1);color:#059669{% endif %};">
+                  background:{% if user.role == 'superadmin' %}rgba(168,85,247,.15);color:#a855f7
+                  {% elif user.role == 'admin' %}rgba(42,91,255,.1);color:var(--c-accent)
+                  {% else %}rgba(16,185,129,.1);color:#059669{% endif %};">
               {{ user.role }}
             </span>
           </div>
@@ -71,7 +73,7 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
                 onclick="openResetPwd({{ user.id }}, '{{ user.username }}')">
           <i class="bi bi-key"></i>
         </button>
-        {% if user.role != 'admin' %}
+        {% if user.role not in ('admin', 'superadmin') %}
         <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}"
               onsubmit="return confirm('¿Eliminar al usuario {{ user.username }}?')">
           <button type="submit" class="btn-icon-xs" style="color:var(--c-danger);" title="Eliminar">
@@ -82,7 +84,7 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
       </div>
     </div>
 
-    {% if user.role == 'admin' %}
+    {% if user.role in ('admin', 'superadmin') %}
     <div style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
       <i class="bi bi-shield-check" style="color:var(--c-accent);"></i>
       El administrador siempre tiene acceso a todos los módulos.

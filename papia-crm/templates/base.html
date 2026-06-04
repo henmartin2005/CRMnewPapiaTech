@@ -129,8 +129,8 @@
     <li>
       <a href="{{ url_for('admin.settings') }}"
          class="sb-link {% if request.endpoint and request.endpoint.startswith('admin.') %}active{% endif %}">
-        <i class="bi bi-sliders"></i>
-        <span class="sb-label">Configuración</span>
+        <i class="bi bi-people-fill"></i>
+        <span class="sb-label">Usuarios & Módulos</span>
       </a>
     </li>
     {% endif %}
@@ -158,12 +158,31 @@
   </ul>
 
   <!-- Footer -->
-  <div class="sb-footer">
+  <div class="sb-footer" style="position:relative;">
+    {% if is_admin %}
+    <a href="{{ url_for('admin.settings') }}" class="sb-user"
+       style="text-decoration:none;flex:1;cursor:pointer;padding:4px 6px;border-radius:var(--radius-sm);transition:background var(--t);"
+       onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
+      <div class="sb-avatar">{{ (session.username or 'A')[0] | upper }}</div>
+      <div style="display:flex;flex-direction:column;min-width:0;">
+        <span class="sb-user-name">{{ session.username or 'Admin' }}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,.35);line-height:1;">
+          {{ session.get('user_role', 'user') }}
+        </span>
+      </div>
+    </a>
+    {% else %}
     <div class="sb-user">
       <div class="sb-avatar">{{ (session.username or 'A')[0] | upper }}</div>
-      <span class="sb-user-name">{{ session.username or 'Admin' }}</span>
+      <div style="display:flex;flex-direction:column;min-width:0;">
+        <span class="sb-user-name">{{ session.username or 'Admin' }}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,.35);line-height:1;">
+          {{ session.get('user_role', 'user') }}
+        </span>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:4px;">
+    {% endif %}
+    <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
       <button class="sb-theme-btn" id="themeToggle" title="Cambiar tema" aria-label="Toggle sidebar theme">
         <i class="bi bi-circle-half" id="themeIcon"></i>
       </button>
