@@ -85,14 +85,34 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
     </div>
 
     {% if user.role in ('admin', 'superadmin') %}
-    <div style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
-      <i class="bi bi-shield-check" style="color:var(--c-accent);"></i>
-      El administrador siempre tiene acceso a todos los módulos.
+    <!-- Admin: read-only view of org-enabled modules (set by PapiaTech) -->
+    <div style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;
+                letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+      <i class="bi bi-shield-lock" style="color:var(--c-accent);font-size:13px;"></i>
+      Módulos habilitados por PapiaTech para esta organización
+    </div>
+    <div class="mod-grid">
+      {% if org_modules %}
+        {% for mod_key, mod_label, mod_icon in org_modules %}
+        <div class="mod-item" style="opacity:1;cursor:default;">
+          <i class="bi {{ mod_icon }}" style="font-size:14px;color:var(--c-accent);"></i>
+          <span>{{ mod_label }}</span>
+          <i class="bi bi-check-circle-fill" style="font-size:12px;color:var(--c-accent);margin-left:2px;"></i>
+        </div>
+        {% endfor %}
+      {% else %}
+        <span style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
+          Ningún módulo habilitado aún. Contacta a PapiaTech.
+        </span>
+      {% endif %}
     </div>
     {% else %}
-    <div style="font-size:12px;font-weight:600;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">
-      Módulos habilitados
+    <!-- User: toggles restricted to org-enabled modules -->
+    <div style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;
+                letter-spacing:.05em;margin-bottom:10px;">
+      Acceso a módulos
     </div>
+    {% if all_modules %}
     <div class="mod-grid">
       {% for mod_key, mod_label, mod_icon in all_modules %}
       {% set is_enabled = modules_by_user.get(user.id, {}).get(mod_key, 0) %}
@@ -108,6 +128,11 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
       </div>
       {% endfor %}
     </div>
+    {% else %}
+    <span style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
+      Tu organización no tiene módulos habilitados. Contacta a PapiaTech.
+    </span>
+    {% endif %}
     {% endif %}
   </div>
   {% endfor %}

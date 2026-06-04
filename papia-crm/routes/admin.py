@@ -45,18 +45,20 @@ def settings():
         ).fetchall()
         modules_by_user[u['id']] = {r['module']: r['enabled'] for r in rows}
 
-    # Only show modules enabled at org level
-    org_mod_rows  = db.execute(
-        "SELECT module, enabled FROM org_modules WHERE org_id=? AND enabled=1", (org_id,)
+    # Modules enabled at org level (set by PapiaTech superadmin)
+    org_mod_rows    = db.execute(
+        "SELECT module FROM org_modules WHERE org_id=? AND enabled=1", (org_id,)
     ).fetchall()
-    org_enabled   = {r['module'] for r in org_mod_rows}
-    visible_mods  = [(k, l, i) for k, l, i in ALL_MODULES if k in org_enabled]
+    org_enabled_set = {r['module'] for r in org_mod_rows}
+    # Tuples for template rendering — only org-enabled modules
+    org_modules_display = [(k, l, i) for k, l, i in ALL_MODULES if k in org_enabled_set]
 
     db.close()
     return render_template('admin/settings.html',
         users=users,
         modules_by_user=modules_by_user,
-        all_modules=visible_mods,
+        all_modules=org_modules_display,   # for user-level toggles
+        org_modules=org_modules_display,   # read-only display for admin cards
     )
 
 
