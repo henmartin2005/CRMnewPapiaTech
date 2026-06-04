@@ -7,12 +7,17 @@
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
-  padding: 20px 24px;
   margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  overflow: hidden;
+}
+.org-card-top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 20px 24px;
+}
+.org-card-modules {
+  border-top: 1px solid var(--c-border);
+  padding: 14px 24px;
+  background: var(--c-bg);
 }
 .org-badge {
   display: inline-block;
@@ -26,6 +31,31 @@
 .org-badge.inactive { background: rgba(239,68,68,.12);  color: #dc2626; }
 .org-badge.plan     { background: rgba(42,91,255,.1);   color: var(--c-accent); }
 .org-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Module toggles */
+.om-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.om-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border); background: var(--c-surface);
+  font-size: 12.5px; font-weight: 500; color: var(--c-text-2);
+  transition: border-color .2s;
+}
+.om-item.enabled { border-color: rgba(42,91,255,.3); background: rgba(42,91,255,.04); }
+.om-item i { font-size: 14px; }
+.om-item.enabled i { color: var(--c-accent); }
+.om-toggle { position:relative; display:inline-block; width:34px; height:18px; margin:0; }
+.om-toggle input { opacity:0; width:0; height:0; }
+.om-slider {
+  position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
+  background: var(--c-border-2); border-radius:18px; transition:.2s;
+}
+.om-slider:before {
+  content:''; position:absolute; height:12px; width:12px; left:3px; bottom:3px;
+  background:#fff; border-radius:50%; transition:.2s;
+}
+input:checked + .om-slider { background: var(--c-accent); }
+input:checked + .om-slider:before { transform: translateX(16px); }
 </style>
 {% endblock %}
 
@@ -49,42 +79,69 @@
 
 <div style="max-width:900px;">
   {% for org in orgs %}
+  {% set mods = org_modules.get(org.id, {}) %}
   <div class="org-card">
-    <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">
-      <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#2A5BFF,#8B5CF6);
-                  color:#fff;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-        {{ org.name[0] | upper }}
+
+    <!-- Header -->
+    <div class="org-card-top">
+      <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">
+        <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#2A5BFF,#8B5CF6);
+                    color:#fff;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          {{ org.name[0] | upper }}
+        </div>
+        <div style="min-width:0;">
+          <div style="font-weight:700;font-size:15px;color:var(--c-text);">
+            {{ org.name }}
+            <span class="org-badge {{ 'active' if org.is_active else 'inactive' }}" style="margin-left:8px;">
+              {{ 'Activa' if org.is_active else 'Inactiva' }}
+            </span>
+          </div>
+          <div style="font-size:12px;color:var(--c-text-3);margin-top:3px;">
+            <span class="org-badge plan">{{ org.plan }}</span>
+            &nbsp;·&nbsp;
+            <i class="bi bi-people"></i> {{ org.user_count }} usuario{{ 's' if org.user_count != 1 else '' }}
+            &nbsp;·&nbsp;
+            <i class="bi bi-calendar3"></i> {{ org.created_at[:10] if org.created_at else '—' }}
+          </div>
+        </div>
       </div>
-      <div style="min-width:0;">
-        <div style="font-weight:700;font-size:15px;color:var(--c-text);">
-          {{ org.name }}
-          <span class="org-badge {{ 'active' if org.is_active else 'inactive' }}" style="margin-left:8px;">
-            {{ 'Activa' if org.is_active else 'Inactiva' }}
-          </span>
-        </div>
-        <div style="font-size:12px;color:var(--c-text-3);margin-top:3px;">
-          <span style="color:var(--c-text-2);">slug:</span> {{ org.slug }}
-          &nbsp;·&nbsp;
-          <span class="org-badge plan">{{ org.plan }}</span>
-          &nbsp;·&nbsp;
-          <i class="bi bi-people"></i> {{ org.user_count }} usuario{{ 's' if org.user_count != 1 else '' }}
-          &nbsp;·&nbsp;
-          <i class="bi bi-calendar3"></i> {{ org.created_at[:10] if org.created_at else '—' }}
-        </div>
+      <div class="org-actions">
+        <a href="{{ url_for('super.view_as_org', org_id=org.id) }}"
+           class="btn-icon-xs" title="Ver como esta org"
+           style="color:var(--c-accent);border-color:var(--c-accent);">
+          <i class="bi bi-eye"></i>
+        </a>
+        <button class="btn-icon-xs" title="{{ 'Desactivar' if org.is_active else 'Activar' }}"
+                onclick="toggleOrg({{ org.id }}, this)"
+                style="{{ 'color:#dc2626;border-color:#dc2626;' if org.is_active else 'color:#059669;border-color:#059669;' }}">
+          <i class="bi bi-{{ 'pause-circle' if org.is_active else 'play-circle' }}"></i>
+        </button>
       </div>
     </div>
-    <div class="org-actions">
-      <a href="{{ url_for('super.view_as_org', org_id=org.id) }}"
-         class="btn-icon-xs" title="Ver como esta org"
-         style="color:var(--c-accent);border-color:var(--c-accent);">
-        <i class="bi bi-eye"></i>
-      </a>
-      <button class="btn-icon-xs" title="{{ 'Desactivar' if org.is_active else 'Activar' }}"
-              onclick="toggleOrg({{ org.id }}, this)"
-              style="{{ 'color:#dc2626;border-color:#dc2626;' if org.is_active else 'color:#059669;border-color:#059669;' }}">
-        <i class="bi bi-{{ 'pause-circle' if org.is_active else 'play-circle' }}"></i>
-      </button>
+
+    <!-- Module toggles -->
+    <div class="org-card-modules">
+      <div style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px;">
+        <i class="bi bi-puzzle"></i> Módulos habilitados para esta organización
+      </div>
+      <div class="om-grid">
+        {% for mod_key, mod_label, mod_icon in all_modules %}
+        {% set is_on = mods.get(mod_key, 1) %}
+        <div class="om-item {% if is_on %}enabled{% endif %}" id="om-item-{{ org.id }}-{{ mod_key }}">
+          <i class="bi {{ mod_icon }}"></i>
+          <span>{{ mod_label }}</span>
+          <label class="om-toggle">
+            <input type="checkbox"
+                   {% if is_on %}checked{% endif %}
+                   onchange="toggleOrgModule({{ org.id }}, '{{ mod_key }}', this)">
+            <span class="om-slider"></span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
     </div>
+
   </div>
   {% else %}
   <div style="text-align:center;padding:60px;color:var(--c-text-3);">
@@ -135,8 +192,29 @@
 <script>
 async function toggleOrg(orgId, btn) {
   const resp = await fetch(`/super/organizations/${orgId}/toggle`, { method: 'POST' });
+  if (resp.ok) location.reload();
+}
+
+async function toggleOrgModule(orgId, module, checkbox) {
+  const enabled = checkbox.checked;
+  const item    = document.getElementById(`om-item-${orgId}-${module}`);
+
+  const resp = await fetch(`/super/organizations/${orgId}/toggle-module`, {
+    method:  'POST',
+    headers: {'Content-Type': 'application/json'},
+    body:    JSON.stringify({ module, enabled }),
+  });
+
   if (resp.ok) {
-    location.reload();
+    item.classList.toggle('enabled', enabled);
+    const icon = item.querySelector('i');
+    if (enabled) {
+      icon.style.color = 'var(--c-accent)';
+    } else {
+      icon.style.color = '';
+    }
+  } else {
+    checkbox.checked = !enabled; // revert on error
   }
 }
 </script>

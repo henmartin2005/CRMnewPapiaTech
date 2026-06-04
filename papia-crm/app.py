@@ -95,24 +95,32 @@ def inject_globals():
     except Exception:
         wa_unread = task_due_count = 0
 
-    # Module permissions
+    # Module permissions: org-level ∩ user-level
     role    = session.get('user_role', 'user')
     user_id = session.get('user_id')
-    if role in ('admin', 'superadmin'):
-        enabled_modules = _ALL_MODULES
-    elif user_id:
-        try:
-            from database import get_db
-            db   = get_db()
-            rows = db.execute(
+    try:
+        from database import get_db as _get_db
+        _db = _get_db()
+        # Modules enabled for this org
+        _org_rows = _db.execute(
+            "SELECT module FROM org_modules WHERE org_id=? AND enabled=1", (org_id,)
+        ).fetchall()
+        org_enabled = {r['module'] for r in _org_rows}
+
+        if role in ('admin', 'superadmin'):
+            # Admin sees all org-enabled modules
+            enabled_modules = org_enabled
+        elif user_id:
+            # User sees intersection of org-enabled and user-enabled
+            _usr_rows = _db.execute(
                 "SELECT module FROM user_modules WHERE user_id=? AND enabled=1", (user_id,)
             ).fetchall()
-            db.close()
-            enabled_modules = {r['module'] for r in rows}
-        except Exception:
+            enabled_modules = org_enabled & {r['module'] for r in _usr_rows}
+        else:
             enabled_modules = set()
-    else:
-        enabled_modules = set()
+        _db.close()
+    except Exception:
+        enabled_modules = _ALL_MODULES if role in ('admin', 'superadmin') else set()
 
     return {
         'wa_unread':        wa_unread,

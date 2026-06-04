@@ -5,7 +5,14 @@ from functools import wraps
 
 super_bp = Blueprint('super', __name__, url_prefix='/super')
 
-ALL_MODULES = ['whatsapp', 'emails', 'calendar', 'proposals', 'tasks']
+ALL_MODULES = [
+    ('whatsapp',  'WhatsApp',   'bi-whatsapp'),
+    ('emails',    'Emails',     'bi-envelope'),
+    ('calendar',  'Calendario', 'bi-calendar3'),
+    ('proposals', 'Propuestas', 'bi-file-earmark-text'),
+    ('tasks',     'Tasks',      'bi-check2-square'),
+]
+ALL_MODULE_KEYS = [m[0] for m in ALL_MODULES]
 
 
 def generate_password_hash(p):
@@ -24,15 +31,25 @@ def superadmin_required(f):
 @super_bp.route('/organizations')
 @superadmin_required
 def organizations():
-    db = get_db()
+    db   = get_db()
     orgs = db.execute("""
         SELECT o.*, COUNT(u.id) as user_count
         FROM organizations o
         LEFT JOIN users u ON u.org_id = o.id
         GROUP BY o.id ORDER BY o.created_at DESC
     """).fetchall()
+
+    # Load module status per org
+    org_modules = {}
+    for row in db.execute("SELECT org_id, module, enabled FROM org_modules").fetchall():
+        org_modules.setdefault(row['org_id'], {})[row['module']] = row['enabled']
+
     db.close()
-    return render_template('super/organizations.html', orgs=orgs)
+    return render_template('super/organizations.html',
+        orgs=orgs,
+        org_modules=org_modules,
+        all_modules=ALL_MODULES,
+    )
 
 
 @super_bp.route('/organizations/create', methods=['POST'])
@@ -66,10 +83,15 @@ def create_org():
     db.commit()
     admin_id = db.execute("SELECT id FROM users WHERE username=? AND org_id=?", (admin_user, org_id)).fetchone()['id']
 
-    # Enable all modules for admin
+    # Enable all modules for the org (superadmin can toggle later)
+    db.executemany(
+        "INSERT OR IGNORE INTO org_modules (org_id, module, enabled) VALUES (?, ?, 1)",
+        [(org_id, m) for m in ALL_MODULE_KEYS]
+    )
+    # Enable all modules for admin user
     db.executemany(
         "INSERT OR IGNORE INTO user_modules (user_id, module, enabled) VALUES (?, ?, 1)",
-        [(admin_id, m) for m in ALL_MODULES]
+        [(admin_id, m) for m in ALL_MODULE_KEYS]
     )
     db.commit()
     db.close()
@@ -97,6 +119,27 @@ def exit_view():
 def toggle_org(org_id):
     db = get_db()
     db.execute("UPDATE organizations SET is_active = CASE WHEN is_active=1 THEN 0 ELSE 1 END WHERE id=?", (org_id,))
+    db.commit()
+    db.close()
+    return jsonify({'success': True})
+
+
+@super_bp.route('/organizations/<int:org_id>/toggle-module', methods=['POST'])
+@superadmin_required
+def toggle_org_module(org_id):
+    data    = request.get_json(silent=True) or {}
+    module  = data.get('module', '')
+    enabled = 1 if data.get('enabled') else 0
+
+    if module not in ALL_MODULE_KEYS:
+        return jsonify({'success': False, 'error': 'Módulo inválido'}), 400
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO org_modules (org_id, module, enabled) VALUES (?, ?, ?) "
+        "ON CONFLICT(org_id, module) DO UPDATE SET enabled=excluded.enabled",
+        (org_id, module, enabled),
+    )
     db.commit()
     db.close()
     return jsonify({'success': True})

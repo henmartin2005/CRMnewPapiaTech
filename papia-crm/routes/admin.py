@@ -32,8 +32,8 @@ def admin_required(f):
 @admin_required
 def settings():
     org_id = session.get('org_id', 1)
-    db    = get_db()
-    users = db.execute(
+    db     = get_db()
+    users  = db.execute(
         "SELECT id, username, display_name, role, is_active FROM users WHERE org_id=? ORDER BY role DESC, username",
         (org_id,)
     ).fetchall()
@@ -45,11 +45,18 @@ def settings():
         ).fetchall()
         modules_by_user[u['id']] = {r['module']: r['enabled'] for r in rows}
 
+    # Only show modules enabled at org level
+    org_mod_rows  = db.execute(
+        "SELECT module, enabled FROM org_modules WHERE org_id=? AND enabled=1", (org_id,)
+    ).fetchall()
+    org_enabled   = {r['module'] for r in org_mod_rows}
+    visible_mods  = [(k, l, i) for k, l, i in ALL_MODULES if k in org_enabled]
+
     db.close()
     return render_template('admin/settings.html',
         users=users,
         modules_by_user=modules_by_user,
-        all_modules=ALL_MODULES,
+        all_modules=visible_mods,
     )
 
 

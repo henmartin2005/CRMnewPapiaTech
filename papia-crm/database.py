@@ -29,6 +29,13 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS org_modules (
+            org_id  INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            module  TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (org_id, module)
+        );
+
         CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first_name TEXT NOT NULL,
@@ -212,6 +219,16 @@ def init_db():
             "INSERT INTO organizations (id, name, slug, plan) VALUES (1, 'Papia Technology Solutions', 'papiatech', 'enterprise')"
         )
         conn.commit()
+
+    # ── Seed org_modules for every org that doesn't have them yet ────────────
+    _ORG_MODULES = ['whatsapp', 'emails', 'calendar', 'proposals', 'tasks']
+    for org_row in conn.execute("SELECT id FROM organizations").fetchall():
+        for mod in _ORG_MODULES:
+            conn.execute(
+                "INSERT OR IGNORE INTO org_modules (org_id, module, enabled) VALUES (?, ?, 1)",
+                (org_row['id'], mod),
+            )
+    conn.commit()
 
     # ── Multi-tenant migrations: add org_id columns ───────────────────────────
     migrations = [
