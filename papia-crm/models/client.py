@@ -69,18 +69,12 @@ def get_all_clients(org_id, search=None):
     return rows
 
 
-def get_client(client_id, org_id=None):
+def get_client(client_id, org_id):
     db = get_db()
-    if org_id is not None:
-        row = db.execute("""
-            SELECT *, (total_cost - amount_paid) AS pending
-            FROM clients WHERE id = ? AND org_id = ?
-        """, (client_id, org_id)).fetchone()
-    else:
-        row = db.execute("""
-            SELECT *, (total_cost - amount_paid) AS pending
-            FROM clients WHERE id = ?
-        """, (client_id,)).fetchone()
+    row = db.execute("""
+        SELECT *, (total_cost - amount_paid) AS pending
+        FROM clients WHERE id = ? AND org_id = ?
+    """, (client_id, org_id)).fetchone()
     db.close()
     return row
 
@@ -107,70 +101,42 @@ def create_client(data, org_id=1):
     return new_id
 
 
-def update_client(client_id, data, org_id=None):
+def update_client(client_id, data, org_id):
     db = get_db()
-    if org_id is not None:
-        db.execute("""
-            UPDATE clients SET
-                first_name=?, last_name=?, email=?, phone=?, company=?,
-                project_type=?, project_details=?, pipeline_stage=?,
-                total_cost=?, amount_paid=?, brochure_sent=?,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=? AND org_id=?
-        """, (
-            data['first_name'], data['last_name'], data['email'],
-            data.get('phone', ''), data.get('company', ''),
-            data['project_type'], data.get('project_details', ''),
-            data.get('pipeline_stage', 'new_lead'),
-            float(data.get('total_cost', 0)),
-            float(data.get('amount_paid', 0)),
-            1 if data.get('brochure_sent') else 0,
-            client_id, org_id,
-        ))
-    else:
-        db.execute("""
-            UPDATE clients SET
-                first_name=?, last_name=?, email=?, phone=?, company=?,
-                project_type=?, project_details=?, pipeline_stage=?,
-                total_cost=?, amount_paid=?, brochure_sent=?,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-        """, (
-            data['first_name'], data['last_name'], data['email'],
-            data.get('phone', ''), data.get('company', ''),
-            data['project_type'], data.get('project_details', ''),
-            data.get('pipeline_stage', 'new_lead'),
-            float(data.get('total_cost', 0)),
-            float(data.get('amount_paid', 0)),
-            1 if data.get('brochure_sent') else 0,
-            client_id,
-        ))
+    db.execute("""
+        UPDATE clients SET
+            first_name=?, last_name=?, email=?, phone=?, company=?,
+            project_type=?, project_details=?, pipeline_stage=?,
+            total_cost=?, amount_paid=?, brochure_sent=?,
+            updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND org_id=?
+    """, (
+        data['first_name'], data['last_name'], data['email'],
+        data.get('phone', ''), data.get('company', ''),
+        data['project_type'], data.get('project_details', ''),
+        data.get('pipeline_stage', 'new_lead'),
+        float(data.get('total_cost', 0)),
+        float(data.get('amount_paid', 0)),
+        1 if data.get('brochure_sent') else 0,
+        client_id, org_id,
+    ))
     db.commit()
     db.close()
 
 
-def update_pipeline_stage(client_id, stage, org_id=None):
+def update_pipeline_stage(client_id, stage, org_id):
     db = get_db()
-    if org_id is not None:
-        db.execute("""
-            UPDATE clients SET pipeline_stage=?, updated_at=CURRENT_TIMESTAMP
-            WHERE id=? AND org_id=?
-        """, (stage, client_id, org_id))
-    else:
-        db.execute("""
-            UPDATE clients SET pipeline_stage=?, updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-        """, (stage, client_id))
+    db.execute("""
+        UPDATE clients SET pipeline_stage=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=? AND org_id=?
+    """, (stage, client_id, org_id))
     db.commit()
     db.close()
 
 
-def delete_client(client_id, org_id=None):
+def delete_client(client_id, org_id):
     db = get_db()
-    if org_id is not None:
-        db.execute("DELETE FROM clients WHERE id=? AND org_id=?", (client_id, org_id))
-    else:
-        db.execute("DELETE FROM clients WHERE id=?", (client_id,))
+    db.execute("DELETE FROM clients WHERE id=? AND org_id=?", (client_id, org_id))
     db.commit()
     db.close()
 
@@ -248,109 +214,66 @@ def add_followup(client_id, method, summary, result, next_date=None, next_at=Non
     db.close()
 
 
-def get_todays_followups(org_id=None):
-    db = get_db()
-    if org_id is not None:
-        rows = db.execute("""
-            SELECT f.*, c.first_name, c.last_name, c.email, c.phone
-            FROM follow_ups f
-            JOIN clients c ON c.id = f.client_id
-            WHERE COALESCE(date(f.next_at), f.next_date) = date('now', 'localtime')
-              AND f.completed = 0
-              AND c.org_id = ?
-            ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
-        """, (org_id,)).fetchall()
-    else:
-        rows = db.execute("""
-            SELECT f.*, c.first_name, c.last_name, c.email, c.phone
-            FROM follow_ups f
-            JOIN clients c ON c.id = f.client_id
-            WHERE COALESCE(date(f.next_at), f.next_date) = date('now', 'localtime')
-              AND f.completed = 0
-            ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
-        """).fetchall()
+def get_todays_followups(org_id):
+    db   = get_db()
+    rows = db.execute("""
+        SELECT f.*, c.first_name, c.last_name, c.email, c.phone
+        FROM follow_ups f
+        JOIN clients c ON c.id = f.client_id
+        WHERE COALESCE(date(f.next_at), f.next_date) = date('now', 'localtime')
+          AND f.completed = 0
+          AND c.org_id = ?
+        ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
+    """, (org_id,)).fetchall()
     db.close()
     return rows
 
 
-def get_due_tasks(org_id=None):
-    db = get_db()
-    if org_id is not None:
-        rows = db.execute("""
-            SELECT f.*, c.first_name, c.last_name, c.email, c.phone
-            FROM follow_ups f
-            JOIN clients c ON c.id = f.client_id
-            WHERE f.completed = 0
-              AND c.org_id = ?
-              AND (
-                (f.next_at IS NOT NULL AND f.next_at <= ?)
-                OR (f.next_at IS NULL AND f.next_date IS NOT NULL AND f.next_date <= date('now', 'localtime'))
-              )
-            ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
-        """, (org_id, _now_str())).fetchall()
-    else:
-        rows = db.execute("""
-            SELECT f.*, c.first_name, c.last_name, c.email, c.phone
-            FROM follow_ups f
-            JOIN clients c ON c.id = f.client_id
-            WHERE f.completed = 0
-              AND (
-                (f.next_at IS NOT NULL AND f.next_at <= ?)
-                OR (f.next_at IS NULL AND f.next_date IS NOT NULL AND f.next_date <= date('now', 'localtime'))
-              )
-            ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
-        """, (_now_str(),)).fetchall()
+def get_due_tasks(org_id):
+    db   = get_db()
+    rows = db.execute("""
+        SELECT f.*, c.first_name, c.last_name, c.email, c.phone
+        FROM follow_ups f
+        JOIN clients c ON c.id = f.client_id
+        WHERE f.completed = 0
+          AND c.org_id = ?
+          AND (
+            (f.next_at IS NOT NULL AND f.next_at <= ?)
+            OR (f.next_at IS NULL AND f.next_date IS NOT NULL AND f.next_date <= date('now', 'localtime'))
+          )
+        ORDER BY COALESCE(f.next_at, f.next_date, f.created_at)
+    """, (org_id, _now_str())).fetchall()
     db.close()
     return rows
 
 
-def get_due_task_count(org_id=None):
-    db = get_db()
-    if org_id is not None:
-        row = db.execute("""
-            SELECT COUNT(*)
-            FROM follow_ups f
-            JOIN clients c ON c.id = f.client_id
-            WHERE f.completed = 0
-              AND c.org_id = ?
-              AND (
-                (f.next_at IS NOT NULL AND f.next_at <= ?)
-                OR (f.next_at IS NULL AND f.next_date IS NOT NULL AND f.next_date <= date('now', 'localtime'))
-              )
-        """, (org_id, _now_str())).fetchone()
-    else:
-        row = db.execute("""
-            SELECT COUNT(*)
-            FROM follow_ups
-            WHERE completed = 0
-              AND (
-                (next_at IS NOT NULL AND next_at <= ?)
-                OR (next_at IS NULL AND next_date IS NOT NULL AND next_date <= date('now', 'localtime'))
-              )
-        """, (_now_str(),)).fetchone()
+def get_due_task_count(org_id):
+    db  = get_db()
+    row = db.execute("""
+        SELECT COUNT(*)
+        FROM follow_ups f
+        JOIN clients c ON c.id = f.client_id
+        WHERE f.completed = 0
+          AND c.org_id = ?
+          AND (
+            (f.next_at IS NOT NULL AND f.next_at <= ?)
+            OR (f.next_at IS NULL AND f.next_date IS NOT NULL AND f.next_date <= date('now', 'localtime'))
+          )
+    """, (org_id, _now_str())).fetchone()
     db.close()
     return row[0]
 
 
-def get_all_tasks(org_id=None):
-    db = get_db()
-    if org_id is not None:
-        rows = db.execute("""
-            SELECT f.*, c.first_name, c.last_name, c.email, c.phone
-            FROM follow_ups f
-            JOIN clients c ON c.id = f.client_id
-            WHERE (f.next_at IS NOT NULL OR f.next_date IS NOT NULL)
-              AND c.org_id = ?
-            ORDER BY f.completed ASC, COALESCE(f.next_at, f.next_date, f.created_at) ASC
-        """, (org_id,)).fetchall()
-    else:
-        rows = db.execute("""
-            SELECT f.*, c.first_name, c.last_name, c.email, c.phone
-            FROM follow_ups f
-            JOIN clients c ON c.id = f.client_id
-            WHERE f.next_at IS NOT NULL OR f.next_date IS NOT NULL
-            ORDER BY f.completed ASC, COALESCE(f.next_at, f.next_date, f.created_at) ASC
-        """).fetchall()
+def get_all_tasks(org_id):
+    db   = get_db()
+    rows = db.execute("""
+        SELECT f.*, c.first_name, c.last_name, c.email, c.phone
+        FROM follow_ups f
+        JOIN clients c ON c.id = f.client_id
+        WHERE (f.next_at IS NOT NULL OR f.next_date IS NOT NULL)
+          AND c.org_id = ?
+        ORDER BY f.completed ASC, COALESCE(f.next_at, f.next_date, f.created_at) ASC
+    """, (org_id,)).fetchall()
     db.close()
     return rows
 
@@ -362,50 +285,31 @@ def complete_followup(followup_id):
     db.close()
 
 
-def get_dashboard_stats(org_id=None):
+def get_dashboard_stats(org_id):
     db = get_db()
 
-    if org_id is not None:
-        total_leads = db.execute(
-            "SELECT COUNT(*) FROM clients WHERE org_id=?", (org_id,)
-        ).fetchone()[0]
+    total_leads = db.execute(
+        "SELECT COUNT(*) FROM clients WHERE org_id=?", (org_id,)
+    ).fetchone()[0]
 
-        active_clients = db.execute(
-            "SELECT COUNT(*) FROM clients WHERE pipeline_stage IN ('active_client','recurring') AND org_id=?",
-            (org_id,)
-        ).fetchone()[0]
+    active_clients = db.execute(
+        "SELECT COUNT(*) FROM clients WHERE pipeline_stage IN ('active_client','recurring') AND org_id=?",
+        (org_id,)
+    ).fetchone()[0]
 
-        pending_proposals = db.execute(
-            "SELECT COUNT(*) FROM clients WHERE pipeline_stage = 'proposal_sent' AND org_id=?",
-            (org_id,)
-        ).fetchone()[0]
+    pending_proposals = db.execute(
+        "SELECT COUNT(*) FROM clients WHERE pipeline_stage = 'proposal_sent' AND org_id=?",
+        (org_id,)
+    ).fetchone()[0]
 
-        financials = db.execute("""
-            SELECT
-                COALESCE(SUM(total_cost), 0) AS total_billed,
-                COALESCE(SUM(amount_paid), 0) AS total_collected,
-                COALESCE(SUM(total_cost - amount_paid), 0) AS total_pending
-            FROM clients
-            WHERE org_id=?
-        """, (org_id,)).fetchone()
-    else:
-        total_leads = db.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
-
-        active_clients = db.execute(
-            "SELECT COUNT(*) FROM clients WHERE pipeline_stage IN ('active_client','recurring')"
-        ).fetchone()[0]
-
-        pending_proposals = db.execute(
-            "SELECT COUNT(*) FROM clients WHERE pipeline_stage = 'proposal_sent'"
-        ).fetchone()[0]
-
-        financials = db.execute("""
-            SELECT
-                COALESCE(SUM(total_cost), 0) AS total_billed,
-                COALESCE(SUM(amount_paid), 0) AS total_collected,
-                COALESCE(SUM(total_cost - amount_paid), 0) AS total_pending
-            FROM clients
-        """).fetchone()
+    financials = db.execute("""
+        SELECT
+            COALESCE(SUM(total_cost), 0)              AS total_billed,
+            COALESCE(SUM(amount_paid), 0)             AS total_collected,
+            COALESCE(SUM(total_cost - amount_paid), 0) AS total_pending
+        FROM clients
+        WHERE org_id=?
+    """, (org_id,)).fetchone()
 
     db.close()
     return {
@@ -418,18 +322,12 @@ def get_dashboard_stats(org_id=None):
     }
 
 
-def get_clients_by_stage(org_id=None):
-    db = get_db()
-    if org_id is not None:
-        rows = db.execute("""
-            SELECT *, (total_cost - amount_paid) AS pending
-            FROM clients WHERE org_id=? ORDER BY created_at DESC
-        """, (org_id,)).fetchall()
-    else:
-        rows = db.execute("""
-            SELECT *, (total_cost - amount_paid) AS pending
-            FROM clients ORDER BY created_at DESC
-        """).fetchall()
+def get_clients_by_stage(org_id):
+    db   = get_db()
+    rows = db.execute("""
+        SELECT *, (total_cost - amount_paid) AS pending
+        FROM clients WHERE org_id=? ORDER BY created_at DESC
+    """, (org_id,)).fetchall()
     db.close()
 
     stages = {stage: [] for stage, _ in PIPELINE_STAGES}

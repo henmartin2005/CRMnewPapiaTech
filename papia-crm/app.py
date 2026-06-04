@@ -88,9 +88,9 @@ _ALL_MODULES = {'whatsapp', 'emails', 'calendar', 'proposals', 'tasks'}
 def inject_globals():
     org_id = g.org_id if hasattr(g, 'org_id') else 1
 
-    # WhatsApp badge & task count
+    # WhatsApp badge & task count — always scoped to current org
     try:
-        wa_unread      = get_unread_count()
+        wa_unread      = get_unread_count(org_id)
         task_due_count = get_due_task_count(org_id)
     except Exception:
         wa_unread = task_due_count = 0
