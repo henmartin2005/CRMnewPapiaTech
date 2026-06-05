@@ -66,6 +66,12 @@ def create_org():
 
     db = get_db()
 
+    # Check username uniqueness globally
+    if db.execute("SELECT 1 FROM users WHERE username=?", (admin_user,)).fetchone():
+        db.close()
+        flash(f'El usuario "{admin_user}" ya existe. Elige otro nombre de usuario.', 'danger')
+        return redirect(url_for('super.organizations'))
+
     # Check slug uniqueness
     if db.execute("SELECT 1 FROM organizations WHERE slug=?", (slug,)).fetchone():
         slug = slug + '-' + str(db.execute("SELECT COUNT(*) FROM organizations").fetchone()[0])
