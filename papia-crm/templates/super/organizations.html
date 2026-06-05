@@ -3,59 +3,117 @@
 
 {% block head %}
 <style>
-.org-card {
+/* ── Compact row ── */
+.org-row {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
-  margin-bottom: 16px;
+  margin-bottom: 6px;
   overflow: hidden;
+  transition: border-color .2s;
 }
-.org-card-top {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; padding: 20px 24px;
+.org-row:hover { border-color: var(--c-border-2); }
+.org-row.open  { border-color: var(--c-accent); margin-bottom: 12px; }
+
+.org-row-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
 }
-.org-card-modules {
-  border-top: 1px solid var(--c-border);
-  padding: 14px 24px;
-  background: var(--c-bg);
+.org-row-bar:hover { background: var(--c-surface-2); }
+
+.org-avatar-sm {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: linear-gradient(135deg, #2A5BFF, #8B5CF6);
+  color: #fff; font-weight: 700; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
+
+.org-row-info { flex: 1; min-width: 0; }
+.org-row-name {
+  font-size: 13.5px; font-weight: 700; color: var(--c-text);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.org-row-meta { font-size: 11.5px; color: var(--c-text-3); margin-top: 1px; }
+
 .org-badge {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 99px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
+  display: inline-block; padding: 1px 8px; border-radius: 99px;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
 }
 .org-badge.active   { background: rgba(16,185,129,.12); color: #059669; }
 .org-badge.inactive { background: rgba(239,68,68,.12);  color: #dc2626; }
 .org-badge.plan     { background: rgba(42,91,255,.1);   color: var(--c-accent); }
-.org-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
-/* Module toggles */
-.om-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.org-row-actions { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+
+.org-chevron {
+  color: var(--c-text-3); font-size: 12px;
+  transition: transform .25s;
+  margin-left: 2px;
+}
+.org-row.open .org-chevron { transform: rotate(180deg); }
+
+/* ── Expandable detail ── */
+.org-detail {
+  max-height: 0; overflow: hidden;
+  transition: max-height .3s ease;
+  border-top: 0 solid var(--c-border);
+}
+.org-row.open .org-detail {
+  max-height: 2400px;
+  border-top-width: 1px;
+}
+
+.org-section {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--c-border);
+}
+.org-section:last-child { border-bottom: none; }
+.org-section-title {
+  font-size: 10.5px; font-weight: 700; color: var(--c-text-3);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+/* ── Module toggles ── */
+.om-grid { display: flex; flex-wrap: wrap; gap: 7px; }
 .om-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 12px; border-radius: var(--radius-sm);
-  border: 1px solid var(--c-border); background: var(--c-surface);
-  font-size: 12.5px; font-weight: 500; color: var(--c-text-2);
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border); background: var(--c-bg);
+  font-size: 12px; font-weight: 500; color: var(--c-text-2);
   transition: border-color .2s;
 }
 .om-item.enabled { border-color: rgba(42,91,255,.3); background: rgba(42,91,255,.04); }
-.om-item i { font-size: 14px; }
 .om-item.enabled i { color: var(--c-accent); }
-.om-toggle { position:relative; display:inline-block; width:34px; height:18px; margin:0; }
+.om-toggle { position:relative; display:inline-block; width:30px; height:16px; margin:0; }
 .om-toggle input { opacity:0; width:0; height:0; }
 .om-slider {
   position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
-  background: var(--c-border-2); border-radius:18px; transition:.2s;
+  background: var(--c-border-2); border-radius:16px; transition:.2s;
 }
 .om-slider:before {
-  content:''; position:absolute; height:12px; width:12px; left:3px; bottom:3px;
+  content:''; position:absolute; height:10px; width:10px; left:3px; bottom:3px;
   background:#fff; border-radius:50%; transition:.2s;
 }
 input:checked + .om-slider { background: var(--c-accent); }
-input:checked + .om-slider:before { transform: translateX(16px); }
+input:checked + .om-slider:before { transform: translateX(14px); }
+
+/* ── User rows ── */
+.usr-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  margin-bottom: 5px;
+}
+.usr-row:last-child { margin-bottom: 0; }
+.usr-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  color: #fff; font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
 </style>
 {% endblock %}
 
@@ -63,190 +121,169 @@ input:checked + .om-slider:before { transform: translateX(16px); }
 <div class="pg-header">
   <div>
     <h1 class="pg-title"><i class="bi bi-building me-2" style="color:var(--c-accent);"></i>Organizaciones</h1>
-    <p style="font-size:13px;color:var(--c-text-3);margin:4px 0 0;">Gestiona todos los tenants del sistema</p>
+    <p style="font-size:13px;color:var(--c-text-3);margin:4px 0 0;">
+      {{ orgs | length }} organización{{ 'es' if orgs | length != 1 else '' }} registrada{{ 's' if orgs | length != 1 else '' }}
+    </p>
   </div>
   <div class="pg-actions">
+    {% if session.get('viewed_org_id') %}
+    <a href="{{ url_for('super.exit_view') }}" class="btn-md" style="border:1px solid orange;color:orange;background:transparent;text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:0 14px;height:32px;border-radius:var(--radius-sm);font-size:13px;">
+      <i class="bi bi-x-circle"></i> Salir de vista org
+    </a>
+    {% endif %}
     <button class="btn-md btn-primary" data-bs-toggle="modal" data-bs-target="#newOrgModal">
       <i class="bi bi-plus-lg"></i> Nueva organización
     </button>
-    {% if session.get('viewed_org_id') %}
-    <a href="{{ url_for('super.exit_view') }}" class="btn-md btn-secondary" style="border-color:orange;color:orange;">
-      <i class="bi bi-x-circle"></i> Salir de org #{{ session.get('viewed_org_id') }}
-    </a>
-    {% endif %}
   </div>
 </div>
 
-<div style="max-width:900px;">
+<div style="max-width:860px;">
   {% for org in orgs %}
-  {% set mods = org_modules.get(org.id, {}) %}
-  <div class="org-card">
+  {% set mods  = org_modules.get(org.id, {}) %}
+  {% set users = org_users.get(org.id, []) %}
 
-    <!-- Header -->
-    <div class="org-card-top">
-      <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">
-        <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#2A5BFF,#8B5CF6);
-                    color:#fff;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          {{ org.name[0] | upper }}
+  <div class="org-row" id="org-row-{{ org.id }}">
+
+    <!-- ── Compact bar (always visible) ── -->
+    <div class="org-row-bar" onclick="toggleDetail({{ org.id }})">
+
+      <div class="org-avatar-sm">{{ org.name[0] | upper }}</div>
+
+      <div class="org-row-info">
+        <div class="org-row-name">
+          {{ org.name }}
+          <span class="org-badge {{ 'active' if org.is_active else 'inactive' }}">
+            {{ 'Activa' if org.is_active else 'Inactiva' }}
+          </span>
+          <span class="org-badge plan">{{ org.plan }}</span>
         </div>
-        <div style="min-width:0;">
-          <div style="font-weight:700;font-size:15px;color:var(--c-text);">
-            {{ org.name }}
-            <span class="org-badge {{ 'active' if org.is_active else 'inactive' }}" style="margin-left:8px;">
-              {{ 'Activa' if org.is_active else 'Inactiva' }}
-            </span>
-          </div>
-          <div style="font-size:12px;color:var(--c-text-3);margin-top:3px;">
-            <span class="org-badge plan">{{ org.plan }}</span>
-            &nbsp;·&nbsp;
-            <i class="bi bi-people"></i> {{ org.user_count }} usuario{{ 's' if org.user_count != 1 else '' }}
-            &nbsp;·&nbsp;
-            <i class="bi bi-calendar3"></i> {{ org.created_at[:10] if org.created_at else '—' }}
-          </div>
+        <div class="org-row-meta">
+          <i class="bi bi-people" style="font-size:10px;"></i> {{ org.user_count }} usuario{{ 's' if org.user_count != 1 else '' }}
+          &nbsp;·&nbsp;
+          <i class="bi bi-calendar3" style="font-size:10px;"></i> {{ org.created_at[:10] if org.created_at else '—' }}
         </div>
       </div>
-      <div class="org-actions">
+
+      <div class="org-row-actions" onclick="event.stopPropagation()">
         <a href="{{ url_for('super.view_as_org', org_id=org.id) }}"
            class="btn-icon-xs" title="Ver como esta org"
            style="color:var(--c-accent);border-color:var(--c-accent);">
           <i class="bi bi-eye"></i>
         </a>
         <button class="btn-icon-xs" title="{{ 'Desactivar' if org.is_active else 'Activar' }}"
-                onclick="toggleOrg({{ org.id }}, this)"
+                onclick="toggleOrgStatus({{ org.id }}, this)"
                 style="{{ 'color:#dc2626;border-color:#dc2626;' if org.is_active else 'color:#059669;border-color:#059669;' }}">
           <i class="bi bi-{{ 'pause-circle' if org.is_active else 'play-circle' }}"></i>
         </button>
       </div>
+
+      <i class="bi bi-chevron-down org-chevron"></i>
     </div>
 
-    <!-- Module toggles -->
-    <div class="org-card-modules">
-      <div style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;
-                  letter-spacing:.06em;margin-bottom:10px;">
-        <i class="bi bi-puzzle"></i> Módulos habilitados para esta organización
-      </div>
-      <div class="om-grid">
-        {% for mod_key, mod_label, mod_icon in all_modules %}
-        {% set is_on = mods.get(mod_key, 1) %}
-        <div class="om-item {% if is_on %}enabled{% endif %}" id="om-item-{{ org.id }}-{{ mod_key }}">
-          <i class="bi {{ mod_icon }}"></i>
-          <span>{{ mod_label }}</span>
-          <label class="om-toggle">
-            <input type="checkbox"
-                   {% if is_on %}checked{% endif %}
-                   onchange="toggleOrgModule({{ org.id }}, '{{ mod_key }}', this)">
-            <span class="om-slider"></span>
-          </label>
+    <!-- ── Expandable detail ── -->
+    <div class="org-detail" id="org-detail-{{ org.id }}">
+
+      <!-- Modules -->
+      <div class="org-section" style="background:var(--c-bg);">
+        <div class="org-section-title">
+          <span><i class="bi bi-puzzle"></i> Módulos</span>
         </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <!-- Users section -->
-    <div style="border-top:1px solid var(--c-border);padding:14px 24px;background:var(--c-surface);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <span style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;">
-          <i class="bi bi-people"></i> Usuarios
-        </span>
-        <button class="btn-wa" style="border-color:var(--c-accent);color:var(--c-accent);height:24px;font-size:11px;"
-                onclick="openAddUser({{ org.id }}, '{{ org.name | e }}')">
-          <i class="bi bi-person-plus"></i> Agregar usuario
-        </button>
-      </div>
-      {% set users = org_users.get(org.id, []) %}
-      {% if users %}
-        <div style="display:flex;flex-direction:column;gap:5px;">
-          {% for u in users %}
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
-                      background:var(--c-bg);border-radius:var(--radius-sm);
-                      border:1px solid var(--c-border);
-                      {% if not u.is_active %}opacity:.6;{% endif %}">
-
-            <!-- Avatar -->
-            <div style="width:28px;height:28px;border-radius:50%;
-                        background:{% if u.is_active %}linear-gradient(135deg,#2A5BFF,#8B5CF6){% else %}var(--c-border-2){% endif %};
-                        color:#fff;font-size:11px;font-weight:700;
-                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              {{ u.display_name[0] | upper }}
-            </div>
-
-            <!-- Name + username + date -->
-            <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                <span style="font-size:13px;font-weight:600;color:var(--c-text);">{{ u.display_name }}</span>
-                <span style="font-size:11.5px;color:var(--c-text-3);">@{{ u.username }}</span>
-              </div>
-              <div style="font-size:10.5px;color:var(--c-text-3);margin-top:1px;">
-                <i class="bi bi-calendar3" style="font-size:9px;"></i>
-                {{ u.created_at[:10] if u.created_at else '—' }}
-              </div>
-            </div>
-
-            <!-- Role badge -->
-            <span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0;
-                  {% if u.role == 'superadmin' %}background:rgba(168,85,247,.15);color:#a855f7;
-                  {% elif u.role == 'admin' %}background:rgba(42,91,255,.1);color:var(--c-accent);
-                  {% else %}background:rgba(16,185,129,.1);color:#059669;{% endif %}">
-              {{ u.role }}
-            </span>
-
-            <!-- Active / Inactive badge -->
-            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0;
-                  {% if u.is_active %}background:rgba(22,163,74,.1);color:var(--c-success);
-                  {% else %}background:rgba(220,38,38,.1);color:var(--c-danger);{% endif %}">
-              {{ 'Activo' if u.is_active else 'Inactivo' }}
-            </span>
-
-            <!-- Action buttons (not for superadmin) -->
-            {% if u.role != 'superadmin' %}
-            <div style="display:flex;gap:4px;flex-shrink:0;">
-
-              <!-- Reset password -->
-              <button class="btn-icon-xs" title="Cambiar contraseña"
-                      onclick="openResetPwd({{ u.id }}, '{{ org.id }}', '@{{ u.username }}')">
-                <i class="bi bi-key"></i>
-              </button>
-
-              <!-- Change role -->
-              <button class="btn-icon-xs" title="Cambiar rol"
-                      onclick="openChangeRole({{ u.id }}, '{{ org.id }}', '@{{ u.username }}', '{{ u.role }}')">
-                <i class="bi bi-shield-half"></i>
-              </button>
-
-              <!-- Toggle active -->
-              <form method="POST"
-                    action="{{ url_for('super.toggle_user_active', org_id=org.id, user_id=u.id) }}"
-                    style="margin:0;" title="{{ 'Desactivar' if u.is_active else 'Activar' }}">
-                <button type="submit" class="btn-icon-xs"
-                        style="{% if u.is_active %}color:var(--c-warning);{% else %}color:var(--c-success);{% endif %}"
-                        onclick="return confirm('¿{{ 'Desactivar' if u.is_active else 'Activar' }} a @{{ u.username }}?')">
-                  <i class="bi bi-{{ 'pause-circle' if u.is_active else 'play-circle' }}"></i>
-                </button>
-              </form>
-
-              <!-- Delete -->
-              <form method="POST"
-                    action="{{ url_for('super.delete_org_user', org_id=org.id, user_id=u.id) }}"
-                    style="margin:0;"
-                    onsubmit="return confirm('¿Eliminar permanentemente a @{{ u.username }}?')">
-                <button type="submit" class="btn-icon-xs" style="color:var(--c-danger);" title="Eliminar">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </form>
-            </div>
-            {% endif %}
-
+        <div class="om-grid">
+          {% for mod_key, mod_label, mod_icon in all_modules %}
+          {% set is_on = mods.get(mod_key, 1) %}
+          <div class="om-item {% if is_on %}enabled{% endif %}" id="om-item-{{ org.id }}-{{ mod_key }}">
+            <i class="bi {{ mod_icon }}"></i>
+            <span>{{ mod_label }}</span>
+            <label class="om-toggle">
+              <input type="checkbox" {% if is_on %}checked{% endif %}
+                     onchange="toggleOrgModule({{ org.id }}, '{{ mod_key }}', this)">
+              <span class="om-slider"></span>
+            </label>
           </div>
           {% endfor %}
         </div>
-      {% else %}
-        <div style="font-size:12.5px;color:var(--c-text-3);font-style:italic;padding:6px 0;">
-          Sin usuarios. Agrega un administrador para que pueda acceder.
-        </div>
-      {% endif %}
-    </div>
+      </div>
 
-  </div>
+      <!-- Users -->
+      <div class="org-section">
+        <div class="org-section-title">
+          <span><i class="bi bi-people"></i> Usuarios</span>
+          <button class="btn-wa" style="border-color:var(--c-accent);color:var(--c-accent);height:22px;font-size:11px;"
+                  onclick="openAddUser({{ org.id }}, '{{ org.name | e }}')">
+            <i class="bi bi-person-plus"></i> Agregar
+          </button>
+        </div>
+
+        {% if users %}
+        {% for u in users %}
+        <div class="usr-row" {% if not u.is_active %}style="opacity:.6;"{% endif %}>
+
+          <div class="usr-avatar"
+               style="background:{% if u.is_active %}linear-gradient(135deg,#2A5BFF,#8B5CF6){% else %}var(--c-border-2){% endif %};">
+            {{ u.display_name[0] | upper }}
+          </div>
+
+          <div style="flex:1;min-width:0;">
+            <span style="font-size:13px;font-weight:600;color:var(--c-text);">{{ u.display_name }}</span>
+            <span style="font-size:11px;color:var(--c-text-3);margin-left:5px;">@{{ u.username }}</span>
+          </div>
+
+          <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;flex-shrink:0;
+                {% if u.role == 'superadmin' %}background:rgba(168,85,247,.15);color:#a855f7;
+                {% elif u.role == 'admin' %}background:rgba(42,91,255,.1);color:var(--c-accent);
+                {% else %}background:rgba(16,185,129,.1);color:#059669;{% endif %}">
+            {{ u.role }}
+          </span>
+
+          <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;flex-shrink:0;
+                {% if u.is_active %}background:rgba(22,163,74,.1);color:var(--c-success);
+                {% else %}background:rgba(220,38,38,.1);color:var(--c-danger);{% endif %}">
+            {{ 'Activo' if u.is_active else 'Inactivo' }}
+          </span>
+
+          {% if u.role != 'superadmin' %}
+          <div style="display:flex;gap:3px;flex-shrink:0;">
+            <button class="btn-icon-xs" title="Cambiar contraseña"
+                    onclick="openResetPwd({{ u.id }}, '{{ org.id }}', '@{{ u.username }}')">
+              <i class="bi bi-key"></i>
+            </button>
+            <button class="btn-icon-xs" title="Cambiar rol"
+                    onclick="openChangeRole({{ u.id }}, '{{ org.id }}', '@{{ u.username }}', '{{ u.role }}')">
+              <i class="bi bi-shield-half"></i>
+            </button>
+            <form method="POST"
+                  action="{{ url_for('super.toggle_user_active', org_id=org.id, user_id=u.id) }}"
+                  style="margin:0;">
+              <button type="submit" class="btn-icon-xs"
+                      style="{% if u.is_active %}color:var(--c-warning);{% else %}color:var(--c-success);{% endif %}"
+                      onclick="return confirm('¿{{ 'Desactivar' if u.is_active else 'Activar' }} a @{{ u.username }}?')"
+                      title="{{ 'Desactivar' if u.is_active else 'Activar' }}">
+                <i class="bi bi-{{ 'pause-circle' if u.is_active else 'play-circle' }}"></i>
+              </button>
+            </form>
+            <form method="POST"
+                  action="{{ url_for('super.delete_org_user', org_id=org.id, user_id=u.id) }}"
+                  style="margin:0;"
+                  onsubmit="return confirm('¿Eliminar permanentemente a @{{ u.username }}?')">
+              <button type="submit" class="btn-icon-xs" style="color:var(--c-danger);" title="Eliminar">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+          {% endif %}
+
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="font-size:12.5px;color:var(--c-text-3);font-style:italic;padding:4px 0;">
+          Sin usuarios aún.
+        </div>
+        {% endif %}
+      </div>
+
+    </div><!-- /org-detail -->
+  </div><!-- /org-row -->
+
   {% else %}
   <div style="text-align:center;padding:60px;color:var(--c-text-3);">
     <i class="bi bi-building" style="font-size:48px;opacity:.3;"></i>
@@ -255,83 +292,70 @@ input:checked + .om-slider:before { transform: translateX(16px); }
   {% endfor %}
 </div>
 
-<!-- Modal: Reset password -->
+<!-- ── Modals (unchanged) ── -->
+
+<!-- Reset password -->
 <div class="modal fade" id="resetPwdModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">
-          <i class="bi bi-key me-2" style="color:var(--c-accent);"></i>
-          Cambiar contraseña — <span id="resetPwdUsername"></span>
-        </h5>
+        <h5 class="modal-title"><i class="bi bi-key me-2" style="color:var(--c-accent);"></i>Cambiar contraseña — <span id="resetPwdUsername"></span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form id="resetPwdForm" method="POST">
         <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
           <div>
             <label class="form-label">Nueva contraseña</label>
-            <input type="password" name="new_password" class="form-control"
-                   required minlength="4" placeholder="Mínimo 4 caracteres" autocomplete="new-password" />
+            <input type="password" name="new_password" class="form-control" required minlength="4" placeholder="Mínimo 4 caracteres" autocomplete="new-password" />
           </div>
           <div>
             <label class="form-label">Confirmar contraseña</label>
-            <input type="password" id="resetPwdConfirm" class="form-control"
-                   required placeholder="Repite la contraseña" autocomplete="new-password" />
+            <input type="password" id="resetPwdConfirm" class="form-control" required placeholder="Repite la contraseña" autocomplete="new-password" />
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn-wa-send" onclick="return validateResetPwd()">
-            <i class="bi bi-check-lg"></i> Guardar
-          </button>
+          <button type="submit" class="btn-wa-send" onclick="return validateResetPwd()"><i class="bi bi-check-lg"></i> Guardar</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-<!-- Modal: Change role -->
+<!-- Change role -->
 <div class="modal fade" id="changeRoleModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">
-          <i class="bi bi-shield-half me-2" style="color:var(--c-accent);"></i>
-          Cambiar rol — <span id="changeRoleUsername"></span>
-        </h5>
+        <h5 class="modal-title"><i class="bi bi-shield-half me-2" style="color:var(--c-accent);"></i>Cambiar rol — <span id="changeRoleUsername"></span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form id="changeRoleForm" method="POST">
         <div class="modal-body">
           <label class="form-label">Nuevo rol</label>
           <select name="role" id="changeRoleSelect" class="form-select">
-            <option value="admin">Admin — gestiona usuarios de su organización</option>
-            <option value="user">Usuario — accede al sistema sin gestión de usuarios</option>
+            <option value="admin">Admin — gestiona usuarios de su org</option>
+            <option value="user">Usuario — accede al sistema</option>
           </select>
           <div style="margin-top:10px;font-size:12px;color:var(--c-text-3);">
-            <i class="bi bi-info-circle"></i>
-            El cambio aplica en el próximo inicio de sesión del usuario.
+            <i class="bi bi-info-circle"></i> Aplica en el próximo inicio de sesión.
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn-wa-send">
-            <i class="bi bi-check-lg"></i> Cambiar rol
-          </button>
+          <button type="submit" class="btn-wa-send"><i class="bi bi-check-lg"></i> Cambiar rol</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-<!-- Modal: Agregar usuario a org -->
+<!-- Add user -->
 <div class="modal fade" id="addUserModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-person-plus me-2" style="color:var(--c-accent);"></i>
-          Agregar usuario — <span id="addUserOrgName"></span>
-        </h5>
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2" style="color:var(--c-accent);"></i>Agregar usuario — <span id="addUserOrgName"></span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form id="addUserForm" method="POST">
@@ -365,7 +389,7 @@ input:checked + .om-slider:before { transform: translateX(16px); }
   </div>
 </div>
 
-<!-- Modal: Nueva organización -->
+<!-- New org -->
 <div class="modal fade" id="newOrgModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -380,9 +404,7 @@ input:checked + .om-slider:before { transform: translateX(16px); }
             <input type="text" name="name" class="form-control" required placeholder="Ej: Acme Corp" />
           </div>
           <hr style="margin:4px 0;">
-          <p style="font-size:12px;color:var(--c-text-3);margin:0;">
-            <i class="bi bi-info-circle"></i> Se creará un usuario administrador para esta org.
-          </p>
+          <p style="font-size:12px;color:var(--c-text-3);margin:0;"><i class="bi bi-info-circle"></i> Se creará un usuario administrador para esta org.</p>
           <div>
             <label class="form-label">Usuario admin</label>
             <input type="text" name="admin_username" class="form-control" required placeholder="Ej: admin_acme" />
@@ -404,21 +426,58 @@ input:checked + .om-slider:before { transform: translateX(16px); }
 
 {% block scripts %}
 <script>
+// ── Accordion ─────────────────────────────────────────────────────────────────
+function toggleDetail(orgId) {
+  const row    = document.getElementById(`org-row-${orgId}`);
+  const detail = document.getElementById(`org-detail-${orgId}`);
+  const isOpen = row.classList.contains('open');
+
+  // Close all
+  document.querySelectorAll('.org-row.open').forEach(r => r.classList.remove('open'));
+
+  // Open clicked if it was closed
+  if (!isOpen) row.classList.add('open');
+}
+
+// Auto-open the org whose flash came from (if any)
+document.addEventListener('DOMContentLoaded', () => {
+  // Open first org by default if only one exists
+  const rows = document.querySelectorAll('.org-row');
+  if (rows.length === 1) rows[0].classList.add('open');
+});
+
+// ── Org status toggle ──────────────────────────────────────────────────────────
+async function toggleOrgStatus(orgId, btn) {
+  const resp = await fetch(`/super/organizations/${orgId}/toggle`, { method: 'POST' });
+  if (resp.ok) location.reload();
+}
+
+// ── Module toggle ──────────────────────────────────────────────────────────────
+async function toggleOrgModule(orgId, module, checkbox) {
+  const enabled = checkbox.checked;
+  const item    = document.getElementById(`om-item-${orgId}-${module}`);
+  const resp = await fetch(`/super/organizations/${orgId}/toggle-module`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ module, enabled }),
+  });
+  if (resp.ok) {
+    item.classList.toggle('enabled', enabled);
+    item.querySelector('i').style.color = enabled ? 'var(--c-accent)' : '';
+  } else {
+    checkbox.checked = !enabled;
+  }
+}
+
+// ── User modals ────────────────────────────────────────────────────────────────
 function openAddUser(orgId, orgName) {
   document.getElementById('addUserOrgName').textContent = orgName;
   document.getElementById('addUserForm').action = `/super/organizations/${orgId}/add-user`;
   new bootstrap.Modal(document.getElementById('addUserModal')).show();
 }
 
-async function toggleOrg(orgId, btn) {
-  const resp = await fetch(`/super/organizations/${orgId}/toggle`, { method: 'POST' });
-  if (resp.ok) location.reload();
-}
-
 function openResetPwd(userId, orgId, username) {
   document.getElementById('resetPwdUsername').textContent = username;
-  document.getElementById('resetPwdForm').action =
-    `/super/organizations/${orgId}/users/${userId}/reset-password`;
+  document.getElementById('resetPwdForm').action = `/super/organizations/${orgId}/users/${userId}/reset-password`;
   document.getElementById('resetPwdForm').reset();
   new bootstrap.Modal(document.getElementById('resetPwdModal')).show();
 }
@@ -426,40 +485,16 @@ function openResetPwd(userId, orgId, username) {
 function validateResetPwd() {
   const pwd  = document.querySelector('#resetPwdForm [name="new_password"]').value;
   const conf = document.getElementById('resetPwdConfirm').value;
-  if (pwd !== conf) { alert('Las contraseñas no coinciden.'); return false; }
-  if (pwd.length < 4) { alert('La contraseña debe tener al menos 4 caracteres.'); return false; }
+  if (pwd !== conf)  { alert('Las contraseñas no coinciden.'); return false; }
+  if (pwd.length < 4){ alert('Mínimo 4 caracteres.'); return false; }
   return true;
 }
 
 function openChangeRole(userId, orgId, username, currentRole) {
   document.getElementById('changeRoleUsername').textContent = username;
-  document.getElementById('changeRoleForm').action =
-    `/super/organizations/${orgId}/users/${userId}/change-role`;
+  document.getElementById('changeRoleForm').action = `/super/organizations/${orgId}/users/${userId}/change-role`;
   document.getElementById('changeRoleSelect').value = currentRole;
   new bootstrap.Modal(document.getElementById('changeRoleModal')).show();
-}
-
-async function toggleOrgModule(orgId, module, checkbox) {
-  const enabled = checkbox.checked;
-  const item    = document.getElementById(`om-item-${orgId}-${module}`);
-
-  const resp = await fetch(`/super/organizations/${orgId}/toggle-module`, {
-    method:  'POST',
-    headers: {'Content-Type': 'application/json'},
-    body:    JSON.stringify({ module, enabled }),
-  });
-
-  if (resp.ok) {
-    item.classList.toggle('enabled', enabled);
-    const icon = item.querySelector('i');
-    if (enabled) {
-      icon.style.color = 'var(--c-accent)';
-    } else {
-      icon.style.color = '';
-    }
-  } else {
-    checkbox.checked = !enabled; // revert on error
-  }
 }
 </script>
 {% endblock %}
