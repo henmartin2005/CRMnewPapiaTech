@@ -8,6 +8,7 @@ from functools import wraps
 
 _LOGO_ALLOWED = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 _LOGOS_DIR    = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'logos')
+_RASTER_LOGOS = {'png', 'jpg', 'jpeg', 'webp'}
 
 super_bp = Blueprint('super', __name__, url_prefix='/super')
 
@@ -227,8 +228,9 @@ def upload_org_logo(org_id):
         return redirect(url_for('super.organizations'))
 
     os.makedirs(_LOGOS_DIR, exist_ok=True)
-    filename = f"org_{org_id}_{uuid4().hex[:8]}.{ext}"
-    file.save(os.path.join(_LOGOS_DIR, filename))
+    save_ext = 'png' if ext in _RASTER_LOGOS else ext
+    filename = f"org_{org_id}_{uuid4().hex[:8]}.{save_ext}"
+    _save_org_logo(file, os.path.join(_LOGOS_DIR, filename), ext)
 
     db = get_db()
     db.execute("UPDATE organizations SET logo_url=? WHERE id=?",
@@ -237,6 +239,38 @@ def upload_org_logo(org_id):
     db.close()
     flash('Logo actualizado correctamente.', 'success')
     return redirect(url_for('super.organizations'))
+
+
+def _save_org_logo(file, path, ext):
+    if ext not in _RASTER_LOGOS:
+        file.save(path)
+        return
+
+    try:
+        from PIL import Image, ImageChops, ImageOps
+    except Exception:
+        file.save(path)
+        return
+
+    img = Image.open(file.stream)
+    img = ImageOps.exif_transpose(img).convert('RGBA')
+
+    alpha_box = img.getchannel('A').getbbox()
+    if alpha_box:
+        img = img.crop(alpha_box)
+
+    bg = Image.new('RGBA', img.size, (255, 255, 255, 255))
+    diff = ImageChops.difference(img, bg).convert('L')
+    mask = diff.point(lambda px: 255 if px > 24 else 0)
+    content_box = mask.getbbox()
+    if content_box:
+        img = img.crop(content_box)
+
+    pad = max(10, int(max(img.size) * 0.06))
+    canvas = Image.new('RGBA', (img.width + pad * 2, img.height + pad * 2), (255, 255, 255, 0))
+    canvas.paste(img, (pad, pad), img)
+    canvas.thumbnail((1200, 1200), Image.LANCZOS)
+    canvas.save(path, 'PNG', optimize=True)
 
 
 @super_bp.route('/organizations/create', methods=['POST'])

@@ -40,6 +40,27 @@
   flex-shrink: 0;
 }
 
+.org-logo-sm {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  object-fit: contain;
+  flex-shrink: 0;
+  border: 1px solid var(--c-border);
+  background: #fff;
+  padding: 3px;
+}
+
+.org-logo-preview {
+  height: 74px;
+  max-width: 240px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: #fff;
+  padding: 6px 10px;
+}
+
 .org-row-info { flex: 1; min-width: 0; }
 .org-row-name {
   font-size: 13.5px; font-weight: 700; color: var(--c-text);
@@ -162,8 +183,7 @@ input:checked + .om-slider:before { transform: translateX(14px); }
 
       <!-- Avatar / Logo -->
       {% if org.logo_url %}
-        <img src="{{ org.logo_url }}" alt="{{ org.name }}"
-             style="width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0;">
+        <img class="org-logo-sm" src="{{ org.logo_url }}" alt="{{ org.name }}">
       {% else %}
         <div class="org-avatar-sm">{{ org.name[0] | upper }}</div>
       {% endif %}
@@ -230,9 +250,7 @@ input:checked + .om-slider:before { transform: translateX(14px); }
         </div>
         <div style="display:flex;align-items:center;gap:14px;">
           {% if org.logo_url %}
-            <img src="{{ org.logo_url }}" alt="Logo"
-                 style="height:48px;max-width:160px;object-fit:contain;border-radius:6px;
-                        border:1px solid var(--c-border);background:#fff;padding:4px;">
+            <img class="org-logo-preview" src="{{ org.logo_url }}" alt="Logo">
           {% else %}
             <div style="width:48px;height:48px;border-radius:6px;border:1px dashed var(--c-border-2);
                         display:flex;align-items:center;justify-content:center;color:var(--c-text-3);">

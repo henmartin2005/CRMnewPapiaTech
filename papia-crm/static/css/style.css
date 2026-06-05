@@ -110,12 +110,39 @@ body.sidebar-light .sidebar {
   gap: 10px;
   padding: 18px 14px 12px;
   text-decoration: none;
+  min-height: 92px;
 }
 
 .sb-logo img { max-height: 28px; flex-shrink: 0; }
 
+.sb-org-logo-wrap {
+  width: 100%;
+  min-height: 68px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(245,247,250,.94));
+  border: 1px solid rgba(255,255,255,.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  overflow: hidden;
+}
+
+.sb-org-logo {
+  width: 100%;
+  max-width: 174px;
+  max-height: 58px !important;
+  object-fit: contain;
+  display: block;
+  filter: none !important;
+}
+
 body.sidebar-light .sb-logo img {
   filter: invert(1) hue-rotate(180deg) brightness(.8);
+}
+
+body.sidebar-light .sb-org-logo {
+  filter: none !important;
 }
 
 .sb-logo-text {
