@@ -63,7 +63,6 @@ def create_link():
             customer_email=client['email'] if client and client['email'] else None,
             success_url=f'{base_url}/payments/success?session_id={{CHECKOUT_SESSION_ID}}',
             cancel_url=f'{base_url}/clients/{client_id}',
-            expires_at=int(time.time()) + 30 * 24 * 3600,   # 30 días
             metadata={'client_id': str(client_id), 'crm': 'papia'},
         )
 
