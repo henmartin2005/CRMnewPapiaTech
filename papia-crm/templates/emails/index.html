@@ -651,6 +651,36 @@ function openReply() {
   modal.show();
 }
 
+// ── Auto-open compose from URL params (eg. from Stripe payment link) ─────────
+document.addEventListener('DOMContentLoaded', () => {
+  const params  = new URLSearchParams(window.location.search);
+  if (params.get('compose') !== '1') return;
+
+  const clientId = params.get('client_id');
+  const subject  = decodeURIComponent(params.get('subject') || '');
+  const body     = decodeURIComponent(params.get('body')    || '');
+
+  if (subject) document.getElementById('composeSubject').value = subject;
+  if (body)    document.getElementById('composeBody').value    = body;
+
+  // Pre-select client in autocomplete
+  if (clientId) {
+    // find the client in all_clients list passed from server
+    const ALL_CLIENTS = {{ all_clients | tojson }};
+    const cl = ALL_CLIENTS.find(c => String(c.id) === String(clientId));
+    if (cl) {
+      selectClient(cl.id, `${cl.first_name} ${cl.last_name}`, cl.email);
+    }
+  }
+
+  // Open the modal
+  const modalEl = document.getElementById('composeModal');
+  if (modalEl) new bootstrap.Modal(modalEl).show();
+
+  // Clean URL so refreshing doesn't re-open it
+  window.history.replaceState({}, '', '/emails' + (clientId ? `?client_id=${clientId}` : ''));
+});
+
 // ── Bubble expand/collapse ────────────────────────────────────────────────────
 function toggleBubble(el) {
   el.querySelector('.em-bubble-body').classList.toggle('expanded');

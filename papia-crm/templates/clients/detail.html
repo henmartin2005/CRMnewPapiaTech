@@ -784,10 +784,13 @@ function sendStripeWA() {
 }
 
 function sendStripeEmail() {
-  if (!stripeUrl || !CLIENT_EMAIL) return;
+  if (!stripeUrl) return;
   const subject = encodeURIComponent('Link de pago — Papia Technology Solutions');
-  const body    = encodeURIComponent(`Hola ${CLIENT_NAME},\n\nAquí está el link para realizar tu pago de forma segura:\n${stripeUrl}\n\nGracias,\nHenrry Martín\nPapia Technology Solutions LLC`);
-  window.open(`mailto:${CLIENT_EMAIL}?subject=${subject}&body=${body}`, '_blank');
+  const body    = encodeURIComponent(
+    `Hola ${CLIENT_NAME},\n\nAquí tienes el link para realizar tu pago de forma segura:\n\n${stripeUrl}\n\nSi tienes alguna pregunta, con gusto te ayudo.\n\nGracias,\nHenrry Martín\nPapia Technology Solutions LLC`
+  );
+  bootstrap.Modal.getInstance(document.getElementById('stripeModal')).hide();
+  window.location.href = `/emails?client_id=${CLIENT_ID}&compose=1&subject=${subject}&body=${body}`;
 }
 </script>
 {% endblock %}
