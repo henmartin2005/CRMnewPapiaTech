@@ -155,36 +155,87 @@ input:checked + .om-slider:before { transform: translateX(16px); }
       </div>
       {% set users = org_users.get(org.id, []) %}
       {% if users %}
-        <div style="display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;flex-direction:column;gap:5px;">
           {% for u in users %}
-          <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;
-                      background:var(--c-bg);border-radius:var(--radius-sm);border:1px solid var(--c-border);">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
+                      background:var(--c-bg);border-radius:var(--radius-sm);
+                      border:1px solid var(--c-border);
+                      {% if not u.is_active %}opacity:.6;{% endif %}">
+
+            <!-- Avatar -->
             <div style="width:28px;height:28px;border-radius:50%;
-                        background:linear-gradient(135deg,#2A5BFF,#8B5CF6);
+                        background:{% if u.is_active %}linear-gradient(135deg,#2A5BFF,#8B5CF6){% else %}var(--c-border-2){% endif %};
                         color:#fff;font-size:11px;font-weight:700;
                         display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               {{ u.display_name[0] | upper }}
             </div>
+
+            <!-- Name + username + date -->
             <div style="flex:1;min-width:0;">
-              <span style="font-size:13px;font-weight:600;color:var(--c-text);">{{ u.display_name }}</span>
-              <span style="font-size:11.5px;color:var(--c-text-3);margin-left:6px;">@{{ u.username }}</span>
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:13px;font-weight:600;color:var(--c-text);">{{ u.display_name }}</span>
+                <span style="font-size:11.5px;color:var(--c-text-3);">@{{ u.username }}</span>
+              </div>
+              <div style="font-size:10.5px;color:var(--c-text-3);margin-top:1px;">
+                <i class="bi bi-calendar3" style="font-size:9px;"></i>
+                {{ u.created_at[:10] if u.created_at else '—' }}
+              </div>
             </div>
-            <span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;
+
+            <!-- Role badge -->
+            <span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0;
                   {% if u.role == 'superadmin' %}background:rgba(168,85,247,.15);color:#a855f7;
                   {% elif u.role == 'admin' %}background:rgba(42,91,255,.1);color:var(--c-accent);
                   {% else %}background:rgba(16,185,129,.1);color:#059669;{% endif %}">
               {{ u.role }}
             </span>
+
+            <!-- Active / Inactive badge -->
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0;
+                  {% if u.is_active %}background:rgba(22,163,74,.1);color:var(--c-success);
+                  {% else %}background:rgba(220,38,38,.1);color:var(--c-danger);{% endif %}">
+              {{ 'Activo' if u.is_active else 'Inactivo' }}
+            </span>
+
+            <!-- Action buttons (not for superadmin) -->
             {% if u.role != 'superadmin' %}
-            <form method="POST"
-                  action="{{ url_for('super.delete_org_user', org_id=org.id, user_id=u.id) }}"
-                  onsubmit="return confirm('¿Eliminar usuario @{{ u.username }}?')"
-                  style="margin:0;">
-              <button type="submit" class="btn-icon-xs" style="color:var(--c-danger);" title="Eliminar">
-                <i class="bi bi-trash"></i>
+            <div style="display:flex;gap:4px;flex-shrink:0;">
+
+              <!-- Reset password -->
+              <button class="btn-icon-xs" title="Cambiar contraseña"
+                      onclick="openResetPwd({{ u.id }}, '{{ org.id }}', '@{{ u.username }}')">
+                <i class="bi bi-key"></i>
               </button>
-            </form>
+
+              <!-- Change role -->
+              <button class="btn-icon-xs" title="Cambiar rol"
+                      onclick="openChangeRole({{ u.id }}, '{{ org.id }}', '@{{ u.username }}', '{{ u.role }}')">
+                <i class="bi bi-shield-half"></i>
+              </button>
+
+              <!-- Toggle active -->
+              <form method="POST"
+                    action="{{ url_for('super.toggle_user_active', org_id=org.id, user_id=u.id) }}"
+                    style="margin:0;" title="{{ 'Desactivar' if u.is_active else 'Activar' }}">
+                <button type="submit" class="btn-icon-xs"
+                        style="{% if u.is_active %}color:var(--c-warning);{% else %}color:var(--c-success);{% endif %}"
+                        onclick="return confirm('¿{{ 'Desactivar' if u.is_active else 'Activar' }} a @{{ u.username }}?')">
+                  <i class="bi bi-{{ 'pause-circle' if u.is_active else 'play-circle' }}"></i>
+                </button>
+              </form>
+
+              <!-- Delete -->
+              <form method="POST"
+                    action="{{ url_for('super.delete_org_user', org_id=org.id, user_id=u.id) }}"
+                    style="margin:0;"
+                    onsubmit="return confirm('¿Eliminar permanentemente a @{{ u.username }}?')">
+                <button type="submit" class="btn-icon-xs" style="color:var(--c-danger);" title="Eliminar">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </div>
             {% endif %}
+
           </div>
           {% endfor %}
         </div>
@@ -202,6 +253,75 @@ input:checked + .om-slider:before { transform: translateX(16px); }
     <p style="margin-top:16px;">No hay organizaciones todavía.</p>
   </div>
   {% endfor %}
+</div>
+
+<!-- Modal: Reset password -->
+<div class="modal fade" id="resetPwdModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-key me-2" style="color:var(--c-accent);"></i>
+          Cambiar contraseña — <span id="resetPwdUsername"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="resetPwdForm" method="POST">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label class="form-label">Nueva contraseña</label>
+            <input type="password" name="new_password" class="form-control"
+                   required minlength="4" placeholder="Mínimo 4 caracteres" autocomplete="new-password" />
+          </div>
+          <div>
+            <label class="form-label">Confirmar contraseña</label>
+            <input type="password" id="resetPwdConfirm" class="form-control"
+                   required placeholder="Repite la contraseña" autocomplete="new-password" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-wa-send" onclick="return validateResetPwd()">
+            <i class="bi bi-check-lg"></i> Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Change role -->
+<div class="modal fade" id="changeRoleModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-shield-half me-2" style="color:var(--c-accent);"></i>
+          Cambiar rol — <span id="changeRoleUsername"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="changeRoleForm" method="POST">
+        <div class="modal-body">
+          <label class="form-label">Nuevo rol</label>
+          <select name="role" id="changeRoleSelect" class="form-select">
+            <option value="admin">Admin — gestiona usuarios de su organización</option>
+            <option value="user">Usuario — accede al sistema sin gestión de usuarios</option>
+          </select>
+          <div style="margin-top:10px;font-size:12px;color:var(--c-text-3);">
+            <i class="bi bi-info-circle"></i>
+            El cambio aplica en el próximo inicio de sesión del usuario.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-wa-send">
+            <i class="bi bi-check-lg"></i> Cambiar rol
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: Agregar usuario a org -->
@@ -293,6 +413,30 @@ function openAddUser(orgId, orgName) {
 async function toggleOrg(orgId, btn) {
   const resp = await fetch(`/super/organizations/${orgId}/toggle`, { method: 'POST' });
   if (resp.ok) location.reload();
+}
+
+function openResetPwd(userId, orgId, username) {
+  document.getElementById('resetPwdUsername').textContent = username;
+  document.getElementById('resetPwdForm').action =
+    `/super/organizations/${orgId}/users/${userId}/reset-password`;
+  document.getElementById('resetPwdForm').reset();
+  new bootstrap.Modal(document.getElementById('resetPwdModal')).show();
+}
+
+function validateResetPwd() {
+  const pwd  = document.querySelector('#resetPwdForm [name="new_password"]').value;
+  const conf = document.getElementById('resetPwdConfirm').value;
+  if (pwd !== conf) { alert('Las contraseñas no coinciden.'); return false; }
+  if (pwd.length < 4) { alert('La contraseña debe tener al menos 4 caracteres.'); return false; }
+  return true;
+}
+
+function openChangeRole(userId, orgId, username, currentRole) {
+  document.getElementById('changeRoleUsername').textContent = username;
+  document.getElementById('changeRoleForm').action =
+    `/super/organizations/${orgId}/users/${userId}/change-role`;
+  document.getElementById('changeRoleSelect').value = currentRole;
+  new bootstrap.Modal(document.getElementById('changeRoleModal')).show();
 }
 
 async function toggleOrgModule(orgId, module, checkbox) {

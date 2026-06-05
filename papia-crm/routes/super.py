@@ -44,9 +44,12 @@ def organizations():
     for row in db.execute("SELECT org_id, module, enabled FROM org_modules").fetchall():
         org_modules.setdefault(row['org_id'], {})[row['module']] = row['enabled']
 
-    # Load users per org
+    # Load users per org — include is_active and created_at for full management
     org_users = {}
-    for row in db.execute("SELECT id, username, display_name, role, org_id FROM users ORDER BY role DESC, username").fetchall():
+    for row in db.execute("""
+        SELECT id, username, display_name, role, is_active, created_at, org_id
+        FROM users ORDER BY role DESC, username
+    """).fetchall():
         org_users.setdefault(row['org_id'], []).append(dict(row))
 
     db.close()
@@ -98,13 +101,96 @@ def add_user_to_org(org_id):
 @super_bp.route('/organizations/<int:org_id>/delete-user/<int:user_id>', methods=['POST'])
 @superadmin_required
 def delete_org_user(org_id, user_id):
+    if user_id == session.get('user_id'):
+        flash('No puedes eliminar tu propia cuenta.', 'danger')
+        return redirect(url_for('super.organizations'))
     db   = get_db()
     user = db.execute("SELECT username, role FROM users WHERE id=? AND org_id=?", (user_id, org_id)).fetchone()
     if user and user['role'] != 'superadmin':
         db.execute("DELETE FROM users WHERE id=?", (user_id,))
         db.commit()
-        flash(f'Usuario "{user["username"]}" eliminado.', 'success')
+        flash(f'Usuario @{user["username"]} eliminado.', 'success')
     db.close()
+    return redirect(url_for('super.organizations'))
+
+
+@super_bp.route('/organizations/<int:org_id>/users/<int:user_id>/reset-password', methods=['POST'])
+@superadmin_required
+def reset_user_password(org_id, user_id):
+    new_password = request.form.get('new_password', '').strip()
+    if not new_password or len(new_password) < 4:
+        flash('La contraseña debe tener al menos 4 caracteres.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    db   = get_db()
+    user = db.execute(
+        "SELECT username FROM users WHERE id=? AND org_id=?", (user_id, org_id)
+    ).fetchone()
+    if not user:
+        db.close()
+        flash('Usuario no encontrado.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    db.execute(
+        "UPDATE users SET password_hash=? WHERE id=?",
+        (generate_password_hash(new_password), user_id),
+    )
+    db.commit()
+    db.close()
+    flash(f'Contraseña de @{user["username"]} actualizada.', 'success')
+    return redirect(url_for('super.organizations'))
+
+
+@super_bp.route('/organizations/<int:org_id>/users/<int:user_id>/toggle-active', methods=['POST'])
+@superadmin_required
+def toggle_user_active(org_id, user_id):
+    if user_id == session.get('user_id'):
+        flash('No puedes desactivar tu propia cuenta.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    db   = get_db()
+    user = db.execute(
+        "SELECT username, role, is_active FROM users WHERE id=? AND org_id=?", (user_id, org_id)
+    ).fetchone()
+    if not user or user['role'] == 'superadmin':
+        db.close()
+        flash('No se puede modificar ese usuario.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    new_status = 0 if user['is_active'] else 1
+    db.execute("UPDATE users SET is_active=? WHERE id=?", (new_status, user_id))
+    db.commit()
+    db.close()
+    action = 'activado' if new_status else 'desactivado'
+    flash(f'Usuario @{user["username"]} {action}.', 'success')
+    return redirect(url_for('super.organizations'))
+
+
+@super_bp.route('/organizations/<int:org_id>/users/<int:user_id>/change-role', methods=['POST'])
+@superadmin_required
+def change_user_role(org_id, user_id):
+    new_role = request.form.get('role', '').strip()
+    if new_role not in ('admin', 'user'):
+        flash('Rol inválido.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    if user_id == session.get('user_id'):
+        flash('No puedes cambiar tu propio rol.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    db   = get_db()
+    user = db.execute(
+        "SELECT username, role FROM users WHERE id=? AND org_id=?", (user_id, org_id)
+    ).fetchone()
+    if not user or user['role'] == 'superadmin':
+        db.close()
+        flash('No se puede modificar ese usuario.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    db.execute("UPDATE users SET role=? WHERE id=?", (new_role, user_id))
+    db.commit()
+    db.close()
+    flash(f'Rol de @{user["username"]} cambiado a {new_role}.', 'success')
     return redirect(url_for('super.organizations'))
 
 
