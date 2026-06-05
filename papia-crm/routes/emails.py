@@ -436,6 +436,17 @@ def index():
     ).fetchall()
     db.close()
 
+    # Pre-filled compose data (eg. from Stripe payment link)
+    compose_preset = None
+    if request.args.get('compose') == '1' and active_client:
+        compose_preset = {
+            'client_id':    active_client['id'],
+            'client_name':  f"{active_client['first_name']} {active_client['last_name']}",
+            'client_email': active_client['email'] or '',
+            'subject':      request.args.get('subject', ''),
+            'body':         request.args.get('body', ''),
+        }
+
     email_settings = _get_settings(org_id)
     return render_template('emails/index.html',
         connected=connected,
@@ -448,6 +459,7 @@ def index():
         active_client=active_client,
         all_clients=all_clients,
         proposal_draft=proposal_draft,
+        compose_preset=compose_preset,
     )
 
 
