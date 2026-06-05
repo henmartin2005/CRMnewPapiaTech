@@ -90,14 +90,28 @@ def _build_html_email(body_text, settings):
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 
-def _client_config():
+def _get_gmail_creds_for_org(org_id):
+    """Returns (client_id, client_secret) for the org, falling back to .env."""
+    db  = get_db()
+    org = db.execute(
+        "SELECT gmail_client_id, gmail_client_secret FROM organizations WHERE id=?", (org_id,)
+    ).fetchone()
+    db.close()
+    client_id     = (org['gmail_client_id']     if org and org['gmail_client_id']     else '') or os.getenv('GMAIL_CLIENT_ID', '')
+    client_secret = (org['gmail_client_secret'] if org and org['gmail_client_secret'] else '') or os.getenv('GMAIL_CLIENT_SECRET', '')
+    return client_id, client_secret
+
+
+def _client_config(org_id=1):
+    client_id, client_secret = _get_gmail_creds_for_org(org_id)
+    redirect_uri = os.getenv('GMAIL_REDIRECT_URI', '')
     return {
         "web": {
-            "client_id":     os.getenv('GMAIL_CLIENT_ID', ''),
-            "client_secret": os.getenv('GMAIL_CLIENT_SECRET', ''),
+            "client_id":     client_id,
+            "client_secret": client_secret,
             "auth_uri":      "https://accounts.google.com/o/oauth2/auth",
             "token_uri":     "https://oauth2.googleapis.com/token",
-            "redirect_uris": [os.getenv('GMAIL_REDIRECT_URI', '')],
+            "redirect_uris": [redirect_uri],
         }
     }
 
@@ -116,12 +130,14 @@ def _load_creds(org_id=1):
     if not row or not row['refresh_token']:
         return None
 
+    client_id, client_secret = _get_gmail_creds_for_org(org_id)
+
     creds = Credentials(
         token=row['access_token'],
         refresh_token=row['refresh_token'],
         token_uri='https://oauth2.googleapis.com/token',
-        client_id=os.getenv('GMAIL_CLIENT_ID'),
-        client_secret=os.getenv('GMAIL_CLIENT_SECRET'),
+        client_id=client_id,
+        client_secret=client_secret,
         scopes=SCOPES,
     )
 
@@ -336,13 +352,15 @@ def gmail_auth():
         flash('Instala las dependencias de Google primero: pip install google-auth-oauthlib google-api-python-client', 'danger')
         return redirect(url_for('emails.index'))
 
-    if not os.getenv('GMAIL_CLIENT_ID'):
-        flash('Configura GMAIL_CLIENT_ID y GMAIL_CLIENT_SECRET en el archivo .env primero.', 'danger')
+    org_id = _get_org_id()
+    client_id, _ = _get_gmail_creds_for_org(org_id)
+    if not client_id:
+        flash('Configura las credenciales de Gmail en Usuarios & Módulos → Configuración de Gmail.', 'danger')
         return redirect(url_for('emails.index'))
 
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-    flow = Flow.from_client_config(_client_config(), scopes=SCOPES)
+    flow = Flow.from_client_config(_client_config(org_id), scopes=SCOPES)
     flow.redirect_uri = os.getenv('GMAIL_REDIRECT_URI',
                                   url_for('emails.oauth2callback', _external=True))
     auth_url, state = flow.authorization_url(
@@ -366,7 +384,7 @@ def oauth2callback():
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     org_id = _get_org_id()
 
-    flow = Flow.from_client_config(_client_config(), scopes=SCOPES,
+    flow = Flow.from_client_config(_client_config(org_id), scopes=SCOPES,
                                    state=session.get('oauth_state'))
     flow.redirect_uri    = os.getenv('GMAIL_REDIRECT_URI',
                                      url_for('emails.oauth2callback', _external=True))

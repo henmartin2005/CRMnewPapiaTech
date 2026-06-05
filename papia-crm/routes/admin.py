@@ -28,6 +28,24 @@ def admin_required(f):
     return decorated
 
 
+@admin_bp.route('/gmail', methods=['POST'])
+@admin_required
+def save_gmail():
+    org_id        = session.get('org_id', 1)
+    client_id     = request.form.get('gmail_client_id', '').strip()
+    client_secret = request.form.get('gmail_client_secret', '').strip()
+
+    db = get_db()
+    if client_id:
+        db.execute("UPDATE organizations SET gmail_client_id=? WHERE id=?", (client_id, org_id))
+    if client_secret:
+        db.execute("UPDATE organizations SET gmail_client_secret=? WHERE id=?", (client_secret, org_id))
+    db.commit()
+    db.close()
+    flash('Credenciales de Gmail guardadas correctamente.', 'success')
+    return redirect(url_for('admin.settings'))
+
+
 @admin_bp.route('/stripe', methods=['POST'])
 @admin_required
 def save_stripe():
@@ -55,7 +73,7 @@ def settings():
     db     = get_db()
 
     org = db.execute(
-        "SELECT stripe_secret_key, stripe_webhook_secret, app_base_url FROM organizations WHERE id=?",
+        "SELECT stripe_secret_key, stripe_webhook_secret, app_base_url, gmail_client_id, gmail_client_secret FROM organizations WHERE id=?",
         (org_id,)
     ).fetchone()
 
@@ -86,6 +104,9 @@ def settings():
         if not val: return ''
         return val[:8] + '••••••••' + val[-4:] if len(val) > 12 else '••••••••'
 
+    from flask import request as _req
+    gmail_redirect_uri = _req.url_root.rstrip('/') + '/emails/oauth2callback'
+
     return render_template('admin/settings.html',
         users=users,
         modules_by_user=modules_by_user,
@@ -95,6 +116,10 @@ def settings():
         stripe_webhook_secret_masked=mask(org['stripe_webhook_secret'] if org else ''),
         app_base_url=org['app_base_url'] if org else '',
         stripe_configured=bool(org and org['stripe_secret_key']),
+        gmail_client_id_masked=mask(org['gmail_client_id'] if org else ''),
+        gmail_client_secret_masked=mask(org['gmail_client_secret'] if org else ''),
+        gmail_configured=bool(org and org['gmail_client_id']),
+        gmail_redirect_uri=gmail_redirect_uri,
     )
 
 
