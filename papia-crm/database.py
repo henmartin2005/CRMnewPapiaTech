@@ -205,6 +205,21 @@ def init_db():
             PRIMARY KEY (user_id, module)
         );
 
+        CREATE TABLE IF NOT EXISTS payment_links (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id         INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            stripe_session_id TEXT,
+            stripe_link_url   TEXT NOT NULL,
+            amount            REAL NOT NULL,
+            currency          TEXT NOT NULL DEFAULT 'usd',
+            description       TEXT,
+            status            TEXT NOT NULL DEFAULT 'pending',
+            paid_at           DATETIME,
+            created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_payment_links_client  ON payment_links(client_id);
+        CREATE INDEX IF NOT EXISTS idx_payment_links_session ON payment_links(stripe_session_id);
         CREATE INDEX IF NOT EXISTS idx_emails_client ON emails(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_client ON proposals(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);

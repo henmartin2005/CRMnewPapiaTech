@@ -29,6 +29,7 @@ from routes.emails import emails_bp
 from routes.proposals import proposals_bp
 from routes.admin import admin_bp
 from routes.super import super_bp
+from routes.payments import payments_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -53,6 +54,7 @@ app.register_blueprint(whatsapp_bp)
 app.register_blueprint(proposals_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(super_bp)
+app.register_blueprint(payments_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────
@@ -68,7 +70,7 @@ def set_org_context():
 # ── Auth guard: protect every route except login, logout, static, and webhook ──
 @app.before_request
 def require_login():
-    open_endpoints = {'auth.login', 'auth.logout', 'static', 'whatsapp.webhook'}
+    open_endpoints = {'auth.login', 'auth.logout', 'static', 'whatsapp.webhook', 'payments.stripe_webhook', 'payments.success'}
     if request.endpoint in open_endpoints:
         return
     if request.path.startswith('/api/'):

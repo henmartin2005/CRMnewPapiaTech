@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Pago recibido{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:60px auto;text-align:center;">
+
+  <div style="width:64px;height:64px;border-radius:50%;background:rgba(22,163,74,.12);
+              display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+    <i class="bi bi-check-circle-fill" style="font-size:32px;color:var(--c-success);"></i>
+  </div>
+
+  <h1 style="font-size:22px;font-weight:700;color:var(--c-text);margin-bottom:8px;">
+    ¡Pago recibido!
+  </h1>
+
+  {% if payment %}
+    <p style="color:var(--c-text-2);font-size:14px;margin-bottom:24px;">
+      Hemos confirmado tu pago de
+      <strong class="num">${{ "%.2f" | format(payment.amount) }} {{ payment.currency | upper }}</strong>
+      por <em>{{ payment.description }}</em>.
+    </p>
+  {% else %}
+    <p style="color:var(--c-text-2);font-size:14px;margin-bottom:24px;">
+      Tu pago fue procesado exitosamente. Gracias por tu confianza.
+    </p>
+  {% endif %}
+
+  <p style="font-size:13px;color:var(--c-text-3);">
+    Recibirás un email de confirmación de Stripe. Si tienes dudas contáctanos a
+    <a href="mailto:info@papiatech.com">info@papiatech.com</a>.
+  </p>
+
+  {% if payment %}
+    <a href="{{ url_for('clients.detail', client_id=payment.client_id) }}"
+       class="btn-wa-send"
+       style="display:inline-flex;margin-top:24px;background:var(--c-accent);text-decoration:none;">
+      <i class="bi bi-person"></i> Ver cliente
+    </a>
+  {% endif %}
+
+</div>
+{% endblock %}

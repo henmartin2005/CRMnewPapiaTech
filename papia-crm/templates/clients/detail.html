@@ -117,6 +117,16 @@
           <span class="fin-row-value num" style="color:var(--c-danger);">{{ client.pending | currency }}</span>
         </div>
 
+        {% if client.pending > 0 %}
+        <div style="margin-top:10px;">
+          <button class="btn-wa-send"
+                  style="width:100%;justify-content:center;background:#635BFF;"
+                  onclick="openStripeModal()">
+            <i class="bi bi-credit-card"></i> Cobrar con Stripe
+          </button>
+        </div>
+        {% endif %}
+
         {% if client.total_cost > 0 %}
           {% set pct = ((client.amount_paid / client.total_cost) * 100) | round(1) %}
           <div class="pay-progress">
@@ -439,6 +449,70 @@
 </div>
 {% endif %}
 
+<!-- ════ STRIPE PAYMENT MODAL ════ -->
+<div class="modal fade" id="stripeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-credit-card me-2" style="color:#635BFF;"></i>Cobrar con Stripe
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+
+        <div>
+          <label class="form-label">Monto a cobrar (USD)</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3);font-size:14px;">$</span>
+            <input type="number" class="form-control" id="stripeAmount"
+                   step="0.01" min="0.50"
+                   value="{{ '%.2f' | format(client.pending) }}"
+                   style="padding-left:22px;" />
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Descripción del pago</label>
+          <input type="text" class="form-control" id="stripeDesc"
+                 value="{{ client.project_type | project_label }} — {{ client.first_name }} {{ client.last_name }}" />
+        </div>
+
+        <div id="stripeLinkResult" style="display:none;">
+          <label class="form-label">Link de pago generado</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" class="form-control num" id="stripeLinkUrl" readonly
+                   style="font-size:12px;color:var(--c-accent);" />
+            <button class="em-link-btn" onclick="copyStripeLink()" title="Copiar">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button class="btn-wa" onclick="sendStripeWA()"
+                    style="border-color:#25D366;color:#25D366;">
+              <i class="bi bi-whatsapp"></i> Enviar por WhatsApp
+            </button>
+            <button class="btn-wa" onclick="sendStripeEmail()"
+                    style="border-color:var(--c-accent);color:var(--c-accent);">
+              <i class="bi bi-envelope"></i> Enviar por Email
+            </button>
+          </div>
+        </div>
+
+        <div id="stripeError" style="display:none;" class="flash-msg danger"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="em-link-btn" data-bs-dismiss="modal">Cerrar</button>
+        <button class="btn-wa-send" id="stripeGenBtn"
+                style="background:#635BFF;"
+                onclick="generateStripeLink()">
+          <i class="bi bi-link-45deg"></i> Generar link
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -636,5 +710,84 @@ if (reminderInput) {
 
 })();
 {% endif %}
+
+// ── Stripe payment link ───────────────────────────────────────────────────
+const CLIENT_ID   = {{ client.id }};
+const CLIENT_PHONE = {{ (client.phone or '') | tojson }};
+const CLIENT_EMAIL = {{ (client.email or '') | tojson }};
+const CLIENT_NAME  = {{ (client.first_name ~ ' ' ~ client.last_name) | tojson }};
+let stripeUrl = '';
+
+function openStripeModal() {
+  document.getElementById('stripeLinkResult').style.display = 'none';
+  document.getElementById('stripeError').style.display      = 'none';
+  document.getElementById('stripeGenBtn').style.display     = '';
+  new bootstrap.Modal(document.getElementById('stripeModal')).show();
+}
+
+async function generateStripeLink() {
+  const btn    = document.getElementById('stripeGenBtn');
+  const errEl  = document.getElementById('stripeError');
+  const amount = parseFloat(document.getElementById('stripeAmount').value);
+  const desc   = document.getElementById('stripeDesc').value.trim();
+
+  errEl.style.display = 'none';
+  if (!amount || amount < 0.50) { showStripeErr('El monto mínimo es $0.50'); return; }
+  if (!desc) { showStripeErr('Escribe una descripción.'); return; }
+
+  btn.disabled  = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando…';
+
+  try {
+    const res  = await fetch('/payments/create-link', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ client_id: CLIENT_ID, amount, description: desc }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      stripeUrl = data.url;
+      document.getElementById('stripeLinkUrl').value        = stripeUrl;
+      document.getElementById('stripeLinkResult').style.display = '';
+      btn.style.display = 'none';
+    } else {
+      showStripeErr(data.error || 'Error al generar el link.');
+    }
+  } catch {
+    showStripeErr('Error de conexión.');
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="bi bi-link-45deg"></i> Generar link';
+  }
+}
+
+function showStripeErr(msg) {
+  const el = document.getElementById('stripeError');
+  el.textContent    = msg;
+  el.style.display  = 'flex';
+}
+
+function copyStripeLink() {
+  navigator.clipboard.writeText(stripeUrl).then(() => {
+    const btn = document.querySelector('#stripeLinkResult .em-link-btn');
+    btn.innerHTML = '<i class="bi bi-check2"></i>';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 2000);
+  });
+}
+
+function sendStripeWA() {
+  if (!stripeUrl) return;
+  const msg = encodeURIComponent(`Hola ${CLIENT_NAME}, aquí está el link para realizar tu pago de forma segura:\n${stripeUrl}`);
+  const phone = CLIENT_PHONE.replace(/\D/g, '');
+  window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+}
+
+function sendStripeEmail() {
+  if (!stripeUrl || !CLIENT_EMAIL) return;
+  const subject = encodeURIComponent('Link de pago — Papia Technology Solutions');
+  const body    = encodeURIComponent(`Hola ${CLIENT_NAME},\n\nAquí está el link para realizar tu pago de forma segura:\n${stripeUrl}\n\nGracias,\nHenrry Martín\nPapia Technology Solutions LLC`);
+  window.open(`mailto:${CLIENT_EMAIL}?subject=${subject}&body=${body}`, '_blank');
+}
 </script>
 {% endblock %}
