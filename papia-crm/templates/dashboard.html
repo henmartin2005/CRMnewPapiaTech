@@ -5,8 +5,16 @@
 
 <div class="pg-header">
   <div>
-    <h1 class="pg-title">Dashboard</h1>
-    <p class="pg-sub">{{ current_org_name or 'Mi organización' }} &mdash; resumen general</p>
+    <div style="display:flex;align-items:center;gap:10px;">
+      {% if current_org_logo %}
+        <img src="{{ current_org_logo }}" alt="{{ current_org_name }}"
+             style="height:32px;max-width:110px;object-fit:contain;border-radius:4px;">
+      {% endif %}
+      <div>
+        <h1 class="pg-title" style="margin:0;">Dashboard</h1>
+        <p class="pg-sub" style="margin:2px 0 0;">{{ current_org_name or 'Mi organización' }} &mdash; resumen general</p>
+      </div>
+    </div>
   </div>
   <div class="pg-actions">
     <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">

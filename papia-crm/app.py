@@ -103,13 +103,16 @@ def inject_globals():
         client_count = _cdb.execute(
             "SELECT COUNT(*) FROM clients WHERE org_id=?", (org_id,)
         ).fetchone()[0]
-        org_name = (_cdb.execute(
-            "SELECT name FROM organizations WHERE id=?", (org_id,)
-        ).fetchone() or {}).get('name', '')
+        _org_row = _cdb.execute(
+            "SELECT name, logo_url FROM organizations WHERE id=?", (org_id,)
+        ).fetchone()
+        org_name = _org_row['name']  if _org_row else ''
+        org_logo = _org_row['logo_url'] if _org_row else ''
         _cdb.close()
     except Exception:
         client_count = 0
         org_name     = ''
+        org_logo     = ''
 
     # Module permissions: org-level ∩ user-level
     role    = session.get('user_role', 'user')
@@ -147,6 +150,7 @@ def inject_globals():
         'current_org_id':   org_id,
         'client_count':     client_count,
         'current_org_name': org_name,
+        'current_org_logo': org_logo,
     }
 
 

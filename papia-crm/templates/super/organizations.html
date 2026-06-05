@@ -3,6 +3,15 @@
 
 {% block head %}
 <style>
+/* ── Drag handle ── */
+.drag-handle {
+  cursor: grab; color: var(--c-border-2); font-size: 14px;
+  padding: 0 4px; flex-shrink: 0; transition: color .15s;
+}
+.drag-handle:hover { color: var(--c-text-3); }
+.sortable-ghost { opacity: .4; background: rgba(42,91,255,.06); }
+.sortable-chosen .org-row-bar { background: var(--c-surface-2); }
+
 /* ── Compact row ── */
 .org-row {
   background: var(--c-surface);
@@ -137,17 +146,27 @@ input:checked + .om-slider:before { transform: translateX(14px); }
   </div>
 </div>
 
-<div style="max-width:860px;">
+<div style="max-width:860px;" id="orgs-sortable">
   {% for org in orgs %}
   {% set mods  = org_modules.get(org.id, {}) %}
   {% set users = org_users.get(org.id, []) %}
 
-  <div class="org-row" id="org-row-{{ org.id }}">
+  <div class="org-row" id="org-row-{{ org.id }}" data-id="{{ org.id }}">
 
     <!-- ── Compact bar (always visible) ── -->
     <div class="org-row-bar" onclick="toggleDetail({{ org.id }})">
 
-      <div class="org-avatar-sm">{{ org.name[0] | upper }}</div>
+      <!-- Drag handle -->
+      <i class="bi bi-grip-vertical drag-handle" title="Arrastrar para reordenar"
+         onclick="event.stopPropagation()"></i>
+
+      <!-- Avatar / Logo -->
+      {% if org.logo_url %}
+        <img src="{{ org.logo_url }}" alt="{{ org.name }}"
+             style="width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0;">
+      {% else %}
+        <div class="org-avatar-sm">{{ org.name[0] | upper }}</div>
+      {% endif %}
 
       <div class="org-row-info">
         <div class="org-row-name">
@@ -201,6 +220,44 @@ input:checked + .om-slider:before { transform: translateX(14px); }
             </label>
           </div>
           {% endfor %}
+        </div>
+      </div>
+
+      <!-- Logo upload -->
+      <div class="org-section" style="background:var(--c-bg);">
+        <div class="org-section-title">
+          <span><i class="bi bi-image"></i> Logo de la organización</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          {% if org.logo_url %}
+            <img src="{{ org.logo_url }}" alt="Logo"
+                 style="height:48px;max-width:160px;object-fit:contain;border-radius:6px;
+                        border:1px solid var(--c-border);background:#fff;padding:4px;">
+          {% else %}
+            <div style="width:48px;height:48px;border-radius:6px;border:1px dashed var(--c-border-2);
+                        display:flex;align-items:center;justify-content:center;color:var(--c-text-3);">
+              <i class="bi bi-image" style="font-size:18px;"></i>
+            </div>
+          {% endif %}
+          <form method="POST"
+                action="{{ url_for('super.upload_org_logo', org_id=org.id) }}"
+                enctype="multipart/form-data"
+                style="display:flex;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+                          padding:5px 12px;border:1px solid var(--c-border);border-radius:var(--radius-sm);
+                          background:var(--c-surface);font-size:12px;color:var(--c-text-2);
+                          transition:border-color .15s;"
+                   onmouseover="this.style.borderColor='var(--c-accent)'"
+                   onmouseout="this.style.borderColor='var(--c-border)'">
+              <i class="bi bi-upload" style="font-size:13px;"></i>
+              <span>Subir logo</span>
+              <input type="file" name="logo" accept="image/*"
+                     style="display:none;" onchange="this.closest('form').submit()">
+            </label>
+            {% if org.logo_url %}
+            <span style="font-size:11px;color:var(--c-text-3);">PNG, JPG, SVG recomendado · máx. 2 MB</span>
+            {% endif %}
+          </form>
         </div>
       </div>
 
@@ -425,7 +482,30 @@ input:checked + .om-slider:before { transform: translateX(14px); }
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
+// ── Drag & drop reorder ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('orgs-sortable');
+  if (!container) return;
+
+  Sortable.create(container, {
+    handle:        '.drag-handle',
+    animation:     150,
+    ghostClass:    'sortable-ghost',
+    chosenClass:   'sortable-chosen',
+    onEnd: async () => {
+      const order = [...container.querySelectorAll('.org-row')]
+                      .map(el => el.dataset.id);
+      await fetch('/super/organizations/reorder', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({ order }),
+      });
+    },
+  });
+});
+
 // ── Accordion ─────────────────────────────────────────────────────────────────
 function toggleDetail(orgId) {
   const row    = document.getElementById(`org-row-${orgId}`);

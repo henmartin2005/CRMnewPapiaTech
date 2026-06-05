@@ -27,8 +27,13 @@
 
   <!-- Logo -->
   <a class="sb-logo" href="{{ url_for('dashboard') }}">
-    <img src="https://www.papiatech.com/assets/logo-papiatech-white-CnoB7BBt.png"
-         alt="Papia Technology Solutions" />
+    {% if current_org_logo and not is_superadmin %}
+      <img src="{{ current_org_logo }}" alt="{{ current_org_name }}"
+           style="max-height:40px;max-width:160px;object-fit:contain;filter:brightness(0) invert(1);opacity:.9;" />
+    {% else %}
+      <img src="https://www.papiatech.com/assets/logo-papiatech-white-CnoB7BBt.png"
+           alt="Papia Technology Solutions" />
+    {% endif %}
   </a>
 
   <hr class="sb-rule" />

@@ -1,7 +1,13 @@
+import os
+from uuid import uuid4
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from database import get_db
 from werkzeug.security import generate_password_hash as _gen_hash
+from werkzeug.utils import secure_filename
 from functools import wraps
+
+_LOGO_ALLOWED = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+_LOGOS_DIR    = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'logos')
 
 super_bp = Blueprint('super', __name__, url_prefix='/super')
 
@@ -36,7 +42,7 @@ def organizations():
         SELECT o.*, COUNT(u.id) as user_count
         FROM organizations o
         LEFT JOIN users u ON u.org_id = o.id
-        GROUP BY o.id ORDER BY o.created_at DESC
+        GROUP BY o.id ORDER BY o.sort_order ASC, o.created_at DESC
     """).fetchall()
 
     # Load module status per org
@@ -191,6 +197,45 @@ def change_user_role(org_id, user_id):
     db.commit()
     db.close()
     flash(f'Rol de @{user["username"]} cambiado a {new_role}.', 'success')
+    return redirect(url_for('super.organizations'))
+
+
+@super_bp.route('/organizations/reorder', methods=['POST'])
+@superadmin_required
+def reorder_organizations():
+    order = request.get_json(silent=True) or {}
+    ids   = order.get('order', [])
+    db    = get_db()
+    for i, org_id in enumerate(ids):
+        db.execute("UPDATE organizations SET sort_order=? WHERE id=?", (i, int(org_id)))
+    db.commit()
+    db.close()
+    return jsonify({'success': True})
+
+
+@super_bp.route('/organizations/<int:org_id>/upload-logo', methods=['POST'])
+@superadmin_required
+def upload_org_logo(org_id):
+    file = request.files.get('logo')
+    if not file or not file.filename:
+        flash('Selecciona un archivo de imagen.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if ext not in _LOGO_ALLOWED:
+        flash('Solo se permiten imágenes PNG, JPG, GIF, WebP o SVG.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    os.makedirs(_LOGOS_DIR, exist_ok=True)
+    filename = f"org_{org_id}_{uuid4().hex[:8]}.{ext}"
+    file.save(os.path.join(_LOGOS_DIR, filename))
+
+    db = get_db()
+    db.execute("UPDATE organizations SET logo_url=? WHERE id=?",
+               (f"/static/logos/{filename}", org_id))
+    db.commit()
+    db.close()
+    flash('Logo actualizado correctamente.', 'success')
     return redirect(url_for('super.organizations'))
 
 

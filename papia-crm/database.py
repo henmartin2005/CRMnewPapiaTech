@@ -264,6 +264,8 @@ def init_db():
         "ALTER TABLE organizations ADD COLUMN app_base_url TEXT DEFAULT ''",
         "ALTER TABLE organizations ADD COLUMN gmail_client_id TEXT DEFAULT ''",
         "ALTER TABLE organizations ADD COLUMN gmail_client_secret TEXT DEFAULT ''",
+        "ALTER TABLE organizations ADD COLUMN logo_url TEXT DEFAULT ''",
+        "ALTER TABLE organizations ADD COLUMN sort_order INTEGER DEFAULT 0",
         "ALTER TABLE payment_links ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
     ]
     for sql in migrations:
