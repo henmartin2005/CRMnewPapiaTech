@@ -142,6 +142,59 @@ input:checked + .om-slider:before { transform: translateX(16px); }
       </div>
     </div>
 
+    <!-- Users section -->
+    <div style="border-top:1px solid var(--c-border);padding:14px 24px;background:var(--c-surface);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;">
+          <i class="bi bi-people"></i> Usuarios
+        </span>
+        <button class="btn-wa" style="border-color:var(--c-accent);color:var(--c-accent);height:24px;font-size:11px;"
+                onclick="openAddUser({{ org.id }}, '{{ org.name | e }}')">
+          <i class="bi bi-person-plus"></i> Agregar usuario
+        </button>
+      </div>
+      {% set users = org_users.get(org.id, []) %}
+      {% if users %}
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          {% for u in users %}
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;
+                      background:var(--c-bg);border-radius:var(--radius-sm);border:1px solid var(--c-border);">
+            <div style="width:28px;height:28px;border-radius:50%;
+                        background:linear-gradient(135deg,#2A5BFF,#8B5CF6);
+                        color:#fff;font-size:11px;font-weight:700;
+                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              {{ u.display_name[0] | upper }}
+            </div>
+            <div style="flex:1;min-width:0;">
+              <span style="font-size:13px;font-weight:600;color:var(--c-text);">{{ u.display_name }}</span>
+              <span style="font-size:11.5px;color:var(--c-text-3);margin-left:6px;">@{{ u.username }}</span>
+            </div>
+            <span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;
+                  {% if u.role == 'superadmin' %}background:rgba(168,85,247,.15);color:#a855f7;
+                  {% elif u.role == 'admin' %}background:rgba(42,91,255,.1);color:var(--c-accent);
+                  {% else %}background:rgba(16,185,129,.1);color:#059669;{% endif %}">
+              {{ u.role }}
+            </span>
+            {% if u.role != 'superadmin' %}
+            <form method="POST"
+                  action="{{ url_for('super.delete_org_user', org_id=org.id, user_id=u.id) }}"
+                  onsubmit="return confirm('¿Eliminar usuario @{{ u.username }}?')"
+                  style="margin:0;">
+              <button type="submit" class="btn-icon-xs" style="color:var(--c-danger);" title="Eliminar">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div style="font-size:12.5px;color:var(--c-text-3);font-style:italic;padding:6px 0;">
+          Sin usuarios. Agrega un administrador para que pueda acceder.
+        </div>
+      {% endif %}
+    </div>
+
   </div>
   {% else %}
   <div style="text-align:center;padding:60px;color:var(--c-text-3);">
@@ -149,6 +202,47 @@ input:checked + .om-slider:before { transform: translateX(16px); }
     <p style="margin-top:16px;">No hay organizaciones todavía.</p>
   </div>
   {% endfor %}
+</div>
+
+<!-- Modal: Agregar usuario a org -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2" style="color:var(--c-accent);"></i>
+          Agregar usuario — <span id="addUserOrgName"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="addUserForm" method="POST">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label class="form-label">Nombre visible</label>
+            <input type="text" name="display_name" class="form-control" placeholder="Ej: Juan Pérez" />
+          </div>
+          <div>
+            <label class="form-label">Usuario</label>
+            <input type="text" name="username" class="form-control" required placeholder="Único en el sistema" />
+          </div>
+          <div>
+            <label class="form-label">Contraseña</label>
+            <input type="password" name="password" class="form-control" required placeholder="Mínimo 4 caracteres" />
+          </div>
+          <div>
+            <label class="form-label">Rol</label>
+            <select name="role" class="form-select">
+              <option value="admin">Admin</option>
+              <option value="user">Usuario</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-md btn-primary"><i class="bi bi-check-lg"></i> Agregar</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: Nueva organización -->
@@ -190,6 +284,12 @@ input:checked + .om-slider:before { transform: translateX(16px); }
 
 {% block scripts %}
 <script>
+function openAddUser(orgId, orgName) {
+  document.getElementById('addUserOrgName').textContent = orgName;
+  document.getElementById('addUserForm').action = `/super/organizations/${orgId}/add-user`;
+  new bootstrap.Modal(document.getElementById('addUserModal')).show();
+}
+
 async function toggleOrg(orgId, btn) {
   const resp = await fetch(`/super/organizations/${orgId}/toggle`, { method: 'POST' });
   if (resp.ok) location.reload();

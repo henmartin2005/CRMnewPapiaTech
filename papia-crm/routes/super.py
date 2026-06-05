@@ -44,12 +44,68 @@ def organizations():
     for row in db.execute("SELECT org_id, module, enabled FROM org_modules").fetchall():
         org_modules.setdefault(row['org_id'], {})[row['module']] = row['enabled']
 
+    # Load users per org
+    org_users = {}
+    for row in db.execute("SELECT id, username, display_name, role, org_id FROM users ORDER BY role DESC, username").fetchall():
+        org_users.setdefault(row['org_id'], []).append(dict(row))
+
     db.close()
     return render_template('super/organizations.html',
         orgs=orgs,
         org_modules=org_modules,
+        org_users=org_users,
         all_modules=ALL_MODULES,
     )
+
+
+@super_bp.route('/organizations/<int:org_id>/add-user', methods=['POST'])
+@superadmin_required
+def add_user_to_org(org_id):
+    username     = request.form.get('username', '').strip()
+    password     = request.form.get('password', '').strip()
+    display_name = request.form.get('display_name', '').strip() or username
+    role         = request.form.get('role', 'user')
+
+    if role not in ('admin', 'user'):
+        role = 'user'
+
+    if not username or not password:
+        flash('Usuario y contraseña son requeridos.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    db = get_db()
+    if db.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+        db.close()
+        flash(f'El usuario "{username}" ya existe. Elige otro nombre.', 'danger')
+        return redirect(url_for('super.organizations'))
+
+    db.execute(
+        "INSERT INTO users (username, password_hash, display_name, role, org_id) VALUES (?, ?, ?, ?, ?)",
+        (username, generate_password_hash(password), display_name, role, org_id)
+    )
+    db.commit()
+    new_id = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()['id']
+    db.executemany(
+        "INSERT OR IGNORE INTO user_modules (user_id, module, enabled) VALUES (?, ?, 1)",
+        [(new_id, m) for m in ALL_MODULE_KEYS]
+    )
+    db.commit()
+    db.close()
+    flash(f'Usuario "{username}" agregado a la organización.', 'success')
+    return redirect(url_for('super.organizations'))
+
+
+@super_bp.route('/organizations/<int:org_id>/delete-user/<int:user_id>', methods=['POST'])
+@superadmin_required
+def delete_org_user(org_id, user_id):
+    db   = get_db()
+    user = db.execute("SELECT username, role FROM users WHERE id=? AND org_id=?", (user_id, org_id)).fetchone()
+    if user and user['role'] != 'superadmin':
+        db.execute("DELETE FROM users WHERE id=?", (user_id,))
+        db.commit()
+        flash(f'Usuario "{user["username"]}" eliminado.', 'success')
+    db.close()
+    return redirect(url_for('super.organizations'))
 
 
 @super_bp.route('/organizations/create', methods=['POST'])
