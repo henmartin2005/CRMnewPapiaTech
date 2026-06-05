@@ -259,6 +259,10 @@ def init_db():
         "ALTER TABLE clients ADD COLUMN source TEXT DEFAULT ''",
         "ALTER TABLE follow_ups ADD COLUMN next_at DATETIME",
         "ALTER TABLE follow_ups ADD COLUMN reminder_comment TEXT",
+        "ALTER TABLE organizations ADD COLUMN stripe_secret_key TEXT DEFAULT ''",
+        "ALTER TABLE organizations ADD COLUMN stripe_webhook_secret TEXT DEFAULT ''",
+        "ALTER TABLE organizations ADD COLUMN app_base_url TEXT DEFAULT ''",
+        "ALTER TABLE payment_links ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1",
     ]
     for sql in migrations:
         try:

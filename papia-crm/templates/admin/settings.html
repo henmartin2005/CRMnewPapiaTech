@@ -49,6 +49,71 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
   </div>
 </div>
 
+<!-- ── Stripe Settings ── -->
+<div style="max-width:800px;margin-bottom:24px;">
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-head-label">
+        <i class="bi bi-credit-card" style="color:#635BFF;margin-right:6px;"></i>Pagos con Stripe
+      </span>
+      {% if stripe_configured %}
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+                     color:var(--c-success);background:rgba(22,163,74,.1);padding:2px 8px;
+                     border-radius:99px;">
+          <i class="bi bi-check-circle-fill"></i> Conectado
+        </span>
+      {% else %}
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+                     color:var(--c-text-3);background:var(--c-bg);padding:2px 8px;
+                     border-radius:99px;border:1px solid var(--c-border);">
+          <i class="bi bi-x-circle"></i> No configurado
+        </span>
+      {% endif %}
+    </div>
+
+    <form method="POST" action="{{ url_for('admin.save_stripe') }}"
+          style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div>
+          <label class="form-label">
+            Secret Key
+            <span style="font-weight:400;color:var(--c-text-3);">(sk_live_... o sk_test_...)</span>
+          </label>
+          <input type="password" name="stripe_secret_key" class="form-control"
+                 placeholder="{% if stripe_configured %}{{ stripe_secret_key_masked }}{% else %}sk_live_...{% endif %}"
+                 autocomplete="off" />
+          <div class="form-text">Obtenla en dashboard.stripe.com → Developers → API keys</div>
+        </div>
+        <div>
+          <label class="form-label">
+            Webhook Secret
+            <span style="font-weight:400;color:var(--c-text-3);">(whsec_...)</span>
+          </label>
+          <input type="password" name="stripe_webhook_secret" class="form-control"
+                 placeholder="{% if stripe_configured %}{{ stripe_webhook_secret_masked }}{% else %}whsec_...{% endif %}"
+                 autocomplete="off" />
+          <div class="form-text">Webhook URL: <code>{{ app_base_url or 'https://tu-dominio.com' }}/webhook/stripe</code></div>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label">URL base del sitio</label>
+        <input type="url" name="app_base_url" class="form-control"
+               value="{{ app_base_url }}"
+               placeholder="https://tu-dominio.com" />
+        <div class="form-text">Usada para las URLs de éxito/cancelación del checkout de Stripe.</div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;">
+        <button type="submit" class="btn-wa-send" style="background:#635BFF;">
+          <i class="bi bi-check-lg"></i> Guardar configuración de Stripe
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div style="max-width:800px;">
   {% for user in users %}
   <div class="user-card">

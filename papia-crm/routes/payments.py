@@ -1,6 +1,6 @@
 import os
 import time
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, session, g
 from database import get_db
 
 payments_bp = Blueprint('payments', __name__)
@@ -8,9 +8,38 @@ payments_bp = Blueprint('payments', __name__)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _stripe():
+def _get_org_id():
+    return getattr(g, 'org_id', None) or session.get('org_id', 1)
+
+
+def _get_org_stripe(org_id):
+    """Return (secret_key, webhook_secret, base_url) for the org.
+    Falls back to .env globals if the org has no keys configured."""
+    db  = get_db()
+    row = db.execute(
+        "SELECT stripe_secret_key, stripe_webhook_secret, app_base_url FROM organizations WHERE id=?",
+        (org_id,)
+    ).fetchone()
+    db.close()
+
+    secret_key     = (row['stripe_secret_key']     or '').strip() if row else ''
+    webhook_secret = (row['stripe_webhook_secret'] or '').strip() if row else ''
+    base_url       = (row['app_base_url']          or '').strip() if row else ''
+
+    # Fall back to .env if org hasn't configured their own keys
+    if not secret_key:
+        secret_key = os.getenv('STRIPE_SECRET_KEY', '')
+    if not webhook_secret:
+        webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+    if not base_url:
+        base_url = os.getenv('APP_BASE_URL', 'https://datos.papiatech.com')
+
+    return secret_key, webhook_secret, base_url
+
+
+def _stripe(secret_key):
     import stripe
-    stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+    stripe.api_key = secret_key
     return stripe
 
 
@@ -34,17 +63,18 @@ def create_link():
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': 'Monto inválido'}), 400
 
-    if not os.getenv('STRIPE_SECRET_KEY'):
-        return jsonify({'success': False, 'error': 'STRIPE_SECRET_KEY no configurada en .env'}), 503
+    org_id = _get_org_id()
+    secret_key, _, base_url = _get_org_stripe(org_id)
+
+    if not secret_key:
+        return jsonify({'success': False, 'error': 'Configura tu Stripe Secret Key en Configuración → Pagos'}), 503
 
     try:
-        stripe     = _stripe()
+        stripe     = _stripe(secret_key)
         db         = get_db()
         client     = db.execute("SELECT first_name, last_name, email FROM clients WHERE id=?",
                                 (client_id,)).fetchone()
         db.close()
-
-        base_url = os.getenv('APP_BASE_URL', 'https://datos.papiatech.com')
 
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
@@ -69,9 +99,9 @@ def create_link():
         db = get_db()
         db.execute("""
             INSERT INTO payment_links
-                (client_id, stripe_session_id, stripe_link_url, amount, currency, description)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (client_id, session.id, session.url, amount, currency, description))
+                (client_id, org_id, stripe_session_id, stripe_link_url, amount, currency, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (client_id, org_id, session.id, session.url, amount, currency, description))
         db.commit()
         db.close()
 
@@ -87,13 +117,36 @@ def create_link():
 def stripe_webhook():
     payload    = request.get_data()
     sig_header = request.headers.get('Stripe-Signature', '')
-    wh_secret  = os.getenv('STRIPE_WEBHOOK_SECRET')
 
-    if not os.getenv('STRIPE_SECRET_KEY'):
+    # Webhook doesn't have session context — try all active orgs
+    # Match by webhook secret or fall back to .env
+    db   = get_db()
+    orgs = db.execute(
+        "SELECT id, stripe_secret_key, stripe_webhook_secret FROM organizations WHERE is_active=1"
+    ).fetchall()
+    db.close()
+
+    secret_key     = os.getenv('STRIPE_SECRET_KEY', '')
+    wh_secret      = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+    matched_org_id = 1
+
+    for org in orgs:
+        org_sk  = (org['stripe_secret_key']     or '').strip()
+        org_whs = (org['stripe_webhook_secret'] or '').strip()
+        if org_whs and org_whs == sig_header[:len(org_whs)]:
+            secret_key     = org_sk or secret_key
+            wh_secret      = org_whs
+            matched_org_id = org['id']
+            break
+        if org_sk:
+            secret_key     = org_sk
+            matched_org_id = org['id']
+
+    if not secret_key:
         return 'Stripe not configured', 503
 
     try:
-        stripe = _stripe()
+        stripe = _stripe(secret_key)
         if wh_secret:
             event = stripe.Webhook.construct_event(payload, sig_header, wh_secret)
         else:

@@ -28,11 +28,37 @@ def admin_required(f):
     return decorated
 
 
+@admin_bp.route('/stripe', methods=['POST'])
+@admin_required
+def save_stripe():
+    org_id         = session.get('org_id', 1)
+    secret_key     = request.form.get('stripe_secret_key', '').strip()
+    webhook_secret = request.form.get('stripe_webhook_secret', '').strip()
+    base_url       = request.form.get('app_base_url', '').strip().rstrip('/')
+
+    db = get_db()
+    db.execute("""
+        UPDATE organizations
+        SET stripe_secret_key=?, stripe_webhook_secret=?, app_base_url=?
+        WHERE id=?
+    """, (secret_key, webhook_secret, base_url, org_id))
+    db.commit()
+    db.close()
+    flash('Configuración de Stripe guardada.', 'success')
+    return redirect(url_for('admin.settings'))
+
+
 @admin_bp.route('/settings')
 @admin_required
 def settings():
     org_id = session.get('org_id', 1)
     db     = get_db()
+
+    org = db.execute(
+        "SELECT stripe_secret_key, stripe_webhook_secret, app_base_url FROM organizations WHERE id=?",
+        (org_id,)
+    ).fetchone()
+
     users  = db.execute(
         "SELECT id, username, display_name, role, is_active FROM users WHERE org_id=? ORDER BY role DESC, username",
         (org_id,)
@@ -54,11 +80,21 @@ def settings():
     org_modules_display = [(k, l, i) for k, l, i in ALL_MODULES if k in org_enabled_set]
 
     db.close()
+
+    # Mask secret keys for display
+    def mask(val):
+        if not val: return ''
+        return val[:8] + '••••••••' + val[-4:] if len(val) > 12 else '••••••••'
+
     return render_template('admin/settings.html',
         users=users,
         modules_by_user=modules_by_user,
-        all_modules=org_modules_display,   # for user-level toggles
-        org_modules=org_modules_display,   # read-only display for admin cards
+        all_modules=org_modules_display,
+        org_modules=org_modules_display,
+        stripe_secret_key_masked=mask(org['stripe_secret_key'] if org else ''),
+        stripe_webhook_secret_masked=mask(org['stripe_webhook_secret'] if org else ''),
+        app_base_url=org['app_base_url'] if org else '',
+        stripe_configured=bool(org and org['stripe_secret_key']),
     )
 
 
