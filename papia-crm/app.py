@@ -30,7 +30,7 @@ from routes.proposals import proposals_bp
 from routes.admin import admin_bp
 from routes.super import super_bp
 from routes.payments import payments_bp
-from routes.meta_webhook import meta_webhook_bp
+from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -86,7 +86,7 @@ def require_login():
         return redirect(url_for('dashboard'))
 
 
-_ALL_MODULES = {'whatsapp', 'emails', 'calendar', 'proposals', 'tasks'}
+_ALL_MODULES = {'whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks'}
 
 
 # ── Context processor: unread badge + enabled modules ──────────────────────
@@ -97,9 +97,11 @@ def inject_globals():
     # Badges & counts — always scoped to current org
     try:
         wa_unread      = get_unread_count(org_id)
+        messenger_unread = get_meta_unread_count(org_id, 'messenger')
+        instagram_unread = get_meta_unread_count(org_id, 'instagram')
         task_due_count = get_due_task_count(org_id)
     except Exception:
-        wa_unread = task_due_count = 0
+        wa_unread = messenger_unread = instagram_unread = task_due_count = 0
 
     try:
         from database import get_db as _gdb
@@ -147,6 +149,8 @@ def inject_globals():
 
     return {
         'wa_unread':        wa_unread,
+        'messenger_unread': messenger_unread,
+        'instagram_unread': instagram_unread,
         'task_due_count':   task_due_count,
         'enabled_modules':  enabled_modules,
         'is_admin':         role in ('admin', 'superadmin'),

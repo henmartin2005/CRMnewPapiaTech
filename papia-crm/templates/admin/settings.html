@@ -193,6 +193,95 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
   </div>
 </div>
 
+<!-- Meta Settings -->
+<div style="max-width:800px;margin-bottom:24px;">
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-head-label">
+        <i class="bi bi-meta" style="color:#0084FF;margin-right:6px;"></i>Messenger e Instagram
+      </span>
+      <span style="font-size:11.5px;color:var(--c-text-3);">
+        {{ meta_connections | length }} canal{{ 'es' if meta_connections | length != 1 else '' }}
+      </span>
+    </div>
+
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);
+                  background:rgba(42,91,255,.06);border:1px solid rgba(42,91,255,.18);">
+        <i class="bi bi-info-circle-fill" style="color:var(--c-accent);font-size:15px;flex-shrink:0;margin-top:1px;"></i>
+        <div style="font-size:12px;color:var(--c-text-2);line-height:1.6;">
+          Webhook para Meta:
+          <code>{{ request.url_root.rstrip('/') }}/webhook/meta</code>.
+          Usa tu <code>META_VERIFY_TOKEN</code> y activa eventos de mensajes para Messenger e Instagram.
+        </div>
+      </div>
+
+      {% if meta_connections %}
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        {% for conn in meta_connections %}
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--c-border);
+                    border-radius:var(--radius-sm);background:var(--c-bg);">
+          <i class="bi {{ 'bi-messenger' if conn.channel == 'messenger' else 'bi-instagram' }}"
+             style="font-size:15px;color:{{ '#0084FF' if conn.channel == 'messenger' else '#E1306C' }};"></i>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:650;color:var(--c-text);">
+              {{ conn.page_name or conn.page_id }}
+            </div>
+            <div style="font-size:11.5px;color:var(--c-text-3);">
+              {{ conn.channel | capitalize }} · ID <span class="num">{{ conn.page_id }}</span>
+            </div>
+          </div>
+          <span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;
+                       {% if conn.is_active %}background:rgba(22,163,74,.1);color:var(--c-success);
+                       {% else %}background:rgba(220,38,38,.1);color:var(--c-danger);{% endif %}">
+            {{ 'Activo' if conn.is_active else 'Inactivo' }}
+          </span>
+          <form method="POST" action="{{ url_for('admin.toggle_meta_connection', connection_id=conn.id) }}" style="margin:0;">
+            <button type="submit" class="btn btn-ghost btn-xs">
+              {{ 'Pausar' if conn.is_active else 'Activar' }}
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('admin.save_meta_connection') }}"
+            style="display:grid;grid-template-columns:150px 1fr 1fr;gap:12px;align-items:end;">
+        <div>
+          <label class="form-label">Canal</label>
+          <select name="channel" class="form-select">
+            <option value="messenger">Messenger</option>
+            <option value="instagram">Instagram</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Page / IG ID</label>
+          <input type="text" name="page_id" class="form-control" required placeholder="ID de página o cuenta IG" />
+        </div>
+        <div>
+          <label class="form-label">Nombre</label>
+          <input type="text" name="page_name" class="form-control" placeholder="Ej: Papia Tech" />
+        </div>
+        <div style="grid-column:1 / -1;">
+          <label class="form-label">Access Token</label>
+          <input type="password" name="page_access_token" class="form-control" required placeholder="EAAG..." autocomplete="off" />
+          <div class="form-text">Se usa para responder mensajes desde el CRM mediante Meta Send API.</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--c-text-2);">
+          <input type="checkbox" name="is_active" checked />
+          Activo
+        </label>
+        <div style="grid-column:2 / -1;display:flex;justify-content:flex-end;">
+          <button type="submit" class="btn-wa-send" style="background:#0084FF;">
+            <i class="bi bi-check-lg"></i> Guardar canal Meta
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div style="max-width:800px;">
   {% for user in users %}
   <div class="user-card">

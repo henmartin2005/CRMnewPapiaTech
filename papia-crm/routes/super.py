@@ -14,6 +14,8 @@ super_bp = Blueprint('super', __name__, url_prefix='/super')
 
 ALL_MODULES = [
     ('whatsapp',  'WhatsApp',   'bi-whatsapp'),
+    ('messenger', 'Messenger',  'bi-messenger'),
+    ('instagram', 'Instagram',  'bi-instagram'),
     ('emails',    'Emails',     'bi-envelope'),
     ('calendar',  'Calendario', 'bi-calendar3'),
     ('proposals', 'Propuestas', 'bi-file-earmark-text'),

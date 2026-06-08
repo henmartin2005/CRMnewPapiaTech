@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% set channel_label = 'Messenger' if channel == 'messenger' else 'Instagram' %}
+{% set channel_icon = 'bi-messenger' if channel == 'messenger' else 'bi-instagram' %}
+{% set channel_color = '#0084FF' if channel == 'messenger' else '#E1306C' %}
+{% block title %}{{ channel_label }}{% endblock %}
+
+{% block head %}
+<style>
+.main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+.meta-shell { display: flex; flex: 1; height: 100%; overflow: hidden; }
+.meta-left {
+  width: 320px; flex-shrink: 0; background: var(--c-surface);
+  border-right: 1px solid var(--c-border); display: flex; flex-direction: column;
+}
+.meta-left-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--c-border);
+}
+.meta-left-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--c-text); }
+.meta-left-title i { color: {{ channel_color }}; font-size: 16px; }
+.meta-convos { flex: 1; overflow-y: auto; }
+.meta-convo-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--c-border); color: inherit; text-decoration: none;
+}
+.meta-convo-item:hover { background: var(--c-surface-2); }
+.meta-convo-item.active { background: rgba(42,91,255,.08); }
+.meta-avatar {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: {{ channel_color }}; color: #fff; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.meta-convo-body { flex: 1; min-width: 0; }
+.meta-convo-name { font-size: 13px; font-weight: 650; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta-convo-preview { font-size: 11.5px; color: var(--c-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta-convo-preview.outbound::before { content: '↑ '; color: var(--c-accent); }
+.meta-convo-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.meta-convo-time { font-size: 10.5px; color: var(--c-text-3); font-family: 'Geist Mono', monospace; }
+.meta-unread-badge {
+  min-width: 18px; height: 18px; border-radius: 99px; padding: 0 5px;
+  display: flex; align-items: center; justify-content: center;
+  background: {{ channel_color }}; color: #fff; font-size: 10px; font-weight: 700;
+}
+.meta-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 40px 20px; text-align: center; color: var(--c-text-3);
+}
+.meta-empty i { font-size: 32px; opacity: .28; }
+.meta-empty p { margin: 0; font-size: 12.5px; }
+.meta-right { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--c-bg); }
+.meta-chat-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 20px; background: var(--c-surface); border-bottom: 1px solid var(--c-border);
+}
+.meta-chat-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.meta-chat-info { min-width: 0; }
+.meta-chat-name { font-size: 14px; font-weight: 700; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta-chat-sub { font-size: 11.5px; color: var(--c-text-3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.meta-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
+.meta-date-sep {
+  display: flex; align-items: center; gap: 10px; margin: 10px 0 6px;
+  font-size: 11px; color: var(--c-text-3); font-family: 'Geist Mono', monospace;
+}
+.meta-date-sep::before, .meta-date-sep::after { content: ''; flex: 1; height: 1px; background: var(--c-border); }
+.meta-bubble-wrap { display: flex; max-width: 72%; flex-direction: column; }
+.meta-bubble-wrap.inbound { align-self: flex-start; align-items: flex-start; }
+.meta-bubble-wrap.outbound { align-self: flex-end; align-items: flex-end; }
+.meta-bubble {
+  padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45;
+  word-break: break-word;
+}
+.meta-bubble.inbound { background: var(--c-surface); border: 1px solid var(--c-border); border-bottom-left-radius: 3px; color: var(--c-text); }
+.meta-bubble.outbound { background: {{ channel_color }}; color: #fff; border-bottom-right-radius: 3px; }
+.meta-bubble-time { margin-top: 2px; font-size: 10px; color: var(--c-text-3); font-family: 'Geist Mono', monospace; }
+.meta-input-bar {
+  display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px;
+  background: var(--c-surface); border-top: 1px solid var(--c-border);
+}
+.meta-textarea {
+  flex: 1; min-height: 36px; max-height: 120px; resize: none; outline: none;
+  border: 1px solid var(--c-border); border-radius: 20px; padding: 8px 14px;
+  font-family: 'Geist', sans-serif; font-size: 13px; color: var(--c-text); background: var(--c-bg);
+}
+.meta-textarea:focus { border-color: {{ channel_color }}; }
+.meta-send-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: none; background: {{ channel_color }};
+  color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.meta-send-btn:disabled { opacity: .45; cursor: not-allowed; }
+.meta-new-lead-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 20px; background: #FEF9C3; border-bottom: 1px solid #FDE68A;
+  font-size: 12.5px; color: #92400E; flex-shrink: 0;
+}
+.meta-new-lead-bar a { font-weight: 600; white-space: nowrap; }
+.meta-messages::-webkit-scrollbar, .meta-convos::-webkit-scrollbar { width: 4px; }
+.meta-messages::-webkit-scrollbar-thumb, .meta-convos::-webkit-scrollbar-thumb { background: var(--c-border-2); border-radius: 99px; }
+@media (max-width: 760px) {
+  .meta-left { width: 42%; min-width: 168px; }
+  .meta-bubble-wrap { max-width: 88%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="meta-shell">
+  <div class="meta-left">
+    <div class="meta-left-header">
+      <div class="meta-left-title">
+        <i class="bi {{ channel_icon }}"></i> {{ channel_label }}
+      </div>
+      <a href="{{ url_for('admin.settings') }}" class="btn btn-ghost btn-icon-xs" title="Configurar canal">
+        <i class="bi bi-sliders" style="font-size:13px;"></i>
+      </a>
+    </div>
+
+    <div class="meta-convos">
+      {% if conversations %}
+        {% for conv in conversations %}
+          {% set display_name = (conv.first_name ~ ' ' ~ conv.last_name) if conv.first_name else conv.sender_id %}
+          {% set initials = (conv.first_name[0] ~ conv.last_name[0]) | upper if conv.first_name else conv.sender_id[-2:] | upper %}
+          <a href="{{ url_for('meta_webhook.inbox', channel=channel, sender_id=conv.sender_id) }}"
+             class="meta-convo-item {% if active_sender == conv.sender_id %}active{% endif %}">
+            <div class="meta-avatar">{{ initials }}</div>
+            <div class="meta-convo-body">
+              <div class="meta-convo-name">{{ display_name }}</div>
+              <div class="meta-convo-preview {{ conv.last_direction }}">
+                {{ conv.last_message[:44] }}{% if conv.last_message | length > 44 %}...{% endif %}
+              </div>
+            </div>
+            <div class="meta-convo-meta">
+              <span class="meta-convo-time">{{ conv.last_at[11:16] if conv.last_at else '' }}</span>
+              {% if conv.unread > 0 %}
+                <span class="meta-unread-badge">{{ conv.unread }}</span>
+              {% endif %}
+            </div>
+          </a>
+        {% endfor %}
+      {% else %}
+        <div class="meta-empty">
+          <i class="bi {{ channel_icon }}"></i>
+          <p>Sin mensajes de {{ channel_label }}</p>
+          <p style="font-size:11px;">Cuando Meta envíe mensajes al webhook, aparecerán aquí.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="meta-right">
+    {% if active_sender %}
+      {% set display_name = (active_client.first_name ~ ' ' ~ active_client.last_name) if active_client else active_sender %}
+      <div class="meta-chat-header">
+        <div class="meta-chat-main">
+          <div class="meta-avatar" style="width:34px;height:34px;font-size:11px;">
+            {% if active_client %}{{ active_client.first_name[0] | upper }}{{ active_client.last_name[0] | upper }}{% else %}{{ active_sender[-2:] | upper }}{% endif %}
+          </div>
+          <div class="meta-chat-info">
+            <div class="meta-chat-name">{{ display_name }}</div>
+            <div class="meta-chat-sub">
+              <span class="num">{{ active_sender }}</span>
+              {% if active_conversation and active_conversation.page_name %}
+                <span style="color:var(--c-border-2);">/</span>
+                <span>{{ active_conversation.page_name }}</span>
+              {% endif %}
+              {% if active_client %}
+                <span style="color:var(--c-border-2);">/</span>
+                <a href="{{ url_for('clients.detail', client_id=active_client.id) }}" style="font-size:11.5px;">Ver perfil</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% if active_client %}
+          <a href="{{ url_for('clients.detail', client_id=active_client.id) }}" class="btn btn-ghost btn-xs">
+            <i class="bi bi-person"></i> Perfil
+          </a>
+        {% endif %}
+      </div>
+
+      {% if not active_client %}
+        <div class="meta-new-lead-bar">
+          <span><i class="bi bi-info-circle me-1"></i>Este contacto no está asociado a un cliente.</span>
+          <a href="{{ url_for('clients.new_client') }}?source={{ channel | urlencode }}">
+            <i class="bi bi-person-plus me-1"></i>Crear lead
+          </a>
+        </div>
+      {% endif %}
+
+      <div class="meta-messages" id="messagesArea">
+        {% set ns = namespace(last_date='') %}
+        {% for msg in active_msgs %}
+          {% set msg_date = msg.created_at[:10] %}
+          {% if msg_date != ns.last_date %}
+            {% set ns.last_date = msg_date %}
+            <div class="meta-date-sep">{{ msg_date }}</div>
+          {% endif %}
+          <div class="meta-bubble-wrap {{ msg.direction }}" data-msg-id="{{ msg.id }}">
+            <div class="meta-bubble {{ msg.direction }}">{{ msg.message }}</div>
+            <div class="meta-bubble-time">{{ msg.created_at[11:16] }}</div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="meta-input-bar">
+        <textarea class="meta-textarea" id="msgInput" placeholder="Responder por {{ channel_label }}..." rows="1"></textarea>
+        <button class="meta-send-btn" id="sendBtn" title="Enviar">
+          <i class="bi bi-send-fill"></i>
+        </button>
+      </div>
+    {% else %}
+      <div class="meta-empty">
+        <i class="bi {{ channel_icon }}"></i>
+        <p>Selecciona una conversación</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if active_sender %}
+<script>
+const ACTIVE_SENDER = {{ active_sender | tojson }};
+const ACTIVE_CHANNEL = {{ channel | tojson }};
+const ACTIVE_PAGE_ID = {{ (active_conversation.page_id if active_conversation else '') | tojson }};
+const ACTIVE_CLIENT_ID = {{ (active_client.id if active_client else None) | tojson }};
+const SEND_URL = '/meta/send';
+const POLL_URL = `/meta/${ACTIVE_CHANNEL}/conversation/${encodeURIComponent(ACTIVE_SENDER)}`;
+const msgArea = document.getElementById('messagesArea');
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+let lastMsgId = {{ (active_msgs[-1].id if active_msgs else 0) }};
+let polling = true;
+
+function scrollBottom() { msgArea.scrollTop = msgArea.scrollHeight; }
+scrollBottom();
+
+msgInput.addEventListener('input', function () {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+msgInput.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+sendBtn.addEventListener('click', sendMessage);
+
+function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text) return;
+  if (!ACTIVE_PAGE_ID) {
+    alert('No se encontró el Page/IG ID de esta conversación.');
+    return;
+  }
+
+  sendBtn.disabled = true;
+  appendBubble({id: 'tmp', direction: 'outbound', message: text, created_at: new Date().toISOString()});
+  scrollBottom();
+  msgInput.value = '';
+  msgInput.style.height = 'auto';
+
+  fetch(SEND_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      channel: ACTIVE_CHANNEL,
+      sender_id: ACTIVE_SENDER,
+      page_id: ACTIVE_PAGE_ID,
+      client_id: ACTIVE_CLIENT_ID,
+      message: text,
+    }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    sendBtn.disabled = false;
+    if (!data.success) alert('Error al enviar: ' + (data.error || 'desconocido'));
+    poll(true);
+  })
+  .catch(() => {
+    sendBtn.disabled = false;
+    alert('Error de conexión al enviar.');
+  });
+}
+
+function appendBubble(msg) {
+  const wrap = document.createElement('div');
+  wrap.className = `meta-bubble-wrap ${msg.direction}`;
+  wrap.dataset.msgId = msg.id;
+  wrap.innerHTML = `
+    <div class="meta-bubble ${msg.direction}">${escapeHtml(msg.message)}</div>
+    <div class="meta-bubble-time">${(msg.created_at || '').slice(11, 16)}</div>`;
+  msgArea.appendChild(wrap);
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
+function poll(force) {
+  fetch(POLL_URL + '?_t=' + Date.now())
+    .then(r => r.json())
+    .then(data => {
+      const msgs = data.messages || [];
+      if (force) document.querySelectorAll('.meta-bubble-wrap[data-msg-id="tmp"]').forEach(el => el.remove());
+      const newMsgs = msgs.filter(m => m.id > lastMsgId);
+      newMsgs.forEach(m => {
+        if (!document.querySelector(`.meta-bubble-wrap[data-msg-id="${m.id}"]`)) appendBubble(m);
+        lastMsgId = Math.max(lastMsgId, m.id);
+      });
+      if (newMsgs.length || force) scrollBottom();
+    })
+    .catch(() => {});
+}
+
+const pollInterval = setInterval(() => { if (polling) poll(false); }, 10000);
+window.addEventListener('beforeunload', () => { polling = false; clearInterval(pollInterval); });
+</script>
+{% endif %}
+{% endblock %}

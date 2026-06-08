@@ -265,7 +265,7 @@ def init_db():
         conn.commit()
 
     # ── Seed org_modules for every org that doesn't have them yet ────────────
-    _ORG_MODULES = ['whatsapp', 'emails', 'calendar', 'proposals', 'tasks']
+    _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks']
     for org_row in conn.execute("SELECT id FROM organizations").fetchall():
         for mod in _ORG_MODULES:
             conn.execute(
@@ -352,7 +352,7 @@ def init_db():
         conn.commit()
 
     # ── Seed users ───────────────────────────────────────────────────────────
-    ALL_MODULES = ['whatsapp', 'emails', 'calendar', 'proposals', 'tasks']
+    ALL_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks']
 
     admin_user = os.getenv('ADMIN_USERNAME', 'admin').strip()
     admin_pass = os.getenv('ADMIN_PASSWORD', 'admin').strip()

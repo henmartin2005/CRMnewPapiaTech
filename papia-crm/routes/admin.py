@@ -10,6 +10,8 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 ALL_MODULES = [
     ('whatsapp',  'WhatsApp',   'bi-whatsapp'),
+    ('messenger', 'Messenger',  'bi-messenger'),
+    ('instagram', 'Instagram',  'bi-instagram'),
     ('emails',    'Emails',     'bi-envelope'),
     ('calendar',  'Calendario', 'bi-calendar3'),
     ('proposals', 'Propuestas', 'bi-file-earmark-text'),
@@ -77,6 +79,11 @@ def settings():
         (org_id,)
     ).fetchone()
 
+    meta_connections = db.execute(
+        "SELECT * FROM meta_channel_connections WHERE org_id=? ORDER BY channel, page_name",
+        (org_id,),
+    ).fetchall()
+
     users  = db.execute(
         "SELECT id, username, display_name, role, is_active FROM users WHERE org_id=? ORDER BY role DESC, username",
         (org_id,)
@@ -120,7 +127,53 @@ def settings():
         gmail_client_secret_masked=mask(org['gmail_client_secret'] if org else ''),
         gmail_configured=bool(org and org['gmail_client_id']),
         gmail_redirect_uri=gmail_redirect_uri,
+        meta_connections=meta_connections,
     )
+
+
+@admin_bp.route('/meta-connections', methods=['POST'])
+@admin_required
+def save_meta_connection():
+    org_id            = session.get('org_id', 1)
+    channel           = request.form.get('channel', '').strip()
+    page_id           = request.form.get('page_id', '').strip()
+    page_name         = request.form.get('page_name', '').strip()
+    page_access_token = request.form.get('page_access_token', '').strip()
+    is_active         = 1 if request.form.get('is_active') else 0
+
+    if channel not in ('messenger', 'instagram') or not page_id or not page_access_token:
+        flash('Canal, Page/IG ID y Access Token son requeridos.', 'danger')
+        return redirect(url_for('admin.settings'))
+
+    db = get_db()
+    db.execute("""
+        INSERT INTO meta_channel_connections
+            (org_id, channel, page_id, page_name, page_access_token, is_active)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(org_id, channel, page_id) DO UPDATE SET
+            page_name=excluded.page_name,
+            page_access_token=excluded.page_access_token,
+            is_active=excluded.is_active
+    """, (org_id, channel, page_id, page_name, page_access_token, is_active))
+    db.commit()
+    db.close()
+    flash('Canal de Meta guardado correctamente.', 'success')
+    return redirect(url_for('admin.settings'))
+
+
+@admin_bp.route('/meta-connections/<int:connection_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_meta_connection(connection_id):
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    db.execute(
+        "UPDATE meta_channel_connections SET is_active = CASE WHEN is_active=1 THEN 0 ELSE 1 END WHERE id=? AND org_id=?",
+        (connection_id, org_id),
+    )
+    db.commit()
+    db.close()
+    flash('Estado del canal actualizado.', 'success')
+    return redirect(url_for('admin.settings'))
 
 
 @admin_bp.route('/users/create', methods=['POST'])

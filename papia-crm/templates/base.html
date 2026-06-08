@@ -129,6 +129,32 @@
     </li>
     {% endif %}
 
+    {% if 'messenger' in enabled_modules %}
+    <li>
+      <a href="{{ url_for('meta_webhook.inbox', channel='messenger') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('meta_webhook.') and request.view_args and request.view_args.get('channel') == 'messenger' %}active{% endif %}">
+        <i class="bi bi-messenger" style="color:#0084FF;"></i>
+        <span class="sb-label">Messenger</span>
+        {% if messenger_unread > 0 %}
+          <span class="sb-wa-badge" style="background:#0084FF;">{{ messenger_unread }}</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endif %}
+
+    {% if 'instagram' in enabled_modules %}
+    <li>
+      <a href="{{ url_for('meta_webhook.inbox', channel='instagram') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('meta_webhook.') and request.view_args and request.view_args.get('channel') == 'instagram' %}active{% endif %}">
+        <i class="bi bi-instagram" style="color:#E1306C;"></i>
+        <span class="sb-label">Instagram</span>
+        {% if instagram_unread > 0 %}
+          <span class="sb-wa-badge" style="background:#E1306C;">{{ instagram_unread }}</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endif %}
+
     {% if is_superadmin %}
     <li>
       <a href="#" class="sb-link sb-disabled">
