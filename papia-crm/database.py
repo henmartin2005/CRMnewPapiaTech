@@ -220,6 +220,35 @@ def init_db():
 
         CREATE INDEX IF NOT EXISTS idx_payment_links_client  ON payment_links(client_id);
         CREATE INDEX IF NOT EXISTS idx_payment_links_session ON payment_links(stripe_session_id);
+        CREATE TABLE IF NOT EXISTS meta_channel_connections (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id            INTEGER NOT NULL DEFAULT 1,
+            channel           TEXT NOT NULL,
+            page_id           TEXT NOT NULL,
+            page_name         TEXT,
+            page_access_token TEXT NOT NULL,
+            is_active         INTEGER NOT NULL DEFAULT 1,
+            created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(org_id, channel, page_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS meta_messages (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id          INTEGER NOT NULL DEFAULT 1,
+            client_id       INTEGER REFERENCES clients(id),
+            channel         TEXT NOT NULL,
+            sender_id       TEXT NOT NULL,
+            page_id         TEXT NOT NULL DEFAULT '',
+            direction       TEXT NOT NULL,
+            message         TEXT NOT NULL,
+            meta_message_id TEXT,
+            status          TEXT NOT NULL DEFAULT 'received',
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_meta_msg_sender ON meta_messages(sender_id);
+        CREATE INDEX IF NOT EXISTS idx_meta_msg_org    ON meta_messages(org_id);
+        CREATE INDEX IF NOT EXISTS idx_meta_msg_client ON meta_messages(client_id);
         CREATE INDEX IF NOT EXISTS idx_emails_client ON emails(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_client ON proposals(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
