@@ -73,6 +73,19 @@
 
     <li class="sb-section" style="margin-top:4px;">Operación</li>
 
+    {% if 'chat' in enabled_modules %}
+    <li>
+      <a href="{{ url_for('internal_chat.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('internal_chat.') %}active{% endif %}">
+        <i class="bi bi-chat-square-text" style="color:#8B5CF6;"></i>
+        <span class="sb-label">Chat interno</span>
+        {% if chat_unread > 0 %}
+          <span class="sb-task-badge">{{ chat_unread }}</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endif %}
+
     {% if 'calendar' in enabled_modules %}
     <li>
       <a href="{{ url_for('followups.calendar') }}"
