@@ -205,6 +205,60 @@ def init_db():
             PRIMARY KEY (user_id, module)
         );
 
+        CREATE TABLE IF NOT EXISTS internal_chat_messages (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id         INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            sender_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            sender_name    TEXT NOT NULL,
+            sender_role    TEXT NOT NULL DEFAULT 'user',
+            message        TEXT NOT NULL,
+            broadcast_id   TEXT,
+            created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS internal_chat_reads (
+            user_id              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            org_id               INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            last_read_message_id INTEGER NOT NULL DEFAULT 0,
+            updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, org_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS internal_direct_messages (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id            INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            sender_user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            sender_name       TEXT NOT NULL,
+            sender_role       TEXT NOT NULL DEFAULT 'user',
+            message           TEXT NOT NULL,
+            created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS internal_direct_reads (
+            user_id              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            peer_user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            last_read_message_id INTEGER NOT NULL DEFAULT 0,
+            updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, peer_user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS internal_user_presence (
+            user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            status     TEXT NOT NULL DEFAULT 'available',
+            last_seen  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_internal_chat_org
+            ON internal_chat_messages(org_id, id);
+        CREATE INDEX IF NOT EXISTS idx_internal_chat_sender
+            ON internal_chat_messages(sender_user_id);
+        CREATE INDEX IF NOT EXISTS idx_internal_direct_pair
+            ON internal_direct_messages(sender_user_id, recipient_user_id, id);
+        CREATE INDEX IF NOT EXISTS idx_internal_direct_recipient
+            ON internal_direct_messages(recipient_user_id, id);
+
         CREATE TABLE IF NOT EXISTS payment_links (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id         INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -265,7 +319,7 @@ def init_db():
         conn.commit()
 
     # ── Seed org_modules for every org that doesn't have them yet ────────────
-    _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks']
+    _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat']
     for org_row in conn.execute("SELECT id FROM organizations").fetchall():
         for mod in _ORG_MODULES:
             conn.execute(
@@ -352,7 +406,15 @@ def init_db():
         conn.commit()
 
     # ── Seed users ───────────────────────────────────────────────────────────
-    ALL_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks']
+    ALL_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat']
+
+    # Chat is enabled by default for existing users because it is an
+    # organization-wide communication channel.
+    conn.execute("""
+        INSERT OR IGNORE INTO user_modules (user_id, module, enabled)
+        SELECT id, 'chat', 1 FROM users
+    """)
+    conn.commit()
 
     admin_user = os.getenv('ADMIN_USERNAME', 'admin').strip()
     admin_pass = os.getenv('ADMIN_PASSWORD', 'admin').strip()

@@ -31,6 +31,7 @@ from routes.admin import admin_bp
 from routes.super import super_bp
 from routes.payments import payments_bp
 from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
+from routes.internal_chat import internal_chat_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -57,6 +58,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(super_bp)
 app.register_blueprint(payments_bp)
 app.register_blueprint(meta_webhook_bp)
+app.register_blueprint(internal_chat_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────
@@ -86,7 +88,7 @@ def require_login():
         return redirect(url_for('dashboard'))
 
 
-_ALL_MODULES = {'whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks'}
+_ALL_MODULES = {'whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat'}
 
 
 # ── Context processor: unread badge + enabled modules ──────────────────────
@@ -100,8 +102,14 @@ def inject_globals():
         messenger_unread = get_meta_unread_count(org_id, 'messenger')
         instagram_unread = get_meta_unread_count(org_id, 'instagram')
         task_due_count = get_due_task_count(org_id)
+        from routes.internal_chat import get_unread_count as _get_chat_unread_count
+        chat_unread    = _get_chat_unread_count(
+            session.get('user_id'),
+            session.get('user_role', 'user'),
+            org_id,
+        )
     except Exception:
-        wa_unread = messenger_unread = instagram_unread = task_due_count = 0
+        wa_unread = messenger_unread = instagram_unread = task_due_count = chat_unread = 0
 
     try:
         from database import get_db as _gdb
@@ -151,6 +159,7 @@ def inject_globals():
         'wa_unread':        wa_unread,
         'messenger_unread': messenger_unread,
         'instagram_unread': instagram_unread,
+        'chat_unread':      chat_unread,
         'task_due_count':   task_due_count,
         'enabled_modules':  enabled_modules,
         'is_admin':         role in ('admin', 'superadmin'),

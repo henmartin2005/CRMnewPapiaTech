@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% block title %}Chat interno{% endblock %}
+
+{% block head %}
+<style>
+  .main-content { padding:0; height:100vh; overflow:hidden; }
+  .ichat-shell { height:100%; display:grid; grid-template-columns:310px minmax(0,1fr); background:var(--c-surface); }
+  .ichat-sidebar { border-right:1px solid var(--c-border); display:flex; flex-direction:column; min-width:0; }
+  .ichat-brand { padding:20px 18px 16px; border-bottom:1px solid var(--c-border); }
+  .ichat-brand-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .ichat-title { margin:0; font-size:18px; font-weight:800; letter-spacing:-.02em; }
+  .ichat-title i { color:#7C3AED; margin-right:7px; }
+  .ichat-subtitle { margin:5px 0 0; color:var(--c-text-3); font-size:12px; }
+  .ichat-search { margin-top:14px; position:relative; }
+  .ichat-search i { position:absolute; left:11px; top:9px; color:var(--c-text-3); }
+  .ichat-search input { padding-left:32px; height:34px; font-size:12.5px; }
+  .ichat-list-label { padding:14px 18px 7px; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--c-text-3); }
+  .ichat-orgs { flex:1; overflow:auto; padding:0 8px 12px; }
+  .ichat-org { display:flex; gap:10px; padding:10px; border-radius:9px; color:inherit; text-decoration:none; transition:background var(--t); margin-bottom:2px; }
+  .ichat-org:hover { background:var(--c-surface-2); color:inherit; }
+  .ichat-org.active { background:rgba(124,58,237,.09); }
+  .ichat-org-avatar { width:40px; height:40px; flex:0 0 auto; border-radius:10px; display:grid; place-items:center; background:linear-gradient(135deg,#2A5BFF,#8B5CF6); color:#fff; font-weight:800; overflow:hidden; }
+  .ichat-org-avatar img { width:100%; height:100%; object-fit:contain; background:#fff; padding:3px; }
+  .ichat-person-avatar { position:relative; overflow:visible; border-radius:50%; }
+  .ichat-status-dot { position:absolute; right:-1px; bottom:-1px; width:12px; height:12px; border-radius:50%; border:2px solid var(--c-surface); background:#94A3B8; }
+  .ichat-status-dot.available { background:#16A34A; }
+  .ichat-status-dot.busy { background:#DC2626; }
+  .ichat-status-dot.away { background:#D97706; }
+  .ichat-status-dot.offline { background:#94A3B8; }
+  .ichat-status-text { display:inline-flex; align-items:center; gap:5px; }
+  .ichat-status-text::before { content:''; width:7px; height:7px; border-radius:50%; background:#94A3B8; }
+  .ichat-status-text.available::before { background:#16A34A; }
+  .ichat-status-text.busy::before { background:#DC2626; }
+  .ichat-status-text.away::before { background:#D97706; }
+  .ichat-status-text.offline::before { background:#94A3B8; }
+  .ichat-person-role { color:var(--c-text-3); font-size:10px; margin-left:5px; }
+  .ichat-org-body { flex:1; min-width:0; }
+  .ichat-org-top { display:flex; align-items:center; justify-content:space-between; gap:7px; }
+  .ichat-org-name { font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ichat-org-time { font:10px 'Geist Mono',monospace; color:var(--c-text-3); white-space:nowrap; }
+  .ichat-org-preview { color:var(--c-text-3); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .ichat-unread { min-width:18px; height:18px; padding:0 5px; border-radius:99px; display:grid; place-items:center; background:#7C3AED; color:#fff; font-size:10px; font-weight:800; }
+  .ichat-main { min-width:0; display:flex; flex-direction:column; background:var(--c-bg); }
+  .ichat-header { min-height:72px; padding:13px 20px; background:var(--c-surface); border-bottom:1px solid var(--c-border); display:flex; align-items:center; justify-content:space-between; gap:15px; }
+  .ichat-header-info { display:flex; align-items:center; gap:11px; min-width:0; }
+  .ichat-header-name { font-size:15px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ichat-header-meta { margin-top:2px; font-size:11.5px; color:var(--c-text-3); }
+  .ichat-member-stack { display:flex; align-items:center; }
+  .ichat-member-dot { width:27px; height:27px; border-radius:50%; display:grid; place-items:center; color:#fff; font-size:9px; font-weight:800; background:#64748B; border:2px solid var(--c-surface); margin-left:-7px; }
+  .ichat-member-dot:first-child { margin-left:0; }
+  .ichat-presence-select { height:30px; width:auto; min-width:128px; padding:0 28px 0 10px; font-size:11.5px; }
+  .ichat-thread { flex:1; overflow-y:auto; padding:24px max(24px,calc((100% - 820px)/2)); display:flex; flex-direction:column; gap:13px; }
+  .ichat-empty { margin:auto; text-align:center; max-width:360px; color:var(--c-text-2); }
+  .ichat-empty-icon { width:64px; height:64px; border-radius:18px; background:rgba(124,58,237,.1); color:#7C3AED; display:grid; place-items:center; font-size:27px; margin:0 auto 14px; }
+  .ichat-empty h2 { font-size:17px; margin:0 0 6px; }
+  .ichat-empty p { margin:0; font-size:12.5px; color:var(--c-text-3); }
+  .ichat-message { display:flex; gap:9px; max-width:76%; align-self:flex-start; }
+  .ichat-message.own { align-self:flex-end; flex-direction:row-reverse; }
+  .ichat-msg-avatar { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; flex:0 0 auto; background:#E9E4FF; color:#6D28D9; font-size:10px; font-weight:800; }
+  .ichat-message.own .ichat-msg-avatar { background:#1E293B; color:#fff; }
+  .ichat-msg-content { min-width:0; }
+  .ichat-msg-author { display:flex; align-items:center; gap:6px; margin:0 0 4px 2px; font-size:11px; color:var(--c-text-3); }
+  .ichat-message.own .ichat-msg-author { justify-content:flex-end; margin-right:2px; }
+  .ichat-role { padding:1px 5px; border-radius:99px; background:rgba(124,58,237,.1); color:#6D28D9; font-size:9px; font-weight:800; text-transform:uppercase; }
+  .ichat-bubble { padding:10px 13px; border-radius:5px 13px 13px 13px; border:1px solid var(--c-border); background:var(--c-surface); color:var(--c-text); font-size:13.5px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; box-shadow:0 1px 2px rgba(15,23,42,.03); }
+  .ichat-message.own .ichat-bubble { border-radius:13px 5px 13px 13px; background:#202735; border-color:#202735; color:#fff; }
+  .ichat-broadcast { display:inline-flex; align-items:center; gap:4px; font-size:9.5px; opacity:.7; margin-top:5px; }
+  .ichat-composer-wrap { padding:12px max(20px,calc((100% - 850px)/2)) 16px; background:var(--c-surface); border-top:1px solid var(--c-border); }
+  .ichat-targets { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+  .ichat-target-label { font-size:11px; font-weight:700; color:var(--c-text-2); white-space:nowrap; }
+  .ichat-target-picker { position:relative; }
+  .ichat-target-button { height:29px; max-width:420px; padding:0 10px; border:1px solid var(--c-border); border-radius:6px; background:var(--c-bg); color:var(--c-text); display:flex; align-items:center; gap:7px; font-size:11.5px; cursor:pointer; }
+  .ichat-target-menu { display:none; position:absolute; z-index:20; bottom:35px; left:0; width:310px; max-height:280px; overflow:auto; padding:7px; border:1px solid var(--c-border); border-radius:10px; background:var(--c-surface); box-shadow:0 12px 35px rgba(15,23,42,.16); }
+  .ichat-target-menu.open { display:block; }
+  .ichat-target-option { display:flex; align-items:center; gap:8px; padding:8px; border-radius:7px; font-size:12px; cursor:pointer; }
+  .ichat-target-option:hover { background:var(--c-surface-2); }
+  .ichat-target-option input { accent-color:#7C3AED; }
+  .ichat-compose { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:end; gap:8px; padding:8px; border:1px solid var(--c-border-2); border-radius:13px; background:var(--c-bg); }
+  .ichat-compose textarea { min-height:34px; max-height:130px; resize:none; border:0; background:transparent; box-shadow:none!important; padding:7px 5px; font-size:13.5px; }
+  .ichat-attach { width:34px; height:34px; display:grid; place-items:center; border:0; background:transparent; color:var(--c-text-3); border-radius:7px; }
+  .ichat-send { width:36px; height:36px; border:0; border-radius:9px; background:#7C3AED; color:#fff; display:grid; place-items:center; }
+  .ichat-send:hover { background:#6D28D9; }
+  .ichat-mobile-back { display:none; }
+  .ichat-drawer-overlay { display:none; }
+  @media (max-width:900px) {
+    .ichat-shell { grid-template-columns:245px minmax(0,1fr); }
+    .ichat-message { max-width:88%; }
+  }
+  @media (max-width:700px) {
+    .main-content { padding-top:48px; }
+    .ichat-shell { grid-template-columns:1fr; height:calc(100vh - 48px); }
+    .ichat-sidebar { display:flex; position:fixed; z-index:1202; top:48px; bottom:0; left:0; width:min(310px,88vw); background:var(--c-surface); transform:translateX(-102%); transition:transform .2s ease; box-shadow:10px 0 30px rgba(15,23,42,.16); }
+    .ichat-sidebar.mobile-open { transform:translateX(0); }
+    .ichat-drawer-overlay { display:block; position:fixed; z-index:1201; inset:48px 0 0; background:rgba(15,23,42,.38); opacity:0; pointer-events:none; transition:opacity .2s ease; }
+    .ichat-drawer-overlay.open { opacity:1; pointer-events:auto; }
+    .ichat-header { min-height:62px; padding:9px 12px; }
+    .ichat-mobile-back { display:grid; width:30px; height:30px; place-items:center; border:1px solid var(--c-border); border-radius:7px; color:var(--c-text-2); }
+    .ichat-member-stack { display:none; }
+    .ichat-thread { padding:16px 12px; }
+    .ichat-message { max-width:94%; }
+    .ichat-composer-wrap { padding:9px 10px 12px; }
+    .ichat-targets { align-items:flex-start; }
+    .ichat-target-button { max-width:230px; }
+    .ichat-target-menu { width:min(310px,calc(100vw - 20px)); left:auto; right:-40px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ichat-drawer-overlay" id="chatDrawerOverlay"></div>
+<div class="ichat-shell">
+  <aside class="ichat-sidebar" id="chatSidebar">
+    <div class="ichat-brand">
+      <div class="ichat-brand-row">
+        <h1 class="ichat-title"><i class="bi bi-chat-square-text"></i>Chat interno</h1>
+        <span class="section-count">{{ organizations|length }}</span>
+      </div>
+      <p class="ichat-subtitle">
+        {% if is_global_chat_admin %}Comunicación con tus agencias{% else %}Canal privado de tu organización{% endif %}
+      </p>
+      <div class="ichat-search">
+        <i class="bi bi-search"></i>
+        <input class="form-control" id="orgSearch" placeholder="Buscar agencia o persona..." autocomplete="off">
+      </div>
+    </div>
+    <div class="ichat-orgs" id="orgList">
+      <div class="ichat-list-label">{{ 'Agencias' if is_global_chat_admin else 'Canal de la agencia' }}</div>
+      {% for org in organizations %}
+      <a class="ichat-org {% if org.id == active_org.id and not active_contact %}active{% endif %}"
+         href="{{ url_for('internal_chat.index', org_id=org.id) }}"
+         data-org-name="{{ org.name|lower }}">
+        <div class="ichat-org-avatar">
+          {% if org.logo_url %}<img src="{{ org.logo_url }}" alt="">{% else %}{{ org.name[:1]|upper }}{% endif %}
+        </div>
+        <div class="ichat-org-body">
+          <div class="ichat-org-top">
+            <span class="ichat-org-name">{{ org.name }}</span>
+            {% if org.unread_count %}<span class="ichat-unread">{{ org.unread_count }}</span>{% endif %}
+          </div>
+          <div class="ichat-org-preview">
+            {% if org.last_message %}{{ org.last_message.message }}{% else %}Inicia la conversación{% endif %}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+
+      <div class="ichat-list-label" style="padding-left:10px;">
+        Personas <span style="font-weight:500;">({{ contacts|length }})</span>
+      </div>
+      {% for contact in contacts %}
+      <a class="ichat-org {% if active_contact and contact.id == active_contact.id %}active{% endif %}"
+         href="{{ url_for('internal_chat.index', org_id=active_org.id, user_id=contact.id) }}"
+         data-org-name="{{ (contact.name ~ ' ' ~ contact.username ~ ' ' ~ contact.label)|lower }}">
+        <div class="ichat-org-avatar ichat-person-avatar">
+          {{ contact.name[:1]|upper }}
+          <span class="ichat-status-dot {{ contact.status }}" title="{{ contact.label }}"></span>
+        </div>
+        <div class="ichat-org-body">
+          <div class="ichat-org-top">
+            <span class="ichat-org-name">
+              {{ contact.name }}
+              {% if contact.role == 'superadmin' %}<span class="ichat-person-role">Sistema</span>{% endif %}
+            </span>
+            {% if contact.unread_count %}<span class="ichat-unread">{{ contact.unread_count }}</span>{% endif %}
+          </div>
+          <div class="ichat-org-preview">
+            {% if contact.last_message %}{{ contact.last_message.message }}{% else %}
+              <span class="ichat-status-text {{ contact.status }}">{{ contact.label }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+      {% else %}
+      <div style="padding:12px;color:var(--c-text-3);font-size:12px;">No hay otros usuarios activos.</div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <section class="ichat-main">
+    <header class="ichat-header">
+      <div class="ichat-header-info">
+        <button class="ichat-mobile-back" id="chatDrawerButton" type="button" aria-label="Ver agencias">
+          <i class="bi bi-list"></i>
+        </button>
+        <div class="ichat-org-avatar {% if active_contact %}ichat-person-avatar{% endif %}">
+          {% if active_contact %}
+            {{ active_contact.name[:1]|upper }}
+            <span class="ichat-status-dot {{ active_contact.status }}"></span>
+          {% elif active_org.logo_url %}<img src="{{ active_org.logo_url }}" alt="">{% else %}{{ active_org.name[:1]|upper }}{% endif %}
+        </div>
+        <div style="min-width:0;">
+          <div class="ichat-header-name">{{ active_contact.name if active_contact else active_org.name }}</div>
+          <div class="ichat-header-meta">
+            {% if active_contact %}
+              <span class="ichat-status-text {{ active_contact.status }}">{{ active_contact.label }}</span>
+              · {{ 'Administrador del sistema' if active_contact.role == 'superadmin' else ('Administrador' if active_contact.role == 'admin' else 'Usuario') }}
+            {% else %}
+              <span style="color:#16A34A;">●</span> {{ active_org.member_count }} miembro{{ 's' if active_org.member_count != 1 else '' }}
+              {% if is_global_chat_admin %} · Agencia privada{% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <select class="form-select ichat-presence-select" id="presenceSelect" title="Tu estado">
+        <option value="available" {% if own_presence.status == 'available' %}selected{% endif %}>Disponible</option>
+        <option value="busy" {% if own_presence.status == 'busy' %}selected{% endif %}>Ocupado</option>
+        <option value="away" {% if own_presence.status == 'away' %}selected{% endif %}>Ausente</option>
+      </select>
+    </header>
+
+    <div class="ichat-thread" id="chatThread" data-latest-id="{{ messages[-1].id if messages else 0 }}">
+      {% if messages %}
+        {% for msg in messages %}
+        {% set own = msg.sender_user_id == session.get('user_id') %}
+        <article class="ichat-message {% if own %}own{% endif %}">
+          <div class="ichat-msg-avatar">{{ msg.sender_name[:1]|upper }}</div>
+          <div class="ichat-msg-content">
+            <div class="ichat-msg-author">
+              <strong>{{ 'Tú' if own else msg.sender_name }}</strong>
+              {% if msg.sender_role in ('admin', 'superadmin') %}
+                <span class="ichat-role">{{ 'Sistema' if msg.sender_role == 'superadmin' else 'Admin' }}</span>
+              {% endif %}
+              <span>{{ msg.created_at|localdatetime }}</span>
+            </div>
+            <div class="ichat-bubble">
+              {{- msg.message -}}
+              {% if msg.broadcast_id and own %}
+              <span class="ichat-broadcast"><i class="bi bi-broadcast"></i> Mensaje multiagencia</span>
+              {% endif %}
+            </div>
+          </div>
+        </article>
+        {% endfor %}
+      {% else %}
+        <div class="ichat-empty">
+          <div class="ichat-empty-icon"><i class="bi bi-chat-heart"></i></div>
+          <h2>Comienza la conversación</h2>
+          <p>
+            {% if active_contact %}
+              Esta conversación es privada entre tú y {{ active_contact.name }}.
+            {% else %}
+              Los mensajes de este canal solo son visibles para los usuarios de {{ active_org.name }} y el administrador del sistema.
+            {% endif %}
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="ichat-composer-wrap">
+      <form method="POST" action="{{ url_for('internal_chat.send') }}" id="chatForm">
+        <input type="hidden" name="active_org_id" value="{{ active_org.id }}">
+        {% if active_contact %}
+        <input type="hidden" name="recipient_user_id" value="{{ active_contact.id }}">
+        {% elif is_global_chat_admin %}
+        <div class="ichat-targets">
+          <span class="ichat-target-label"><i class="bi bi-send-check"></i> Enviar a:</span>
+          <div class="ichat-target-picker">
+            <button class="ichat-target-button" type="button" id="targetButton">
+              <i class="bi bi-building"></i>
+              <span id="targetSummary">{{ active_org.name }}</span>
+              <i class="bi bi-chevron-up"></i>
+            </button>
+            <div class="ichat-target-menu" id="targetMenu">
+              {% for org in organizations %}
+              <label class="ichat-target-option">
+                <input type="checkbox" name="org_ids" value="{{ org.id }}"
+                       data-name="{{ org.name }}" {% if org.id == active_org.id %}checked{% endif %}>
+                <span>{{ org.name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          <span style="font-size:10.5px;color:var(--c-text-3);">Puedes seleccionar varias agencias</span>
+        </div>
+        {% endif %}
+        <div class="ichat-compose">
+          <button class="ichat-attach" type="button" title="Adjuntos próximamente"><i class="bi bi-paperclip"></i></button>
+          <textarea class="form-control" id="chatMessage" name="message" maxlength="4000"
+                    placeholder="Escribe un mensaje para {{ active_contact.name if active_contact else active_org.name }}..." required></textarea>
+          <button class="ichat-send" type="submit" title="Enviar mensaje"><i class="bi bi-send-fill"></i></button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const thread = document.getElementById('chatThread');
+  const input = document.getElementById('chatMessage');
+  const form = document.getElementById('chatForm');
+  const chatSidebar = document.getElementById('chatSidebar');
+  const drawerButton = document.getElementById('chatDrawerButton');
+  const drawerOverlay = document.getElementById('chatDrawerOverlay');
+  const presenceSelect = document.getElementById('presenceSelect');
+  if (thread) thread.scrollTop = thread.scrollHeight;
+
+  if (drawerButton) {
+    const closeDrawer = () => {
+      chatSidebar.classList.remove('mobile-open');
+      drawerOverlay.classList.remove('open');
+    };
+    drawerButton.addEventListener('click', () => {
+      chatSidebar.classList.add('mobile-open');
+      drawerOverlay.classList.add('open');
+    });
+    drawerOverlay.addEventListener('click', closeDrawer);
+  }
+
+  if (input) {
+    const resize = () => {
+      input.style.height = '34px';
+      input.style.height = Math.min(input.scrollHeight, 130) + 'px';
+    };
+    input.addEventListener('input', resize);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        if (form.reportValidity()) form.submit();
+      }
+    });
+  }
+
+  const search = document.getElementById('orgSearch');
+  if (search) {
+    search.addEventListener('input', () => {
+      const query = search.value.trim().toLowerCase();
+      document.querySelectorAll('.ichat-org').forEach((org) => {
+        org.style.display = org.dataset.orgName.includes(query) ? '' : 'none';
+      });
+    });
+  }
+
+  if (presenceSelect) {
+    presenceSelect.addEventListener('change', async () => {
+      const response = await fetch('{{ url_for("internal_chat.set_presence") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: presenceSelect.value})
+      });
+      if (response.ok) window.location.reload();
+    });
+  }
+
+  const targetButton = document.getElementById('targetButton');
+  const targetMenu = document.getElementById('targetMenu');
+  const targetSummary = document.getElementById('targetSummary');
+  const targetInputs = targetMenu ? [...targetMenu.querySelectorAll('input')] : [];
+  const updateTargets = () => {
+    const selected = targetInputs.filter((item) => item.checked);
+    if (!selected.length) targetSummary.textContent = 'Selecciona agencias';
+    else if (selected.length === 1) targetSummary.textContent = selected[0].dataset.name;
+    else targetSummary.textContent = selected.length + ' agencias seleccionadas';
+  };
+  if (targetButton) {
+    targetButton.addEventListener('click', () => targetMenu.classList.toggle('open'));
+    targetInputs.forEach((item) => item.addEventListener('change', updateTargets));
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.ichat-target-picker')) targetMenu.classList.remove('open');
+    });
+    form.addEventListener('submit', (event) => {
+      if (!targetInputs.some((item) => item.checked)) {
+        event.preventDefault();
+        targetMenu.classList.add('open');
+      }
+    });
+  }
+
+  const heartbeat = () => fetch('{{ url_for("internal_chat.heartbeat") }}', {method:'POST'}).catch(() => {});
+  heartbeat();
+  setInterval(heartbeat, 30000);
+
+  let latestId = Number(thread.dataset.latestId || 0);
+  setInterval(async () => {
+    if (document.hidden || (input && input.value.trim())) return;
+    try {
+      const response = await fetch('{{ url_for("internal_chat.latest", org_id=active_org.id, user_id=(active_contact.id if active_contact else None)) }}');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.latest_id > latestId) window.location.reload();
+      latestId = data.latest_id;
+    } catch (error) {
+      // The next polling cycle retries silently.
+    }
+  }, 8000);
+})();
+</script>
+{% endblock %}
