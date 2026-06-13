@@ -250,6 +250,49 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS internal_chat_attachments (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id            INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            conversation_type TEXT NOT NULL,
+            message_id        INTEGER NOT NULL,
+            uploader_user_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            original_name     TEXT NOT NULL,
+            stored_name       TEXT NOT NULL,
+            mime_type         TEXT,
+            file_size         INTEGER NOT NULL DEFAULT 0,
+            created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at        DATETIME NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS internal_chat_permissions (
+            user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            org_id            INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            can_write_general INTEGER NOT NULL DEFAULT 0,
+            updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, org_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS internal_chat_reactions (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_type TEXT NOT NULL,
+            message_id        INTEGER NOT NULL,
+            user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            emoji             TEXT NOT NULL,
+            created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(conversation_type, message_id, user_id, emoji)
+        );
+
+        CREATE TABLE IF NOT EXISTS internal_chat_reaction_events (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_type TEXT NOT NULL,
+            message_id        INTEGER NOT NULL,
+            org_id            INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            emoji             TEXT NOT NULL,
+            active            INTEGER NOT NULL DEFAULT 1,
+            created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_internal_chat_org
             ON internal_chat_messages(org_id, id);
         CREATE INDEX IF NOT EXISTS idx_internal_chat_sender
@@ -258,6 +301,14 @@ def init_db():
             ON internal_direct_messages(sender_user_id, recipient_user_id, id);
         CREATE INDEX IF NOT EXISTS idx_internal_direct_recipient
             ON internal_direct_messages(recipient_user_id, id);
+        CREATE INDEX IF NOT EXISTS idx_internal_attach_msg
+            ON internal_chat_attachments(conversation_type, message_id);
+        CREATE INDEX IF NOT EXISTS idx_internal_attach_expiry
+            ON internal_chat_attachments(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_internal_reactions_msg
+            ON internal_chat_reactions(conversation_type, message_id);
+        CREATE INDEX IF NOT EXISTS idx_internal_reaction_events_sync
+            ON internal_chat_reaction_events(conversation_type, org_id, created_at, message_id);
 
         CREATE TABLE IF NOT EXISTS payment_links (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,

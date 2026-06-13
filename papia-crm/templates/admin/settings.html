@@ -361,6 +361,21 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
       </div>
       {% endfor %}
     </div>
+    {% if 'chat' in enabled_modules %}
+    {% set can_write_chat = chat_permissions.get(user.id, 0) %}
+    <div class="mod-grid" style="margin-top:10px;">
+      <div class="mod-item">
+        <i class="bi bi-pencil-square" style="font-size:14px;{% if can_write_chat %}color:var(--c-accent){% endif %}"></i>
+        <span>Escribir en canal general</span>
+        <label class="mod-toggle" style="margin:0;">
+          <input type="checkbox"
+                 {% if can_write_chat %}checked{% endif %}
+                 onchange="toggleChatWrite({{ user.id }}, this.checked)">
+          <span class="mod-slider"></span>
+        </label>
+      </div>
+    </div>
+    {% endif %}
     {% else %}
     <span style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
       Tu organización no tiene módulos habilitados. Contacta a PapiaTech.
@@ -434,6 +449,14 @@ async function toggleModule(userId, module, enabled) {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ module, enabled }),
+  });
+}
+
+async function toggleChatWrite(userId, enabled) {
+  await fetch(`/admin/users/${userId}/toggle-chat-write`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ enabled }),
   });
 }
 

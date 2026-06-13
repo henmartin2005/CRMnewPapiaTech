@@ -97,6 +97,13 @@ def settings():
         ).fetchall()
         modules_by_user[u['id']] = {r['module']: r['enabled'] for r in rows}
 
+    chat_permissions = {}
+    rows = db.execute(
+        "SELECT user_id, can_write_general FROM internal_chat_permissions WHERE org_id=?",
+        (org_id,),
+    ).fetchall()
+    chat_permissions = {r['user_id']: r['can_write_general'] for r in rows}
+
     # Modules enabled at org level (set by PapiaTech superadmin)
     org_mod_rows    = db.execute(
         "SELECT module FROM org_modules WHERE org_id=? AND enabled=1", (org_id,)
@@ -129,6 +136,7 @@ def settings():
         gmail_configured=bool(org and org['gmail_client_id']),
         gmail_redirect_uri=gmail_redirect_uri,
         meta_connections=meta_connections,
+        chat_permissions=chat_permissions,
     )
 
 
@@ -223,6 +231,33 @@ def toggle_module(user_id):
         "ON CONFLICT(user_id, module) DO UPDATE SET enabled=excluded.enabled",
         (user_id, module, enabled),
     )
+    db.commit()
+    db.close()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/users/<int:user_id>/toggle-chat-write', methods=['POST'])
+@admin_required
+def toggle_chat_write(user_id):
+    org_id = session.get('org_id', 1)
+    enabled = 1 if (request.get_json(silent=True) or {}).get('enabled') else 0
+
+    db = get_db()
+    user = db.execute(
+        "SELECT id, role FROM users WHERE id=? AND org_id=?",
+        (user_id, org_id),
+    ).fetchone()
+    if not user or user['role'] in ('admin', 'superadmin'):
+        db.close()
+        return jsonify({'success': False, 'error': 'Usuario inválido'}), 400
+
+    db.execute("""
+        INSERT INTO internal_chat_permissions (user_id, org_id, can_write_general, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id, org_id) DO UPDATE SET
+            can_write_general=excluded.can_write_general,
+            updated_at=CURRENT_TIMESTAMP
+    """, (user_id, org_id, enabled))
     db.commit()
     db.close()
     return jsonify({'success': True})
