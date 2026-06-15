@@ -4,6 +4,8 @@ import base64
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 
 from flask import (Blueprint, request, jsonify, render_template,
                    redirect, url_for, flash, session, g)
@@ -485,12 +487,23 @@ def index():
 
 @emails_bp.route('/emails/send', methods=['POST'])
 def send():
-    org_id    = _get_org_id()
-    data      = request.get_json(silent=True) or {}
-    client_id = data.get('client_id')
-    to_email  = (data.get('to_email')  or '').strip()
-    subject   = (data.get('subject')   or '').strip()
-    body      = (data.get('body')      or '').strip()
+    org_id = _get_org_id()
+
+    # Accept both JSON (compose) and multipart/form-data (reply bar with attachments)
+    ct = request.content_type or ''
+    if 'application/json' in ct:
+        data         = request.get_json(silent=True) or {}
+        client_id    = data.get('client_id')
+        to_email     = (data.get('to_email')  or '').strip()
+        subject      = (data.get('subject')   or '').strip()
+        body         = (data.get('body')      or '').strip()
+        attach_files = []
+    else:
+        client_id    = request.form.get('client_id')
+        to_email     = (request.form.get('to_email')  or '').strip()
+        subject      = (request.form.get('subject')   or '').strip()
+        body         = (request.form.get('body')      or '').strip()
+        attach_files = [f for f in request.files.getlist('files') if f.filename]
 
     if not to_email or not subject or not body:
         return jsonify({'success': False, 'error': 'to_email, subject y body son requeridos'}), 400
@@ -500,14 +513,28 @@ def send():
         return jsonify({'success': False, 'error': 'Gmail no conectado. Ve a Emails → Conectar Gmail.'}), 503
 
     try:
-        settings   = _get_settings(org_id)
-        html_body  = _build_html_email(body, settings)
+        settings  = _get_settings(org_id)
+        html_body = _build_html_email(body, settings)
 
-        msg = MIMEMultipart('alternative')
+        if attach_files:
+            msg     = MIMEMultipart('mixed')
+            alt_msg = MIMEMultipart('alternative')
+            alt_msg.attach(MIMEText(body, 'plain'))
+            alt_msg.attach(MIMEText(html_body, 'html'))
+            msg.attach(alt_msg)
+            for f in attach_files:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(f.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', 'attachment', filename=f.filename)
+                msg.attach(part)
+        else:
+            msg = MIMEMultipart('alternative')
+            msg.attach(MIMEText(body, 'plain'))
+            msg.attach(MIMEText(html_body, 'html'))
+
         msg['Subject'] = subject
         msg['To']      = to_email
-        msg.attach(MIMEText(body, 'plain'))
-        msg.attach(MIMEText(html_body, 'html'))
 
         raw  = base64.urlsafe_b64encode(msg.as_bytes()).decode()
         sent = service.users().messages().send(userId='me', body={'raw': raw}).execute()
@@ -525,6 +552,43 @@ def send():
 
         return jsonify({'success': True, 'id': sent.get('id')})
 
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+# ── AI reply ──────────────────────────────────────────────────────────────────
+
+@emails_bp.route('/emails/ai-reply', methods=['POST'])
+def ai_reply():
+    data    = request.get_json(silent=True) or {}
+    context = (data.get('thread_context') or data.get('context') or '').strip()
+    mode    = data.get('mode', 'reply')
+
+    api_key = os.getenv('ANTHROPIC_API_KEY', '')
+    if not api_key:
+        return jsonify({'success': False, 'error': 'ANTHROPIC_API_KEY no configurada'}), 503
+
+    try:
+        import anthropic
+        ai = anthropic.Anthropic(api_key=api_key)
+
+        if mode == 'compose':
+            user_msg = f'Redacta un email profesional sobre el siguiente tema: {context}'
+        else:
+            user_msg = f'Redacta una respuesta profesional al siguiente email:\n\n{context}'
+
+        result = ai.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=1024,
+            system=(
+                'Eres un asistente profesional de Papia Technology Solutions, '
+                'una empresa de tecnología. Redactas emails profesionales, '
+                'claros y concisos en español. Usa un tono cordial y formal. '
+                'Responde solo con el cuerpo del email, sin asunto ni encabezados.'
+            ),
+            messages=[{'role': 'user', 'content': user_msg}],
+        )
+        return jsonify({'success': True, 'reply': result.content[0].text})
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500
 

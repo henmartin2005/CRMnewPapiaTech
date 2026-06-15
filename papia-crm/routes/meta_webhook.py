@@ -8,6 +8,7 @@ Webhook de entrada para Messenger e Instagram Direct.
 import os
 import hmac
 import hashlib
+from typing import Optional
 from flask import Blueprint, request, jsonify, session, g, render_template, abort
 from database import get_db
 from services.meta_send import send_message
@@ -29,7 +30,7 @@ def _verify_signature(payload: bytes, signature: str) -> bool:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
-def _get_page_token(page_id: str, channel: str, org_id: int = 1) -> str | None:
+def _get_page_token(page_id: str, channel: str, org_id: int = 1) -> Optional[str]:
     db  = get_db()
     row = db.execute(
         "SELECT page_access_token FROM meta_channel_connections "
@@ -52,7 +53,7 @@ def _get_connection_org_id(page_id: str, channel: str) -> int:
     return row['org_id'] if row else 1
 
 
-def _find_client_by_sender(sender_id: str, channel: str, org_id: int = 1) -> int | None:
+def _find_client_by_sender(sender_id: str, channel: str, org_id: int = 1) -> Optional[int]:
     db  = get_db()
     row = db.execute(
         "SELECT client_id FROM meta_messages "
@@ -76,7 +77,7 @@ def _save_message(channel, sender_id, page_id, direction, text,
     db.close()
 
 
-def get_meta_unread_count(org_id: int = 1, channel: str | None = None) -> int:
+def get_meta_unread_count(org_id: int = 1, channel: Optional[str] = None) -> int:
     db    = get_db()
     if channel:
         count = db.execute(

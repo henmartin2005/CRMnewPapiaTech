@@ -2,6 +2,7 @@
 {% block title %}Emails{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css" />
 <style>
 .main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 .em-shell { display: flex; flex: 1; overflow: hidden; height: 100%; }
@@ -318,17 +319,36 @@
         <button class="em-reply-tab active" onclick="setReplyTab(this,'reply')">Responder</button>
         <button class="em-reply-tab" onclick="setReplyTab(this,'forward')">Reenviar</button>
       </div>
+      {% if templates %}
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:11.5px;color:var(--c-text-3);white-space:nowrap;flex-shrink:0;">
+          <i class="ph ph-file-text"></i> Plantilla
+        </span>
+        <select id="replyTplSelect" onchange="applyReplyTemplate(this.value)"
+                style="flex:1;height:28px;font-size:12px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);padding:0 6px;outline:none;cursor:pointer;">
+          <option value="">— Sin plantilla —</option>
+          {% for t in templates %}
+          <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
       <div class="em-reply-row">
         <textarea class="em-reply-input" id="replyBody" placeholder="Escribe tu respuesta..."></textarea>
         <div class="em-reply-btns">
-          <button class="em-reply-ai" onclick="generateAIReply()" title="Generar respuesta con IA">
+          <button class="em-reply-ai" onclick="generateAIReply()" id="aiReplyBtn" title="Generar respuesta con IA">
             <i class="ph ph-sparkle"></i> IA
+          </button>
+          <button class="em-icon-btn" onclick="document.getElementById('attachFile').click()" title="Adjuntar archivos">
+            <i class="ph ph-paperclip"></i>
           </button>
           <button class="em-reply-send" onclick="sendReply()">
             <i class="ph ph-paper-plane-tilt"></i> Enviar
           </button>
         </div>
       </div>
+      <input type="file" id="attachFile" style="display:none" multiple onchange="handleAttachFiles(this)">
+      <div id="attachChips" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
     </div>
 
     {% else %}
@@ -347,23 +367,64 @@
 
 <!-- ── COMPOSE MODAL ── -->
 <div id="composeModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:flex-end;padding:20px;">
-  <div style="width:480px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+  <div style="width:500px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--c-border);">
       <span style="font-size:13px;font-weight:700;color:var(--c-text);">Nuevo email</span>
       <button onclick="closeCompose()" style="background:none;border:none;cursor:pointer;color:var(--c-text-3);font-size:18px;"><i class="ph ph-x"></i></button>
     </div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
-      <select id="composeTo" style="width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;">
-        <option value="">Seleccionar cliente...</option>
-        {% for cl in all_clients %}
-        <option value="{{ cl.email }}" {% if compose_preset and compose_preset.client_email == cl.email %}selected{% endif %}>
-          {{ cl.first_name }} {{ cl.last_name }} — {{ cl.email }}
-        </option>
-        {% endfor %}
-      </select>
+
+      <!-- Destinatario: toggle cliente / email libre -->
+      <div>
+        <div style="display:flex;gap:0;border:1px solid var(--c-border);border-radius:7px;overflow:hidden;width:fit-content;margin-bottom:8px;">
+          <button id="cmpTabCliente" onclick="setComposeMode('cliente')"
+                  style="padding:5px 14px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--c-accent);color:#fff;display:flex;align-items:center;gap:5px;">
+            <i class="ph ph-user-check"></i> Cliente
+          </button>
+          <button id="cmpTabLibre" onclick="setComposeMode('libre')"
+                  style="padding:5px 14px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--c-surface);color:var(--c-text-2);display:flex;align-items:center;gap:5px;">
+            <i class="ph ph-envelope-simple-open"></i> Email libre
+          </button>
+        </div>
+
+        <!-- Modo cliente -->
+        <div id="cmpModoCliente">
+          <select id="composeTo" style="width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;">
+            <option value="">Seleccionar cliente...</option>
+            {% for cl in all_clients %}
+            <option value="{{ cl.email }}" {% if compose_preset and compose_preset.client_email == cl.email %}selected{% endif %}>
+              {{ cl.first_name }} {{ cl.last_name }} — {{ cl.email }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Modo email libre -->
+        <div id="cmpModoLibre" style="display:none;display:flex;flex-direction:column;gap:6px;">
+          <input id="composeToFree" type="email" placeholder="correo@ejemplo.com"
+                 style="display:none;width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;" />
+          <input id="composeToName" type="text" placeholder="Nombre (opcional)"
+                 style="display:none;width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;" />
+        </div>
+      </div>
+
       <input id="composeSubject" type="text" placeholder="Asunto"
              value="{{ compose_preset.subject if compose_preset else '' }}"
              style="width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;" />
+      {% if templates %}
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11.5px;color:var(--c-text-3);white-space:nowrap;flex-shrink:0;display:flex;align-items:center;gap:4px;">
+          <i class="ph ph-file-text"></i> Plantilla
+        </span>
+        <select id="composeTpl" onchange="applyComposeTemplate(this.value)"
+                style="flex:1;height:30px;font-size:12px;border:1px solid var(--c-border);border-radius:6px;background:var(--c-bg);color:var(--c-text);padding:0 6px;outline:none;cursor:pointer;">
+          <option value="">— Sin plantilla —</option>
+          {% for t in templates %}
+          <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
       <textarea id="composeBody" placeholder="Escribe tu mensaje..."
                 style="width:100%;min-height:140px;padding:9px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;resize:vertical;outline:none;font-family:inherit;">{{ compose_preset.body if compose_preset else '' }}</textarea>
       <div style="display:flex;gap:6px;justify-content:flex-end;">
@@ -375,6 +436,49 @@
 </div>
 
 <script>
+const TEMPLATES = {{ templates | tojson }};
+const TPL_MAP   = {};
+TEMPLATES.forEach(t => TPL_MAP[t.id] = t);
+const ACTIVE_CLIENT_NAME = {{ ((active_client.first_name ~ ' ' ~ active_client.last_name) if active_client else '') | tojson }};
+
+// ── Template selector ──
+function applyReplyTemplate(tplId) {
+  if (!tplId) return;
+  const tpl = TPL_MAP[parseInt(tplId)];
+  if (!tpl) return;
+  const firstName = ACTIVE_CLIENT_NAME ? ACTIVE_CLIENT_NAME.split(' ')[0] : '{nombre}';
+  document.getElementById('replyBody').value = tpl.body.replace(/\{nombre\}/g, firstName);
+  document.getElementById('replyBody').focus();
+}
+
+// ── File attachments ──
+let _attachedFiles = [];
+
+function handleAttachFiles(input) {
+  _attachedFiles = Array.from(input.files);
+  renderAttachChips();
+}
+
+function removeAttach(idx) {
+  _attachedFiles.splice(idx, 1);
+  const dt = new DataTransfer();
+  _attachedFiles.forEach(f => dt.items.add(f));
+  document.getElementById('attachFile').files = dt.files;
+  renderAttachChips();
+}
+
+function renderAttachChips() {
+  document.getElementById('attachChips').innerHTML = _attachedFiles.map((f, i) => `
+    <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;background:var(--c-surface-2);border:1px solid var(--c-border);font-size:11px;color:var(--c-text-2);">
+      <i class="ph ph-file"></i>${escHtml(f.name)}
+      <button onclick="removeAttach(${i})" style="border:none;background:none;cursor:pointer;color:var(--c-text-3);padding:0;font-size:13px;line-height:1;" title="Quitar">×</button>
+    </span>`).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 // ── Tab switching ──
 function switchTab(btn, tab) {
   document.querySelectorAll('.em-tab-btn').forEach(b => b.classList.remove('active'));
@@ -436,18 +540,38 @@ function setReplyTab(btn, mode) {
 // ── Send reply ──
 function sendReply() {
   const body = document.getElementById('replyBody').value.trim();
-  if (!body) return;
+  if (!body) { alert('Escribe un mensaje.'); return; }
   const clientId = {{ active_id or 'null' }};
-  const subject = '{{ active_thread[0].subject if active_thread else "" }}';
-  const toEmail = '{{ active_thread[0].from_email if active_thread else "" }}';
-  fetch('/emails/send', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
-    body: JSON.stringify({ to_email: toEmail, subject: 'Re: ' + subject, body: body, client_id: clientId })
-  }).then(r => r.json()).then(d => {
-    if (d.success) { document.getElementById('replyBody').value = ''; location.reload(); }
-    else { alert('Error: ' + (d.error || '')); }
-  });
+  const subject  = 'Re: {{ active_thread[0].subject if active_thread else "" }}';
+  const toEmail  = '{{ active_thread[0].from_email if active_thread else "" }}';
+
+  if (_attachedFiles.length) {
+    const fd = new FormData();
+    fd.append('client_id', clientId);
+    fd.append('to_email',  toEmail);
+    fd.append('subject',   subject);
+    fd.append('body',      body);
+    _attachedFiles.forEach(f => fd.append('files', f));
+    fetch('/emails/send', { method: 'POST', body: fd })
+      .then(r => r.json()).then(d => {
+        if (d.success) {
+          document.getElementById('replyBody').value = '';
+          document.getElementById('attachChips').innerHTML = '';
+          document.getElementById('attachFile').value = '';
+          _attachedFiles = [];
+          location.reload();
+        } else { alert('Error: ' + (d.error || '')); }
+      });
+  } else {
+    fetch('/emails/send', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
+      body: JSON.stringify({ to_email: toEmail, subject, body, client_id: clientId })
+    }).then(r => r.json()).then(d => {
+      if (d.success) { document.getElementById('replyBody').value = ''; location.reload(); }
+      else { alert('Error: ' + (d.error || '')); }
+    });
+  }
 }
 
 // ── AI reply ──
@@ -469,22 +593,72 @@ function generateAIReply() {
 }
 
 // ── Compose ──
+let _composeMode = 'cliente';
+
+function setComposeMode(mode) {
+  _composeMode = mode;
+  const isCliente = mode === 'cliente';
+  document.getElementById('cmpModoCliente').style.display  = isCliente ? 'block' : 'none';
+  const libre = document.getElementById('cmpModoLibre');
+  libre.style.display = isCliente ? 'none' : 'flex';
+  document.getElementById('composeToFree').style.display = isCliente ? 'none' : 'block';
+  document.getElementById('composeToName').style.display = isCliente ? 'none' : 'block';
+  document.getElementById('cmpTabCliente').style.background = isCliente ? 'var(--c-accent)' : 'var(--c-surface)';
+  document.getElementById('cmpTabCliente').style.color      = isCliente ? '#fff' : 'var(--c-text-2)';
+  document.getElementById('cmpTabLibre').style.background   = isCliente ? 'var(--c-surface)' : 'var(--c-accent)';
+  document.getElementById('cmpTabLibre').style.color        = isCliente ? 'var(--c-text-2)' : '#fff';
+  if (!isCliente) document.getElementById('composeToFree').focus();
+}
+
+function applyComposeTemplate(tplId) {
+  if (!tplId) return;
+  const tpl = TPL_MAP[parseInt(tplId)];
+  if (!tpl) return;
+  // Resolve {nombre} from selected client name or leave placeholder
+  let firstName = '{nombre}';
+  if (_composeMode === 'cliente') {
+    const sel = document.getElementById('composeTo');
+    const txt = sel.options[sel.selectedIndex]?.text || '';
+    const name = txt.split('—')[0].trim();
+    if (name) firstName = name.split(' ')[0];
+  } else {
+    const n = (document.getElementById('composeToName')?.value || '').trim();
+    if (n) firstName = n.split(' ')[0];
+  }
+  const replace = s => s.replace(/\{nombre\}/g, firstName);
+  document.getElementById('composeSubject').value = replace(tpl.subject || '');
+  document.getElementById('composeBody').value    = replace(tpl.body   || '');
+}
+
 function openCompose() {
-  const m = document.getElementById('composeModal');
-  m.style.display = 'flex';
+  _composeMode = 'cliente';
+  setComposeMode('cliente');
+  const tplSel = document.getElementById('composeTpl');
+  if (tplSel) tplSel.value = '';
+  document.getElementById('composeSubject').value = '';
+  document.getElementById('composeBody').value    = '';
+  document.getElementById('composeModal').style.display = 'flex';
 }
 function closeCompose() {
   document.getElementById('composeModal').style.display = 'none';
 }
 function sendCompose() {
-  const to = document.getElementById('composeTo').value;
+  let toEmail = '';
+  if (_composeMode === 'cliente') {
+    toEmail = document.getElementById('composeTo').value;
+    if (!toEmail) { alert('Selecciona un cliente.'); return; }
+  } else {
+    toEmail = document.getElementById('composeToFree').value.trim();
+    if (!toEmail || !toEmail.includes('@')) { alert('Ingresa un email válido.'); return; }
+  }
   const subject = document.getElementById('composeSubject').value.trim();
-  const body = document.getElementById('composeBody').value.trim();
-  if (!to || !subject || !body) { alert('Completa todos los campos'); return; }
+  const body    = document.getElementById('composeBody').value.trim();
+  if (!subject) { alert('Escribe el asunto.'); return; }
+  if (!body)    { alert('Escribe el mensaje.'); return; }
   fetch('/emails/send', {
     method: 'POST',
     headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
-    body: JSON.stringify({ to_email: to, subject, body })
+    body: JSON.stringify({ to_email: toEmail, subject, body })
   }).then(r => r.json()).then(d => {
     if (d.success) { closeCompose(); location.reload(); }
     else { alert('Error: ' + (d.error || '')); }
