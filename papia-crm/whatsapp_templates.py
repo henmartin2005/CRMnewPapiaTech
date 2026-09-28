@@ -29,9 +29,9 @@ TEMPLATES = {
                ['Ana', 'Booking app', 'https://datos.papiatech.com/p/1234'], []),
     }),
     'recordatorio_reunion': ('UTILITY', {
-        'es': (f"Hola {{{{1}}}}, te recordamos tu reunión con {BRAND} el {{{{2}}}} a las {{{{3}}}}.",
+        'es': (f"Hola {{{{1}}}}, te recordamos tu reunión con {BRAND} el {{{{2}}}} a las {{{{3}}}}. ¿Nos confirmas tu asistencia?",
                ['Ana', 'martes 6 de octubre', '3:00 p. m.'], ['Confirmar', 'Reprogramar']),
-        'en': (f"Hi {{{{1}}}}, this is a reminder of your meeting with {BRAND} on {{{{2}}}} at {{{{3}}}}.",
+        'en': (f"Hi {{{{1}}}}, this is a reminder of your meeting with {BRAND} on {{{{2}}}} at {{{{3}}}}. Can you confirm you'll attend?",
                ['Ana', 'Tuesday, October 6', '3:00 PM'], ['Confirm', 'Reschedule']),
     }),
     'recordatorio_pago': ('UTILITY', {
