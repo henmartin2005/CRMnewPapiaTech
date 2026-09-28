@@ -64,6 +64,7 @@ def get_conversations(org_id=1):
             w.phone,
             w.message          AS last_message,
             w.direction        AS last_direction,
+            w.status           AS last_status,
             w.created_at       AS last_at,
             w.client_id,
             c.first_name, c.last_name,
@@ -279,10 +280,57 @@ def index():
     return render_template(
         'whatsapp/index.html',
         conversations=conversations,
+        conversations_data=conversations_to_dicts(conversations, org_id),
         active_phone=active_phone,
         active_msgs=active_msgs,
+        active_msgs_data=messages_to_dicts(active_msgs),
         active_client=active_client,
     )
+
+
+def _clients_by_digits(org_id=1):
+    """Mapa últimos-10-dígitos → cliente, para nombrar chats cuyo mensaje no quedó enlazado."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, first_name, last_name, phone FROM clients WHERE phone IS NOT NULL AND phone != '' AND org_id=?",
+        (org_id,)).fetchall()
+    db.close()
+    out = {}
+    for c in rows:
+        d = re.sub(r'\D', '', c['phone'] or '')
+        if len(d) >= 7:
+            out[d[-10:]] = c
+    return out
+
+
+def conversations_to_dicts(rows, org_id=1):
+    clients = _clients_by_digits(org_id)
+    out = []
+    for r in rows:
+        client_id, first, last = r['client_id'], r['first_name'], r['last_name']
+        if not first:
+            c = clients.get(re.sub(r'\D', '', r['phone'] or '')[-10:])
+            if c:
+                client_id, first, last = c['id'], c['first_name'], c['last_name']
+        name = ' '.join(x for x in (first, last) if x) if first else ''
+        out.append({
+            'phone':      r['phone'],
+            'name':       name,
+            'client_id':  client_id,
+            'last_message':   r['last_message'],
+            'last_direction': r['last_direction'],
+            'last_status':    r['last_status'],
+            'last_at':    r['last_at'],
+            'unread':     r['unread'] or 0,
+        })
+    return out
+
+
+@whatsapp_bp.route('/whatsapp/conversations.json')
+def conversations_json():
+    """Lista de chats para refrescar el panel izquierdo sin recargar."""
+    org_id = _get_org_id()
+    return jsonify({'conversations': conversations_to_dicts(get_conversations(org_id), org_id)})
 
 
 @whatsapp_bp.route('/webhook/whatsapp', methods=['POST'])

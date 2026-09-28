@@ -3,639 +3,774 @@
 
 {% block head %}
 <style>
-/* ── Override main padding for full-height chat ── */
-.main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-
-/* ── Chat shell ── */
-.wa-shell {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  height: 100%;
+/* ═══════════════════════════════════════════════
+   WhatsApp Web look — Papia CRM
+═══════════════════════════════════════════════ */
+.main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; box-sizing: border-box; }
+@media (max-width: 1023px) {
+  /* deja sitio a la barra superior móvil del CRM */
+  .main-content { padding: var(--topbar-h, 52px) 0 0 !important; }
 }
 
-/* ════════════════════════
-   LEFT PANEL — conversations
-════════════════════════ */
-.wa-left {
-  width: 300px;
+.wa {
+  --wa-panel:      #f0f2f5;
+  --wa-surface:    #ffffff;
+  --wa-hover:      #f5f6f6;
+  --wa-active:     #f0f2f5;
+  --wa-line:       #e9edef;
+  --wa-text:       #111b21;
+  --wa-text-2:     #667781;
+  --wa-icon:       #54656f;
+  --wa-green:      #00a884;
+  --wa-green-2:    #25d366;
+  --wa-out:        #d9fdd3;
+  --wa-in:         #ffffff;
+  --wa-chat-bg:    #efeae2;
+  --wa-tick-read:  #53bdeb;
+  --wa-shadow:     0 1px .5px rgba(11,20,26,.13);
+  --wa-font:       'Segoe UI', 'Helvetica Neue', Helvetica, 'Lucida Grande', Arial, Ubuntu, Cantarell, 'Fira Sans', sans-serif;
+
+  display: flex; flex: 1; height: 100%; overflow: hidden;
+  font-family: var(--wa-font); color: var(--wa-text); background: var(--wa-panel);
+}
+.wa *, .wa *::before, .wa *::after { box-sizing: border-box; }
+.wa button { font-family: inherit; }
+
+.wa-icon-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--wa-icon); background: transparent; border: none; cursor: pointer;
+  font-size: 19px; text-decoration: none; transition: background .15s;
   flex-shrink: 0;
-  border-right: 1px solid var(--c-border);
-  display: flex;
-  flex-direction: column;
-  background: var(--c-surface);
 }
+.wa-icon-btn:hover { background: rgba(11,20,26,.06); color: var(--wa-icon); }
+.wa-icon-btn.on { background: rgba(11,20,26,.1); }
 
-.wa-left-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--c-border);
-  flex-shrink: 0;
+/* ── LEFT ─────────────────────────────── */
+.wa-side {
+  width: 30%; min-width: 320px; max-width: 440px;
+  display: flex; flex-direction: column;
+  background: var(--wa-surface); border-right: 1px solid var(--wa-line);
 }
-
-.wa-left-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--c-text);
-  display: flex;
-  align-items: center;
-  gap: 7px;
+.wa-side-top {
+  height: 64px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px 0 20px; background: var(--wa-surface);
 }
+.wa-side-title { font-size: 22px; font-weight: 700; letter-spacing: -.2px; }
+.wa-side-tools { display: flex; gap: 4px; }
 
-.wa-left-title i { color: #25D366; font-size: 16px; }
-
-.wa-convos {
-  flex: 1;
-  overflow-y: auto;
+.wa-search { padding: 0 12px 8px; flex-shrink: 0; }
+.wa-search-box {
+  display: flex; align-items: center; gap: 12px;
+  height: 36px; padding: 0 12px 0 14px;
+  background: var(--wa-panel); border-radius: 8px;
 }
-
-.wa-convo-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--c-border);
-  transition: background var(--t);
-  text-decoration: none;
-  color: inherit;
+.wa-search-box i { color: var(--wa-icon); font-size: 14px; }
+.wa-search-box input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font: 15px var(--wa-font); color: var(--wa-text);
 }
+.wa-search-box input::placeholder { color: var(--wa-text-2); }
 
-.wa-convo-item:hover { background: var(--c-surface-2); }
+.wa-chips { display: flex; gap: 8px; padding: 0 16px 8px; flex-shrink: 0; }
+.wa-chip {
+  border: none; cursor: pointer; font-size: 14px; line-height: 1;
+  padding: 8px 12px; border-radius: 18px;
+  background: var(--wa-panel); color: var(--wa-text-2); transition: background .15s;
+}
+.wa-chip:hover { background: #e9edef; }
+.wa-chip.on { background: #d9fdd3; color: #008069; }
 
-.wa-convo-item.active { background: #E8F5FF; }
+.wa-list { flex: 1; overflow-y: auto; }
+.wa-row {
+  display: flex; align-items: center; height: 72px;
+  padding-left: 13px; cursor: pointer;
+  text-decoration: none; color: inherit; background: var(--wa-surface);
+}
+.wa-row:hover  { background: var(--wa-hover); }
+.wa-row.active { background: var(--wa-active); }
+.wa-row-body {
+  flex: 1; min-width: 0; height: 100%;
+  display: flex; flex-direction: column; justify-content: center;
+  padding-right: 15px; margin-left: 13px;
+  border-bottom: 1px solid var(--wa-line);
+}
+.wa-row:last-child .wa-row-body { border-bottom: none; }
+.wa-row-line { display: flex; align-items: center; gap: 6px; }
+.wa-row-name {
+  flex: 1; min-width: 0; font-size: 17px; line-height: 21px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wa-row-time { font-size: 12px; color: var(--wa-text-2); flex-shrink: 0; }
+.wa-row.unread .wa-row-time { color: var(--wa-green-2); font-weight: 500; }
+.wa-row-prev {
+  flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--wa-text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+}
+.wa-row.unread .wa-row-prev { color: var(--wa-text); }
+.wa-row-prev .tick { font-size: 15px; vertical-align: -2px; margin-right: 2px; }
+.wa-badge {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--wa-green-2); color: #fff; font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.wa-list-empty { padding: 48px 32px; text-align: center; color: var(--wa-text-2); font-size: 14px; line-height: 1.5; }
+.wa-list-empty i { display: block; font-size: 36px; opacity: .35; margin-bottom: 10px; }
 
-.wa-convo-avatar {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #25D366, #128C7E);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
+/* avatar */
+.wa-av {
+  width: 49px; height: 49px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
+  color: #fff; font-size: 17px; font-weight: 600; letter-spacing: .3px;
+  background: #dfe5e7;
+}
+.wa-av.sm { width: 40px; height: 40px; font-size: 15px; }
+.wa-av.anon { color: #fff; background: #cfd4d6; }
+.wa-av.anon i { font-size: 26px; margin-top: 6px; }
+.wa-av.sm.anon i { font-size: 22px; margin-top: 5px; }
+
+/* ── RIGHT ────────────────────────────── */
+.wa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; background: var(--wa-chat-bg); }
+
+.wa-head {
+  height: 64px; flex-shrink: 0; z-index: 2;
+  display: flex; align-items: center; gap: 13px;
+  padding: 0 12px 0 16px; background: var(--wa-panel);
+  border-left: 1px solid rgba(0,0,0,.02);
+}
+.wa-back { display: none; }
+.wa-head-info { flex: 1; min-width: 0; cursor: default; }
+.wa-head-name { font-size: 16px; line-height: 21px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wa-head-sub  { font-size: 13px; line-height: 20px; color: var(--wa-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wa-head-sub a { color: var(--wa-text-2); text-decoration: underline; text-underline-offset: 2px; }
+.wa-head-sub a:hover { color: var(--wa-text); }
+
+.wa-find {
+  display: none; align-items: center; gap: 8px;
+  padding: 8px 16px; background: var(--wa-panel); border-top: 1px solid var(--wa-line); z-index: 2;
+}
+.wa-find.open { display: flex; }
+.wa-find input {
+  flex: 1; height: 34px; border: none; border-radius: 8px; padding: 0 12px;
+  font: 14px var(--wa-font); background: var(--wa-surface); outline: none;
+}
+.wa-find-count { font-size: 12px; color: var(--wa-text-2); min-width: 60px; text-align: right; }
+
+.wa-notice {
+  align-self: center; margin: 12px auto 4px; max-width: 560px;
+  background: #fff5c4; color: #54656f; font-size: 12.5px; line-height: 1.45;
+  padding: 6px 12px; border-radius: 7.5px; box-shadow: var(--wa-shadow); text-align: center;
+}
+.wa-notice a { color: #027eb5; font-weight: 600; text-decoration: none; white-space: nowrap; }
+
+/* wallpaper: textura propia, sutil */
+.wa-scroll {
+  flex: 1; overflow-y: auto; position: relative;
+  background-color: var(--wa-chat-bg);
+  background-image:
+    radial-gradient(rgba(84,101,111,.07) 1.2px, transparent 1.4px),
+    radial-gradient(rgba(84,101,111,.05) 1px, transparent 1.2px);
+  background-size: 26px 26px, 13px 13px;
+  background-position: 0 0, 6px 7px;
+}
+.wa-thread { padding: 12px 7% 8px; display: flex; flex-direction: column; min-height: 100%; }
+
+.wa-day {
+  align-self: center; margin: 12px 0 10px;
+  background: var(--wa-surface); color: var(--wa-icon);
+  font-size: 12.5px; line-height: 21px; padding: 5px 12px 6px;
+  border-radius: 7.5px; box-shadow: var(--wa-shadow); text-transform: uppercase;
+  position: sticky; top: 8px; z-index: 1;
 }
 
-.wa-convo-body { flex: 1; min-width: 0; }
-
-.wa-convo-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--c-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.wa-msg { display: flex; margin-bottom: 2px; padding: 0 9px; }
+.wa-msg.first { margin-top: 10px; }
+.wa-msg.out { justify-content: flex-end; }
+.wa-bub {
+  position: relative; max-width: 65%;
+  padding: 6px 7px 8px 9px; border-radius: 7.5px;
+  font-size: 14.2px; line-height: 19px; color: var(--wa-text);
+  box-shadow: var(--wa-shadow); word-wrap: break-word; overflow-wrap: anywhere; white-space: pre-wrap;
 }
-
-.wa-convo-preview {
-  font-size: 11.5px;
-  color: var(--c-text-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.wa-msg.in  .wa-bub { background: var(--wa-in); }
+.wa-msg.out .wa-bub { background: var(--wa-out); }
+.wa-msg.first.in  .wa-bub { border-top-left-radius: 0; }
+.wa-msg.first.out .wa-bub { border-top-right-radius: 0; }
+/* colita */
+.wa-msg.first .wa-bub::before {
+  content: ''; position: absolute; top: 0; width: 8px; height: 13px;
 }
-
-.wa-convo-preview.outbound::before {
-  content: '↑ ';
-  color: var(--c-accent);
+.wa-msg.first.in .wa-bub::before {
+  left: -8px; background: var(--wa-in);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
 }
-
-.wa-convo-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex-shrink: 0;
+.wa-msg.first.out .wa-bub::before {
+  right: -8px; background: var(--wa-out);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
 }
+.wa-bub a { color: #027eb5; text-decoration: none; }
+.wa-bub a:hover { text-decoration: underline; }
+.wa-bub .att { color: var(--wa-text-2); font-style: italic; }
+.wa-bub mark { background: #ffe58f; padding: 0 1px; border-radius: 2px; }
 
-.wa-convo-time {
-  font-size: 10.5px;
-  color: var(--c-text-3);
-  font-family: 'Geist Mono', monospace;
+.wa-meta {
+  position: absolute; right: 7px; bottom: 3px; height: 15px;
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; color: var(--wa-text-2); white-space: nowrap;
 }
+.wa-sp { display: inline-block; height: 1px; vertical-align: bottom; }
+.wa-msg.in  .wa-sp { width: 62px; }
+.wa-msg.out .wa-sp { width: 82px; }
+.wa-meta .tick { font-size: 16px; line-height: 1; margin-left: 1px; }
+.tick.read   { color: var(--wa-tick-read); }
+.tick.failed { color: #ea0038; font-size: 13px !important; }
+.wa-msg.pending .wa-meta .tick { opacity: .5; }
 
-.wa-unread-badge {
-  background: #25D366;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  min-width: 18px;
-  height: 18px;
-  border-radius: 99px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 5px;
+.wa-down {
+  position: absolute; right: 22px; bottom: 80px; z-index: 3;
+  width: 42px; height: 42px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--wa-surface); color: var(--wa-icon); font-size: 18px;
+  box-shadow: 0 1px 3px rgba(11,20,26,.25);
+  display: none; align-items: center; justify-content: center;
 }
+.wa-down.show { display: flex; }
+.wa-down .wa-badge { position: absolute; top: -6px; right: -4px; }
 
-.wa-empty-convos {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 40px 20px;
-  color: var(--c-text-3);
-  text-align: center;
+/* composer */
+.wa-compose {
+  flex-shrink: 0; min-height: 62px; z-index: 2;
+  display: flex; align-items: flex-end; gap: 6px;
+  padding: 10px 16px; background: var(--wa-panel); position: relative;
 }
-
-.wa-empty-convos i { font-size: 28px; opacity: .35; }
-.wa-empty-convos p { font-size: 12.5px; margin: 0; }
-
-/* ════════════════════════
-   RIGHT PANEL — chat
-════════════════════════ */
-.wa-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--c-bg);
-  min-width: 0;
+.wa-compose .wa-icon-btn { margin-bottom: 1px; font-size: 22px; }
+.wa-input {
+  flex: 1; min-height: 42px; max-height: 140px; resize: none;
+  padding: 11px 14px; border: none; border-radius: 8px; outline: none;
+  background: var(--wa-surface); color: var(--wa-text);
+  font: 15px/20px var(--wa-font); overflow-y: auto;
 }
+.wa-input::placeholder { color: var(--wa-text-2); }
+.wa-send { color: var(--wa-icon); }
+.wa-send.ready { color: var(--wa-green); }
+.wa-send:disabled { opacity: .4; cursor: not-allowed; }
 
-/* ── Chat header ── */
-.wa-chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  background: var(--c-surface);
-  border-bottom: 1px solid var(--c-border);
-  flex-shrink: 0;
-  gap: 12px;
+.wa-emoji {
+  position: absolute; left: 12px; bottom: 66px; z-index: 5;
+  width: 336px; max-height: 260px; overflow-y: auto;
+  background: var(--wa-surface); border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(11,20,26,.22); padding: 10px;
+  display: none; grid-template-columns: repeat(8, 1fr); gap: 2px;
 }
-
-.wa-chat-info { flex: 1; min-width: 0; }
-
-.wa-chat-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--c-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.wa-emoji.open { display: grid; }
+.wa-emoji button {
+  border: none; background: none; cursor: pointer; font-size: 22px; line-height: 36px;
+  border-radius: 6px; padding: 0;
 }
+.wa-emoji button:hover { background: var(--wa-panel); }
 
-.wa-chat-sub {
-  font-size: 11.5px;
-  color: var(--c-text-3);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+/* empty right */
+.wa-intro {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 28px; background: #f8f9fa; border-bottom: 6px solid var(--wa-green-2);
 }
-
-.wa-chat-actions { display: flex; gap: 6px; align-items: center; }
-
-/* ── Messages area ── */
-.wa-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.wa-intro-ring {
+  width: 132px; height: 132px; border-radius: 50%; margin-bottom: 28px;
+  background: #e7f8ef; display: flex; align-items: center; justify-content: center;
 }
-
-/* date separator */
-.wa-date-sep {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0 6px;
-  font-size: 11px;
-  color: var(--c-text-3);
-  font-family: 'Geist Mono', monospace;
+.wa-intro-ring i { font-size: 62px; color: var(--wa-green-2); }
+.wa-intro h2 { font-size: 30px; font-weight: 300; color: #41525d; margin: 0 0 12px; }
+.wa-intro p { font-size: 14px; line-height: 20px; color: var(--wa-text-2); max-width: 460px; margin: 0; }
+.wa-intro .wa-intro-cta {
+  margin-top: 26px; display: inline-flex; align-items: center; gap: 8px;
+  background: var(--wa-green); color: #fff; text-decoration: none;
+  padding: 10px 22px; border-radius: 24px; font-size: 14px; font-weight: 500;
 }
+.wa-intro .wa-intro-cta:hover { background: #008f72; color: #fff; }
 
-.wa-date-sep::before, .wa-date-sep::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--c-border);
+/* scrollbars */
+.wa-list::-webkit-scrollbar, .wa-scroll::-webkit-scrollbar, .wa-emoji::-webkit-scrollbar { width: 6px; }
+.wa-list::-webkit-scrollbar-thumb, .wa-scroll::-webkit-scrollbar-thumb, .wa-emoji::-webkit-scrollbar-thumb {
+  background: rgba(11,20,26,.2); border-radius: 3px;
 }
+.wa-list::-webkit-scrollbar-track, .wa-scroll::-webkit-scrollbar-track { background: transparent; }
 
-/* bubbles */
-.wa-bubble-wrap {
-  display: flex;
-  max-width: 72%;
-  flex-direction: column;
+/* mobile / narrow */
+@media (max-width: 900px) {
+  .wa-side { width: 100%; max-width: none; min-width: 0; }
+  .wa.has-chat .wa-side { display: none; }
+  .wa:not(.has-chat) .wa-main { display: none; }
+  .wa-back { display: inline-flex; }
+  .wa-thread { padding: 10px 2% 8px; }
+  .wa-bub { max-width: 85%; }
+  .wa-emoji { width: calc(100% - 24px); }
 }
-
-.wa-bubble-wrap.inbound  { align-self: flex-start; align-items: flex-start; }
-.wa-bubble-wrap.outbound { align-self: flex-end;   align-items: flex-end;   }
-
-.wa-bubble {
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.45;
-  word-break: break-word;
-  position: relative;
-}
-
-.wa-bubble.inbound {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-bottom-left-radius: 3px;
-  color: var(--c-text);
-}
-
-.wa-bubble.outbound {
-  background: #5BA3C9;
-  color: #fff;
-  border-bottom-right-radius: 3px;
-}
-
-.wa-bubble-time {
-  font-size: 10px;
-  color: var(--c-text-3);
-  margin-top: 2px;
-  font-family: 'Geist Mono', monospace;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.wa-bubble-wrap.outbound .wa-bubble-time { color: var(--c-text-3); justify-content: flex-end; }
-
-.wa-status-icon { font-size: 11px; }
-.wa-status-icon.sent     { color: var(--c-text-3); }
-.wa-status-icon.delivered{ color: var(--c-text-3); }
-.wa-status-icon.read     { color: #53bdeb; }
-.wa-status-icon.failed   { color: var(--c-danger, #dc2626); }
-
-/* no conversation selected */
-.wa-no-chat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--c-text-3);
-}
-
-.wa-no-chat i { font-size: 40px; opacity: .2; }
-.wa-no-chat p { font-size: 13px; margin: 0; }
-
-/* ── Input bar ── */
-.wa-input-bar {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--c-surface);
-  border-top: 1px solid var(--c-border);
-  flex-shrink: 0;
-}
-
-.wa-textarea {
-  flex: 1;
-  min-height: 36px;
-  max-height: 120px;
-  resize: none;
-  border: 1px solid var(--c-border);
-  border-radius: 20px;
-  padding: 8px 14px;
-  font-family: 'Geist', sans-serif;
-  font-size: 13px;
-  color: var(--c-text);
-  background: var(--c-bg);
-  outline: none;
-  line-height: 1.4;
-  transition: border-color var(--t);
-  overflow-y: auto;
-}
-
-.wa-textarea:focus { border-color: #25D366; }
-
-.wa-send-btn {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: #25D366;
-  border: none;
-  color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  font-size: 15px;
-  flex-shrink: 0;
-  transition: background var(--t), transform .1s;
-}
-
-.wa-send-btn:hover  { background: #128C7E; }
-.wa-send-btn:active { transform: scale(.93); }
-.wa-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
-
-/* ── New conversation create-lead banner ── */
-.wa-new-lead-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 20px;
-  background: #FEF9C3;
-  border-bottom: 1px solid #FDE68A;
-  font-size: 12.5px;
-  color: #92400E;
-  flex-shrink: 0;
-}
-
-.wa-new-lead-bar a {
-  font-weight: 600;
-  color: var(--c-accent);
-  white-space: nowrap;
-}
-
-/* scrollbar */
-.wa-messages::-webkit-scrollbar,
-.wa-convos::-webkit-scrollbar { width: 4px; }
-.wa-messages::-webkit-scrollbar-track,
-.wa-convos::-webkit-scrollbar-track { background: transparent; }
-.wa-messages::-webkit-scrollbar-thumb,
-.wa-convos::-webkit-scrollbar-thumb { background: var(--c-border-2); border-radius: 99px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="wa-shell">
+{% set has_chat = active_phone and true %}
+<div class="wa {% if has_chat %}has-chat{% endif %}" id="wa">
 
-  <!-- ══ LEFT: conversations list ══ -->
-  <div class="wa-left">
-    <div class="wa-left-header">
-      <div class="wa-left-title">
-        <i class="bi bi-whatsapp"></i> WhatsApp
+  <!-- ══════════ LEFT: chats ══════════ -->
+  <aside class="wa-side">
+    <div class="wa-side-top">
+      <div class="wa-side-title">Chats</div>
+      <div class="wa-side-tools">
+        <a href="{{ url_for('whatsapp.new_conversation') }}" class="wa-icon-btn" title="Nuevo chat">
+          <i class="bi bi-chat-square-text"></i>
+        </a>
       </div>
-      <a href="{{ url_for('whatsapp.new_conversation') }}"
-         class="btn btn-ghost btn-icon-xs" title="Nueva conversación">
-        <i class="bi bi-pencil-square" style="font-size:13px;"></i>
-      </a>
     </div>
 
-    <div class="wa-convos" id="convoList">
-      {% if conversations %}
-        {% for conv in conversations %}
-          {% set display_name = (conv.first_name ~ ' ' ~ conv.last_name) if conv.first_name else conv.phone %}
-          {% set initials = (conv.first_name[0] ~ conv.last_name[0]) | upper if conv.first_name else conv.phone[-2:] | upper %}
-          <a href="{{ url_for('whatsapp.index', phone=conv.phone) }}"
-             class="wa-convo-item {% if active_phone == conv.phone %}active{% endif %}">
-            <div class="wa-convo-avatar">{{ initials }}</div>
-            <div class="wa-convo-body">
-              <div class="wa-convo-name">{{ display_name }}</div>
-              <div class="wa-convo-preview {{ conv.last_direction }}">
-                {{ conv.last_message[:42] }}{% if conv.last_message | length > 42 %}…{% endif %}
-              </div>
-            </div>
-            <div class="wa-convo-meta">
-              <span class="wa-convo-time">
-                {{ conv.last_at[11:16] if conv.last_at else '' }}
-              </span>
-              {% if conv.unread > 0 %}
-                <span class="wa-unread-badge">{{ conv.unread }}</span>
-              {% endif %}
-            </div>
-          </a>
-        {% endfor %}
-      {% else %}
-        <div class="wa-empty-convos">
-          <i class="bi bi-whatsapp"></i>
-          <p>Sin conversaciones aún</p>
-          <p style="font-size:11px;">Los mensajes entrantes aparecerán aquí</p>
-        </div>
-      {% endif %}
+    <div class="wa-search">
+      <label class="wa-search-box">
+        <i class="bi bi-search"></i>
+        <input type="search" id="chatSearch" placeholder="Buscar un chat o iniciar uno nuevo" autocomplete="off" />
+      </label>
     </div>
-  </div>
 
-  <!-- ══ RIGHT: active conversation ══ -->
-  <div class="wa-right">
+    <div class="wa-chips">
+      <button class="wa-chip on" data-filter="all">Todos</button>
+      <button class="wa-chip" data-filter="unread">No leídos</button>
+      <button class="wa-chip" data-filter="leads">Sin registrar</button>
+    </div>
 
-    {% if active_phone %}
+    <div class="wa-list" id="chatList"></div>
+  </aside>
 
-      {% set display_name = (active_client.first_name ~ ' ' ~ active_client.last_name) if active_client else active_phone %}
+  <!-- ══════════ RIGHT: conversation ══════════ -->
+  <section class="wa-main">
+  {% if has_chat %}
+    {% set display_name = (active_client.first_name ~ ' ' ~ (active_client.last_name or '')) | trim if active_client else active_phone %}
 
-      <!-- Header -->
-      <div class="wa-chat-header">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div class="wa-convo-avatar" style="width:34px;height:34px;font-size:11px;">
-            {% if active_client %}
-              {{ active_client.first_name[0] | upper }}{{ active_client.last_name[0] | upper }}
-            {% else %}
-              {{ active_phone[-2:] | upper }}
-            {% endif %}
-          </div>
-          <div class="wa-chat-info">
-            <div class="wa-chat-name">{{ display_name }}</div>
-            <div class="wa-chat-sub">
-              <span class="num">{{ active_phone }}</span>
-              {% if active_client %}
-                <span style="color:var(--c-border-2);">·</span>
-                <a href="{{ url_for('clients.detail', client_id=active_client.id) }}"
-                   style="color:var(--c-accent);font-size:11.5px;">
-                  Ver perfil
-                </a>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        <div class="wa-chat-actions">
+    <header class="wa-head">
+      <a href="{{ url_for('whatsapp.index') }}" class="wa-icon-btn wa-back" title="Volver"><i class="bi bi-arrow-left"></i></a>
+      <div class="wa-av sm" id="headAvatar"></div>
+      <div class="wa-head-info">
+        <div class="wa-head-name">{{ display_name }}</div>
+        <div class="wa-head-sub">
           {% if active_client %}
-            <a href="{{ url_for('clients.detail', client_id=active_client.id) }}"
-               class="btn btn-ghost btn-xs">
-              <i class="bi bi-person"></i> Perfil
-            </a>
+            {{ active_phone }} · <a href="{{ url_for('clients.detail', client_id=active_client.id) }}">ver perfil en el CRM</a>
+          {% else %}
+            {{ active_phone }}
           {% endif %}
         </div>
       </div>
-
-      <!-- New lead banner -->
-      {% if not active_client %}
-        <div class="wa-new-lead-bar">
-          <span><i class="bi bi-info-circle me-1"></i>Este número no está en tu CRM.</span>
-          <a href="{{ url_for('clients.new_client') }}?phone={{ active_phone | urlencode }}">
-            <i class="bi bi-person-plus me-1"></i>Crear como nuevo lead
-          </a>
-        </div>
+      <button class="wa-icon-btn" id="findToggle" title="Buscar en el chat"><i class="bi bi-search" style="font-size:17px;"></i></button>
+      {% if active_client %}
+        <a class="wa-icon-btn" href="{{ url_for('clients.detail', client_id=active_client.id) }}" title="Perfil del cliente"><i class="bi bi-person-vcard"></i></a>
+      {% else %}
+        <a class="wa-icon-btn" href="{{ url_for('clients.new_client') }}?phone={{ active_phone | urlencode }}" title="Crear lead"><i class="bi bi-person-plus"></i></a>
       {% endif %}
+    </header>
 
-      <!-- Messages -->
-      <div class="wa-messages" id="messagesArea">
-        {% set ns = namespace(last_date='') %}
-        {% for msg in active_msgs %}
-          {% set msg_date = msg.created_at[:10] %}
-          {% if msg_date != ns.last_date %}
-            {% set ns.last_date = msg_date %}
-            <div class="wa-date-sep">{{ msg_date }}</div>
-          {% endif %}
+    <div class="wa-find" id="findBar">
+      <input type="search" id="findInput" placeholder="Buscar mensajes…" autocomplete="off" />
+      <span class="wa-find-count" id="findCount"></span>
+      <button class="wa-icon-btn" id="findClose" title="Cerrar"><i class="bi bi-x-lg" style="font-size:16px;"></i></button>
+    </div>
 
-          <div class="wa-bubble-wrap {{ msg.direction }}">
-            <div class="wa-bubble {{ msg.direction }}">{{ msg.message }}</div>
-            <div class="wa-bubble-time">
-              <span>{{ msg.created_at[11:16] }}</span>
-              {% if msg.direction == 'outbound' %}
-                {% if msg.status == 'failed' %}<i class="bi bi-exclamation-circle wa-status-icon failed" title="No entregado"></i>{% else %}<i class="bi bi-check2{% if msg.status == 'read' %}-all{% elif msg.status == 'delivered' %}-all{% endif %} wa-status-icon {{ msg.status }}"></i>{% endif %}
-              {% endif %}
-            </div>
-          </div>
-        {% endfor %}
-
-        {% if not active_msgs %}
-          <div style="flex:1;display:flex;align-items:center;justify-content:center;">
-            <span style="font-size:12.5px;color:var(--c-text-3);">Aún no hay mensajes en esta conversación</span>
+    <div class="wa-scroll" id="scroller">
+      <div class="wa-thread" id="thread">
+        {% if not active_client %}
+          <div class="wa-notice">
+            Este número no está en tu CRM.
+            <a href="{{ url_for('clients.new_client') }}?phone={{ active_phone | urlencode }}">Crear como nuevo lead</a>
           </div>
         {% endif %}
       </div>
+    </div>
 
-      <!-- Input bar -->
-      <div class="wa-input-bar">
-        <textarea class="wa-textarea"
-                  id="msgInput"
-                  placeholder="Escribe un mensaje…"
-                  rows="1"></textarea>
-        <button class="wa-send-btn" id="sendBtn" title="Enviar (Enter)">
-          <i class="bi bi-send-fill"></i>
-        </button>
-      </div>
+    <button class="wa-down" id="toBottom" title="Ir al final"><i class="bi bi-chevron-down"></i></button>
 
-    {% else %}
-      <!-- No conversation selected -->
-      <div class="wa-no-chat">
-        <i class="bi bi-whatsapp"></i>
-        <p>Selecciona una conversación</p>
-        <p style="font-size:11.5px;">o inicia una nueva desde el ícono del lápiz</p>
-      </div>
-    {% endif %}
+    <div class="wa-emoji" id="emojiPanel"></div>
 
-  </div>
+    <footer class="wa-compose">
+      <button class="wa-icon-btn" id="emojiBtn" title="Emojis"><i class="bi bi-emoji-smile"></i></button>
+      <textarea class="wa-input" id="msgInput" rows="1" placeholder="Escribe un mensaje"></textarea>
+      <button class="wa-icon-btn wa-send" id="sendBtn" title="Enviar (Enter)"><i class="bi bi-send-fill"></i></button>
+    </footer>
+
+  {% else %}
+    <div class="wa-intro">
+      <div class="wa-intro-ring"><i class="bi bi-whatsapp"></i></div>
+      <h2>WhatsApp · Papia CRM</h2>
+      <p>Atiende a tus clientes desde aquí. Los mensajes al +1 305-902-4632 llegan en tiempo real y cada chat se enlaza con su ficha del CRM.</p>
+      <a class="wa-intro-cta" href="{{ url_for('whatsapp.new_conversation') }}"><i class="bi bi-plus-lg"></i> Nuevo chat</a>
+    </div>
+  {% endif %}
+  </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
-{% if active_phone %}
 <script>
-const ACTIVE_PHONE  = {{ active_phone | tojson }};
-const SEND_URL      = '/whatsapp/send';
-const POLL_URL      = '/whatsapp/conversation/' + encodeURIComponent(ACTIVE_PHONE);
-const msgArea       = document.getElementById('messagesArea');
-const msgInput      = document.getElementById('msgInput');
-const sendBtn       = document.getElementById('sendBtn');
-let   lastMsgId     = {{ (active_msgs[-1].id if active_msgs else 0) }};
-let   polling       = true;
+(function () {
+  'use strict';
 
-// ── Auto-scroll to bottom ──
-function scrollBottom() {
-  msgArea.scrollTop = msgArea.scrollHeight;
-}
-scrollBottom();
+  // ── Datos iniciales ─────────────────────────────
+  let CHATS        = {{ conversations_data | tojson }};
+  const ACTIVE     = {{ (active_phone or '') | tojson }};
+  const MSGS       = {{ (active_msgs_data or []) | tojson }};
+  const CHAT_URL   = {{ url_for('whatsapp.index') | tojson }};
+  const LIST_URL   = {{ url_for('whatsapp.conversations_json') | tojson }};
+  const SEND_URL   = {{ url_for('whatsapp.send_message') | tojson }};
+  const NEW_URL    = {{ url_for('whatsapp.new_conversation') | tojson }};
+  const CLIENT_NAME = {{ ((active_client.first_name ~ ' ' ~ (active_client.last_name or '')) | trim if active_client else '') | tojson }};
 
-// ── Auto-grow textarea ──
-msgInput.addEventListener('input', function () {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-});
-
-// ── Send on Enter (Shift+Enter = newline) ──
-msgInput.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
+  // ── Utilidades de fecha (SQLite guarda UTC) ─────
+  function toDate(s) {
+    if (!s) return null;
+    if (s instanceof Date) return s;
+    let iso = String(s).replace(' ', 'T');
+    if (!/[zZ]|[+-]\d\d:?\d\d$/.test(iso)) iso += 'Z';
+    const d = new Date(iso);
+    return isNaN(d) ? null : d;
   }
-});
+  const DAY = 86400000;
+  function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+  function hhmm(d) { return d.toLocaleTimeString('es-US', { hour: 'numeric', minute: '2-digit' }); }
+  function dayDiff(d) { return Math.round((startOfDay(new Date()) - startOfDay(d)) / DAY); }
+  function listTime(s) {
+    const d = toDate(s); if (!d) return '';
+    const n = dayDiff(d);
+    if (n === 0) return hhmm(d);
+    if (n === 1) return 'Ayer';
+    if (n < 7)  return d.toLocaleDateString('es-US', { weekday: 'long' });
+    return d.toLocaleDateString('es-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+  function dayLabel(d) {
+    const n = dayDiff(d);
+    if (n === 0) return 'Hoy';
+    if (n === 1) return 'Ayer';
+    if (n < 7)  return d.toLocaleDateString('es-US', { weekday: 'long' });
+    return d.toLocaleDateString('es-US', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
 
-sendBtn.addEventListener('click', sendMessage);
-
-function sendMessage() {
-  const text = msgInput.value.trim();
-  if (!text) return;
-
-  sendBtn.disabled = true;
-
-  // Optimistic bubble
-  appendBubble({ direction: 'outbound', message: text, created_at: new Date().toISOString(), status: 'sent', id: 'tmp' });
-  scrollBottom();
-  msgInput.value = '';
-  msgInput.style.height = 'auto';
-
-  fetch(SEND_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({phone: ACTIVE_PHONE, message: text}),
-  })
-  .then(r => r.json())
-  .then(data => {
-    sendBtn.disabled = false;
-    if (!data.success && data.template_required) {
-      if (confirm(data.error + '\n\n¿Abrir el formulario para enviar una plantilla aprobada?')) {
-        window.location = '/whatsapp/new-conversation?need_template=1&phone=' + encodeURIComponent(ACTIVE_PHONE);
-        return;
-      }
-    } else if (!data.success) {
-      alert('Error al enviar: ' + (data.error || 'desconocido'));
+  // ── Utilidades de texto ─────────────────────────
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function linkify(html) {
+    return html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  }
+  function formatBody(text) {
+    const t = String(text ?? '');
+    if (/^\[(image|video|audio|document|sticker|file|archivo|mensaje)[^\]]*\]$/i.test(t) || /^\[plantilla:/i.test(t)) {
+      const icon = /image|sticker/i.test(t) ? 'bi-image' : /video/i.test(t) ? 'bi-camera-video'
+                 : /audio/i.test(t) ? 'bi-mic' : /plantilla/i.test(t) ? 'bi-file-earmark-text' : 'bi-paperclip';
+      return `<span class="att"><i class="bi ${icon}"></i> ${esc(t.slice(1, -1))}</span>`;
     }
-    // Refresh to get real message from DB
-    poll(true);
-  })
-  .catch(() => {
-    sendBtn.disabled = false;
-    alert('Error de conexión al enviar.');
-  });
-}
-
-// ── Render a single bubble ──
-function appendBubble(msg) {
-  const date = (msg.created_at || '').slice(0, 10);
-  const time = (msg.created_at || '').slice(11, 16);
-
-  let statusIcon = '';
-  if (msg.direction === 'outbound') {
-    const cls = msg.status === 'failed' ? 'bi-exclamation-circle wa-status-icon failed'
-              : msg.status === 'read' ? 'bi-check2-all wa-status-icon read'
-              : msg.status === 'delivered' ? 'bi-check2-all wa-status-icon delivered'
-              : 'bi-check2 wa-status-icon sent';
-    statusIcon = `<i class="bi ${cls}"></i>`;
+    // *negrita* _cursiva_ ~tachado~ como en WhatsApp
+    return linkify(esc(t))
+      .replace(/(^|[\s(¡¿])\*([^*\n]+)\*(?=[\s.,;:!?)]|$)/g, '$1<b>$2</b>')
+      .replace(/(^|[\s(¡¿])_([^_\n]+)_(?=[\s.,;:!?)]|$)/g, '$1<i>$2</i>')
+      .replace(/(^|[\s(¡¿])~([^~\n]+)~(?=[\s.,;:!?)]|$)/g, '$1<s>$2</s>');
+  }
+  function tickHtml(status) {
+    if (status === 'failed')    return '<i class="bi bi-exclamation-circle-fill tick failed" title="No entregado"></i>';
+    if (status === 'read')      return '<i class="bi bi-check2-all tick read" title="Leído"></i>';
+    if (status === 'delivered') return '<i class="bi bi-check2-all tick" title="Entregado"></i>';
+    if (status === 'pending')   return '<i class="bi bi-clock tick" style="font-size:11px" title="Enviando"></i>';
+    return '<i class="bi bi-check2 tick" title="Enviado"></i>';
   }
 
-  const wrap = document.createElement('div');
-  wrap.className = `wa-bubble-wrap ${msg.direction}`;
-  wrap.dataset.msgId = msg.id;
-  wrap.innerHTML = `
-    <div class="wa-bubble ${msg.direction}">${escapeHtml(msg.message)}</div>
-    <div class="wa-bubble-time">
-      <span>${time}</span>${statusIcon}
-    </div>`;
-  msgArea.appendChild(wrap);
-}
+  // ── Avatares ────────────────────────────────────
+  const AV_COLORS = ['#128c7e','#00a884','#34b7f1','#7f66ff','#ff6b6b','#f59e0b','#06b6d4','#a855f7','#ec4899','#10b981','#6366f1','#ef4444'];
+  function avatarHtml(name, phone, cls) {
+    const key = phone || name || '?';
+    let h = 0; for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    if (name) {
+      const parts = name.trim().split(/\s+/);
+      const ini = ((parts[0] || '')[0] || '') + ((parts[1] || '')[0] || '');
+      return `<div class="wa-av ${cls || ''}" style="background:${AV_COLORS[h % AV_COLORS.length]}">${esc(ini.toUpperCase())}</div>`;
+    }
+    return `<div class="wa-av anon ${cls || ''}"><i class="bi bi-person-fill"></i></div>`;
+  }
 
-function escapeHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-}
+  // ════════════ LISTA DE CHATS ════════════
+  const listEl   = document.getElementById('chatList');
+  const searchEl = document.getElementById('chatSearch');
+  let filter = 'all';
 
-// ── Poll for new messages every 10s ──
-function poll(force) {
-  fetch(POLL_URL + '?_t=' + Date.now())
+  function renderList() {
+    const q = (searchEl.value || '').trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, '');
+    const rows = CHATS.filter(c => {
+      if (filter === 'unread' && !(c.unread > 0)) return false;
+      if (filter === 'leads' && c.client_id) return false;
+      if (!q) return true;
+      return (c.name || '').toLowerCase().includes(q)
+          || (qDigits && (c.phone || '').replace(/\D/g, '').includes(qDigits))
+          || (c.last_message || '').toLowerCase().includes(q);
+    });
+
+    if (!rows.length) {
+      const msg = q ? 'No se encontraron chats.' :
+                  filter === 'unread' ? 'No tienes chats sin leer.' :
+                  filter === 'leads' ? 'Todos los chats están enlazados a un cliente.' :
+                  'Sin conversaciones aún.<br>Los mensajes entrantes aparecerán aquí.';
+      let extra = '';
+      if (qDigits.length >= 8) {
+        extra = `<div style="margin-top:14px"><a class="wa-chip on" style="text-decoration:none" href="${NEW_URL}?phone=%2B${qDigits}">Escribir a +${qDigits}</a></div>`;
+      }
+      listEl.innerHTML = `<div class="wa-list-empty"><i class="bi bi-chat-dots"></i>${msg}${extra}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = rows.map(c => {
+      const name = c.name || c.phone;
+      const unread = c.unread > 0 && c.phone !== ACTIVE;
+      const out = c.last_direction === 'outbound';
+      const prevText = String(c.last_message || '').replace(/\s+/g, ' ');
+      return `
+        <a class="wa-row ${c.phone === ACTIVE ? 'active' : ''} ${unread ? 'unread' : ''}"
+           href="${CHAT_URL}?phone=${encodeURIComponent(c.phone)}">
+          ${avatarHtml(c.name, c.phone)}
+          <div class="wa-row-body">
+            <div class="wa-row-line">
+              <span class="wa-row-name">${esc(name)}</span>
+              <span class="wa-row-time">${esc(listTime(c.last_at))}</span>
+            </div>
+            <div class="wa-row-line">
+              <span class="wa-row-prev">${out ? tickHtml(c.last_status) : ''}${esc(prevText)}</span>
+              ${unread ? `<span class="wa-badge">${c.unread}</span>` : ''}
+            </div>
+          </div>
+        </a>`;
+    }).join('');
+  }
+
+  document.querySelectorAll('.wa-chip[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.wa-chip[data-filter]').forEach(b => b.classList.toggle('on', b === btn));
+      filter = btn.dataset.filter;
+      renderList();
+    });
+  });
+  searchEl.addEventListener('input', renderList);
+  renderList();
+
+  function refreshList() {
+    fetch(LIST_URL + '?_t=' + Date.now())
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.conversations) { CHATS = d.conversations; renderList(); } })
+      .catch(() => {});
+  }
+  setInterval(refreshList, 10000);
+
+  if (!ACTIVE) return;
+
+  // ════════════ CONVERSACIÓN ════════════
+  const scroller = document.getElementById('scroller');
+  const thread   = document.getElementById('thread');
+  const input    = document.getElementById('msgInput');
+  const sendBtn  = document.getElementById('sendBtn');
+  const toBottom = document.getElementById('toBottom');
+  const POLL_URL = CHAT_URL + '/conversation/' + encodeURIComponent(ACTIVE);
+
+  document.getElementById('headAvatar').outerHTML = avatarHtml(CLIENT_NAME, ACTIVE, 'sm');
+
+  const rendered = new Map();       // id -> {el, status}
+  let lastDay = null, lastDir = null, lastAt = null, lastId = 0, missed = 0;
+
+  function nearBottom() { return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120; }
+  function scrollBottom(smooth) { scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }); }
+
+  function addMessage(m) {
+    if (m.id != null && rendered.has(String(m.id))) return null;
+    const d = toDate(m.created_at) || new Date();
+    const dayKey = startOfDay(d).getTime();
+    if (dayKey !== lastDay) {
+      const chip = document.createElement('div');
+      chip.className = 'wa-day';
+      chip.textContent = dayLabel(d);
+      thread.appendChild(chip);
+      lastDay = dayKey; lastDir = null;
+    }
+    const dir = m.direction === 'outbound' ? 'out' : 'in';
+    const first = dir !== lastDir || !lastAt || (d - lastAt) > 10 * 60000;
+    const row = document.createElement('div');
+    row.className = `wa-msg ${dir}${first ? ' first' : ''}${m.status === 'pending' ? ' pending' : ''}`;
+    row.dataset.id = m.id;
+    row.dataset.text = String(m.message || '').toLowerCase();
+    row.innerHTML = `<div class="wa-bub"><span class="txt">${formatBody(m.message)}</span><span class="wa-sp"></span><span class="wa-meta"><span>${esc(hhmm(d))}</span>${dir === 'out' ? tickHtml(m.status) : ''}</span></div>`;
+    thread.appendChild(row);
+    lastDir = dir; lastAt = d;
+    if (m.id != null) rendered.set(String(m.id), { el: row, status: m.status });
+    if (typeof m.id === 'number') lastId = Math.max(lastId, m.id);
+    return row;
+  }
+
+  function setStatus(id, status) {
+    const r = rendered.get(String(id));
+    if (!r || r.status === status) return;
+    r.status = status;
+    r.el.classList.remove('pending');
+    const t = r.el.querySelector('.wa-meta .tick');
+    if (t) t.outerHTML = tickHtml(status);
+  }
+
+  MSGS.forEach(addMessage);
+  if (!MSGS.length) {
+    const e = document.createElement('div');
+    e.className = 'wa-day'; e.style.position = 'static';
+    e.textContent = 'Aún no hay mensajes';
+    thread.appendChild(e);
+  }
+  scrollBottom(false);
+
+  // ── Botón "ir al final" ──
+  scroller.addEventListener('scroll', () => {
+    const show = !nearBottom();
+    toBottom.classList.toggle('show', show);
+    if (!show) { missed = 0; toBottom.innerHTML = '<i class="bi bi-chevron-down"></i>'; }
+  });
+  toBottom.addEventListener('click', () => scrollBottom(true));
+
+  // ── Polling ──
+  function poll(force) {
+    fetch(POLL_URL + '?_t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        const msgs = data.messages || [];
+        if (force) {
+          thread.querySelectorAll('.wa-msg[data-id^="tmp"]').forEach(el => {
+            rendered.delete(el.dataset.id); el.remove();
+          });
+        }
+        const stick = nearBottom();
+        let added = 0;
+        msgs.forEach(m => {
+          if (rendered.has(String(m.id))) { setStatus(m.id, m.status); return; }
+          if (m.id > lastId || force) { if (addMessage(m)) added++; }
+        });
+        if (added) {
+          if (stick || force) scrollBottom(true);
+          else {
+            missed += added;
+            toBottom.classList.add('show');
+            toBottom.innerHTML = `<i class="bi bi-chevron-down"></i><span class="wa-badge">${missed}</span>`;
+          }
+        }
+      })
+      .catch(() => {});
+  }
+  const timer = setInterval(() => poll(false), 5000);
+  window.addEventListener('beforeunload', () => clearInterval(timer));
+
+  // ── Composer ──
+  function autosize() {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+    sendBtn.classList.toggle('ready', !!input.value.trim());
+  }
+  input.addEventListener('input', autosize);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+  });
+  sendBtn.addEventListener('click', send);
+  input.focus();
+
+  let tmpSeq = 0;
+  function send() {
+    const text = input.value.trim();
+    if (!text || sendBtn.disabled) return;
+    sendBtn.disabled = true;
+    const tmpId = 'tmp' + (++tmpSeq);
+    addMessage({ id: tmpId, direction: 'outbound', message: text, created_at: new Date(), status: 'pending' });
+    scrollBottom(true);
+    input.value = ''; autosize();
+    closeEmoji();
+
+    fetch(SEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: ACTIVE, message: text }),
+    })
     .then(r => r.json())
     .then(data => {
-      const msgs   = data.messages || [];
-      const newMsgs = msgs.filter(m => m.id > lastMsgId);
-      if (newMsgs.length > 0 || force) {
-        // Remove optimistic/temp bubbles on force refresh
-        if (force) {
-          document.querySelectorAll('.wa-bubble-wrap[data-msg-id="tmp"]').forEach(el => el.remove());
-        }
-        newMsgs.forEach(m => {
-          if (!document.querySelector(`.wa-bubble-wrap[data-msg-id="${m.id}"]`)) {
-            appendBubble(m);
+      sendBtn.disabled = false;
+      if (!data.success) {
+        setStatus(tmpId, 'failed');
+        if (data.template_required) {
+          if (confirm(data.error + '\n\n¿Abrir el formulario para enviar una plantilla aprobada?')) {
+            window.location = NEW_URL + '?need_template=1&phone=' + encodeURIComponent(ACTIVE);
           }
-          lastMsgId = Math.max(lastMsgId, m.id);
-        });
-        if (newMsgs.length > 0) scrollBottom();
+        } else {
+          alert('No se pudo enviar: ' + (data.error || 'error desconocido'));
+        }
+        input.value = text; autosize();
+        return;
       }
+      poll(true);
+      refreshList();
     })
-    .catch(() => {});
-}
+    .catch(() => {
+      sendBtn.disabled = false;
+      setStatus(tmpId, 'failed');
+      input.value = text; autosize();
+      alert('Error de conexión al enviar.');
+    });
+  }
 
-// Start polling
-const pollInterval = setInterval(() => { if (polling) poll(false); }, 10000);
-window.addEventListener('beforeunload', () => { polling = false; clearInterval(pollInterval); });
+  // ── Emojis ──
+  const EMOJIS = '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😎 🤩 🥳 😏 😌 🤔 🤗 🤭 😬 🙄 😴 😢 😭 😤 😡 🤯 😱 🥺 🙏 👍 👎 👌 ✌️ 🤝 👏 🙌 💪 👋 👉 👀 ❤️ 🧡 💛 💚 💙 💜 🖤 💯 ✅ ❌ ⭐ 🔥 🎉 🎁 📅 📌 📞 📱 💻 📧 💰 💳 🚗 🏠 ⏰ ☀️ 🌙 ☕ 🍕'.split(' ');
+  const emojiPanel = document.getElementById('emojiPanel');
+  const emojiBtn   = document.getElementById('emojiBtn');
+  emojiPanel.innerHTML = EMOJIS.map(e => `<button type="button">${e}</button>`).join('');
+  function closeEmoji() { emojiPanel.classList.remove('open'); emojiBtn.classList.remove('on'); }
+  emojiBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    emojiPanel.classList.toggle('open');
+    emojiBtn.classList.toggle('on', emojiPanel.classList.contains('open'));
+  });
+  emojiPanel.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    e.stopPropagation();
+    const s = input.selectionStart ?? input.value.length, en = input.selectionEnd ?? s;
+    input.value = input.value.slice(0, s) + b.textContent + input.value.slice(en);
+    input.focus();
+    input.selectionStart = input.selectionEnd = s + b.textContent.length;
+    autosize();
+  });
+  document.addEventListener('click', e => { if (!emojiPanel.contains(e.target)) closeEmoji(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeEmoji(); closeFind(); } });
+
+  // ── Buscar en el chat ──
+  const findBar = document.getElementById('findBar');
+  const findInput = document.getElementById('findInput');
+  const findCount = document.getElementById('findCount');
+  const findToggle = document.getElementById('findToggle');
+  function clearMarks() {
+    thread.querySelectorAll('.wa-msg').forEach(r => {
+      const t = r.querySelector('.txt'); if (t && t.dataset.orig) { t.innerHTML = t.dataset.orig; delete t.dataset.orig; }
+      r.style.opacity = '';
+    });
+  }
+  function runFind() {
+    clearMarks();
+    const q = findInput.value.trim().toLowerCase();
+    if (!q) { findCount.textContent = ''; return; }
+    let hits = 0, firstHit = null;
+    thread.querySelectorAll('.wa-msg').forEach(r => {
+      if (r.dataset.text.includes(q)) {
+        hits++; firstHit = firstHit || r;
+        const t = r.querySelector('.txt'); t.dataset.orig = t.innerHTML;
+        const rx = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        t.innerHTML = t.innerHTML.replace(/(^|>)([^<]+)/g, (m, a, b) => a + b.replace(rx, '<mark>$1</mark>'));
+      } else r.style.opacity = '.35';
+    });
+    findCount.textContent = hits ? `${hits} resultado${hits > 1 ? 's' : ''}` : 'Sin resultados';
+    if (firstHit) firstHit.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function closeFind() { findBar.classList.remove('open'); findToggle.classList.remove('on'); findInput.value = ''; clearMarks(); findCount.textContent = ''; }
+  findToggle.addEventListener('click', () => {
+    if (findBar.classList.toggle('open')) { findToggle.classList.add('on'); findInput.focus(); } else closeFind();
+  });
+  document.getElementById('findClose').addEventListener('click', closeFind);
+  findInput.addEventListener('input', runFind);
+})();
 </script>
-{% endif %}
 {% endblock %}
