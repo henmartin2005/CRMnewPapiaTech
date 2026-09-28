@@ -263,6 +263,7 @@
 .wa-status-icon.sent     { color: var(--c-text-3); }
 .wa-status-icon.delivered{ color: var(--c-text-3); }
 .wa-status-icon.read     { color: #53bdeb; }
+.wa-status-icon.failed   { color: var(--c-danger, #dc2626); }
 
 /* no conversation selected */
 .wa-no-chat {
@@ -471,7 +472,7 @@
             <div class="wa-bubble-time">
               <span>{{ msg.created_at[11:16] }}</span>
               {% if msg.direction == 'outbound' %}
-                <i class="bi bi-check2{% if msg.status == 'read' %}-all{% elif msg.status == 'delivered' %}-all{% endif %} wa-status-icon {{ msg.status }}"></i>
+                {% if msg.status == 'failed' %}<i class="bi bi-exclamation-circle wa-status-icon failed" title="No entregado"></i>{% else %}<i class="bi bi-check2{% if msg.status == 'read' %}-all{% elif msg.status == 'delivered' %}-all{% endif %} wa-status-icon {{ msg.status }}"></i>{% endif %}
               {% endif %}
             </div>
           </div>
@@ -562,7 +563,12 @@ function sendMessage() {
   .then(r => r.json())
   .then(data => {
     sendBtn.disabled = false;
-    if (!data.success) {
+    if (!data.success && data.template_required) {
+      if (confirm(data.error + '\n\n¿Abrir el formulario para enviar una plantilla aprobada?')) {
+        window.location = '/whatsapp/new-conversation?need_template=1&phone=' + encodeURIComponent(ACTIVE_PHONE);
+        return;
+      }
+    } else if (!data.success) {
       alert('Error al enviar: ' + (data.error || 'desconocido'));
     }
     // Refresh to get real message from DB
@@ -581,7 +587,8 @@ function appendBubble(msg) {
 
   let statusIcon = '';
   if (msg.direction === 'outbound') {
-    const cls = msg.status === 'read' ? 'bi-check2-all wa-status-icon read'
+    const cls = msg.status === 'failed' ? 'bi-exclamation-circle wa-status-icon failed'
+              : msg.status === 'read' ? 'bi-check2-all wa-status-icon read'
               : msg.status === 'delivered' ? 'bi-check2-all wa-status-icon delivered'
               : 'bi-check2 wa-status-icon sent';
     statusIcon = `<i class="bi ${cls}"></i>`;

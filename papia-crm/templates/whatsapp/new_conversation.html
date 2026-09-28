@@ -12,7 +12,7 @@
   </div>
 </div>
 
-<div style="max-width:480px;">
+<div style="max-width:520px;">
   <div class="section-card">
     <div class="card-header">
       <span class="card-header-left">
@@ -21,7 +21,7 @@
       </span>
     </div>
     <div class="card-body">
-      <form method="POST">
+      <form method="POST" id="newConvForm">
         <div style="margin-bottom:14px;">
           <label class="form-label">
             Número de teléfono <span style="color:var(--c-danger);">*</span>
@@ -31,11 +31,31 @@
                  value="{{ request.args.get('phone', '') }}" />
           <div class="form-text">Incluye el código de país. Ej: +15551234567</div>
         </div>
-        <div style="margin-bottom:18px;">
+
+        <div style="margin-bottom:14px;">
+          <label class="form-label">Plantilla aprobada
+            <span style="color:var(--c-text-3);font-weight:400;">(obligatoria si el contacto no te ha escrito en 24 h)</span>
+          </label>
+          <select name="template_name" id="tplSelect" class="form-control">
+            <option value="">— Sin plantilla (solo si el contacto escribió en las últimas 24 h) —</option>
+          </select>
+          <input type="hidden" name="template_language" id="tplLang" />
+          <div class="form-text" id="tplHelp">Cargando plantillas…</div>
+        </div>
+
+        <div style="margin-bottom:14px;" id="tplParamsWrap" hidden>
+          <label class="form-label">Variables de la plantilla</label>
+          <input type="text" name="template_params" class="form-control"
+                 placeholder="Ana | Mobile App" />
+          <div class="form-text">Sepáralas con «|» en el orden {{ '{{1}}' }}, {{ '{{2}}' }}…</div>
+        </div>
+
+        <div style="margin-bottom:18px;" id="msgWrap">
           <label class="form-label">Mensaje inicial <span style="color:var(--c-text-3);font-weight:400;">(opcional)</span></label>
           <textarea name="message" class="form-control" rows="3"
                     placeholder="Hola, ¿cómo estás?…"></textarea>
         </div>
+
         <div style="display:flex;justify-content:flex-end;gap:8px;">
           <a href="{{ url_for('whatsapp.index') }}" class="btn btn-ghost btn-md">Cancelar</a>
           <button type="submit" class="btn btn-primary btn-md" style="background:#25D366;border-color:#25D366;">
@@ -46,4 +66,40 @@
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  const sel = document.getElementById('tplSelect');
+  const lang = document.getElementById('tplLang');
+  const help = document.getElementById('tplHelp');
+  const paramsWrap = document.getElementById('tplParamsWrap');
+  const msgWrap = document.getElementById('msgWrap');
+
+  fetch('{{ url_for("whatsapp.templates_json") }}')
+    .then(r => r.json())
+    .then(d => {
+      const list = d.templates || [];
+      list.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.name; o.dataset.lang = t.language || 'es';
+        o.textContent = `${t.name} (${t.language || ''}${t.category ? ' · ' + t.category : ''})`;
+        sel.appendChild(o);
+      });
+      help.textContent = list.length
+        ? 'Meta exige plantilla para escribirle primero a un contacto.'
+        : (d.error ? 'No se pudieron cargar las plantillas: ' + d.error
+                   : 'No hay plantillas aprobadas todavía. Créalas en Zernio → WhatsApp → Templates.');
+      if ({{ 'true' if request.args.get('need_template') else 'false' }} && list.length) sel.focus();
+    })
+    .catch(() => { help.textContent = 'No se pudieron cargar las plantillas.'; });
+
+  sel.addEventListener('change', () => {
+    const opt = sel.options[sel.selectedIndex];
+    lang.value = opt.dataset.lang || '';
+    const usingTpl = !!sel.value;
+    paramsWrap.hidden = !usingTpl;
+    msgWrap.hidden = usingTpl;
+  });
+})();
+</script>
 {% endblock %}

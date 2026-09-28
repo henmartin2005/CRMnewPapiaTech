@@ -1,7 +1,12 @@
+import json
+import logging
 import os
 import re
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, g
 from database import get_db
+from services import zernio
+
+log = logging.getLogger(__name__)
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
@@ -144,6 +149,118 @@ def _get_org_id():
     return g.org_id if hasattr(g, 'org_id') else 1
 
 
+# ── Proveedor de envío (Zernio por defecto, Twilio como respaldo) ────────────
+
+def _provider() -> str:
+    forced = os.getenv('WHATSAPP_PROVIDER', '').strip().lower()
+    if forced in ('zernio', 'twilio'):
+        return forced
+    return 'zernio' if zernio.is_configured() else 'twilio'
+
+
+def _get_conv_id(phone: str, org_id=1):
+    db = get_db()
+    row = db.execute(
+        "SELECT zernio_conversation_id FROM whatsapp_conversations WHERE org_id=? AND phone=?",
+        (org_id, zernio.to_e164(phone)),
+    ).fetchone()
+    db.close()
+    return row['zernio_conversation_id'] if row else None
+
+
+def _save_conv_id(phone: str, conversation_id: str, org_id=1, inbound=False):
+    if not conversation_id:
+        return
+    db = get_db()
+    db.execute(
+        """INSERT INTO whatsapp_conversations (org_id, phone, zernio_conversation_id, last_inbound_at)
+               VALUES (?, ?, ?, CASE WHEN ? THEN CURRENT_TIMESTAMP END)
+           ON CONFLICT(org_id, phone) DO UPDATE SET
+               zernio_conversation_id = excluded.zernio_conversation_id,
+               last_inbound_at = COALESCE(excluded.last_inbound_at, whatsapp_conversations.last_inbound_at),
+               updated_at = CURRENT_TIMESTAMP""",
+        (org_id, zernio.to_e164(phone), conversation_id, 1 if inbound else 0),
+    )
+    db.commit()
+    db.close()
+
+
+def _message_exists(wa_message_id: str) -> bool:
+    if not wa_message_id:
+        return False
+    db = get_db()
+    row = db.execute("SELECT 1 FROM whatsapp_messages WHERE wa_message_id=? LIMIT 1",
+                     (wa_message_id,)).fetchone()
+    db.close()
+    return row is not None
+
+
+def _update_status(wa_message_id: str, status: str):
+    if not wa_message_id:
+        return
+    rank = {'sent': 1, 'delivered': 2, 'read': 3, 'failed': 9}
+    db = get_db()
+    row = db.execute("SELECT id, status FROM whatsapp_messages WHERE wa_message_id=? AND direction='outbound'",
+                     (wa_message_id,)).fetchone()
+    # No retroceder (un 'delivered' tardío no pisa un 'read')
+    if row and rank.get(status, 0) > rank.get(row['status'], 0):
+        db.execute("UPDATE whatsapp_messages SET status=? WHERE id=?", (status, row['id']))
+        db.commit()
+    db.close()
+
+
+def deliver(phone: str, message: str, org_id=1, template=None) -> str:
+    """
+    Envía un WhatsApp y devuelve el id del mensaje.
+    template = {'name': ..., 'language': 'es', 'params': [...]} para primer contacto.
+    Lanza zernio.TemplateRequired si no hay ventana abierta y no se pasó plantilla.
+    """
+    phone = zernio.to_e164(phone)
+
+    if _provider() == 'zernio':
+        if template and template.get('name'):
+            data = zernio.start_with_template(phone, template['name'],
+                                              template.get('language') or 'es',
+                                              template.get('params'))
+            _save_conv_id(phone, data.get('conversationId'), org_id)
+            return data.get('messageId', '')
+
+        conv_id = _get_conv_id(phone, org_id) or zernio.find_conversation_id(phone)
+        if not conv_id:
+            raise zernio.TemplateRequired(
+                'Este contacto no ha escrito todavía. WhatsApp exige una plantilla aprobada para el primer mensaje.',
+                code='TEMPLATE_REQUIRED')
+        _save_conv_id(phone, conv_id, org_id)
+        data = zernio.send_text(conv_id, message)
+        return data.get('messageId', '')
+
+    # ── Twilio (legacy) ──
+    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+    auth_token  = os.getenv('TWILIO_AUTH_TOKEN')
+    from_number = os.getenv('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
+    if not account_sid or not auth_token:
+        raise RuntimeError('No hay proveedor de WhatsApp configurado (Zernio ni Twilio).')
+    from twilio.rest import Client as TwilioClient
+    msg = TwilioClient(account_sid, auth_token).messages.create(
+        from_=from_number, to=f'whatsapp:{phone}', body=message)
+    return msg.sid
+
+
+def _record_outbound(phone, message, wa_id, org_id, client_id=None):
+    resolved = client_id
+    if not resolved:
+        matched = find_client_by_phone(phone, org_id)
+        resolved = matched['id'] if matched else None
+    save_message(phone=zernio.to_e164(phone), direction='outbound', message=message,
+                 wa_message_id=wa_id, client_id=resolved, status='sent', org_id=org_id)
+    if resolved:
+        try:
+            save_client_note(int(resolved), message)
+        except Exception:
+            pass
+    return resolved
+
+
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 @whatsapp_bp.route('/whatsapp')
@@ -170,82 +287,100 @@ def index():
 
 @whatsapp_bp.route('/webhook/whatsapp', methods=['POST'])
 def webhook():
-    """Receive inbound WhatsApp messages from Twilio."""
+    """Legacy: mensajes entrantes desde Twilio."""
     raw_from = request.form.get('From', '')
     body      = request.form.get('Body', '').strip()
     wa_id     = request.form.get('MessageSid', '')
 
     phone  = normalize_phone(raw_from)
-    # For inbound webhooks, default to org_id=1 (PapiaTech)
     org_id = 1
     client = find_client_by_phone(phone, org_id)
 
-    save_message(
-        phone=phone,
-        direction='inbound',
-        message=body,
-        wa_message_id=wa_id,
-        client_id=client['id'] if client else None,
-        org_id=org_id,
-    )
-
-    # Empty TwiML — no auto-reply
+    save_message(phone=phone, direction='inbound', message=body, wa_message_id=wa_id,
+                 client_id=client['id'] if client else None, org_id=org_id)
     return '<Response></Response>', 200, {'Content-Type': 'text/xml'}
+
+
+@whatsapp_bp.route('/webhook/zernio', methods=['POST'])
+def zernio_webhook():
+    """Eventos de Zernio: message.received / sent / delivered / read / failed."""
+    raw = request.get_data()
+    if not zernio.verify_signature(raw, request.headers.get('X-Zernio-Signature', '')):
+        log.warning('Zernio webhook: firma inválida')
+        return jsonify({'error': 'invalid signature'}), 401
+
+    try:
+        payload = json.loads(raw or b'{}')
+    except ValueError:
+        return jsonify({'error': 'invalid json'}), 400
+
+    event   = payload.get('event') or request.headers.get('X-Zernio-Event', '')
+    msg     = payload.get('message') or {}
+    conv    = payload.get('conversation') or {}
+    account = payload.get('account') or {}
+    platform = msg.get('platform') or account.get('platform')
+
+    if event == 'webhook.test':
+        return jsonify({'ok': True})
+    if platform and platform != 'whatsapp':
+        return jsonify({'ignored': platform})   # IG/Messenger siguen por Meta directo
+
+    org_id = 1  # PapiaTech (single-tenant para este número)
+    wa_id  = msg.get('platformMessageId') or msg.get('id')
+
+    try:
+        if event == 'message.received':
+            sender = msg.get('sender') or {}
+            phone = zernio.to_e164(sender.get('phoneNumber') or conv.get('participantId') or sender.get('id'))
+            if not phone or _message_exists(wa_id):
+                return jsonify({'ok': True})
+            text = msg.get('text') or ''
+            if not text and msg.get('attachments'):
+                kinds = ', '.join(a.get('type', 'archivo') for a in msg['attachments'])
+                text = f'[{kinds}]'
+            _save_conv_id(phone, conv.get('id') or msg.get('conversationId'), org_id, inbound=True)
+            client = find_client_by_phone(phone, org_id)
+            save_message(phone=phone, direction='inbound', message=text or '[mensaje]',
+                         wa_message_id=wa_id, client_id=client['id'] if client else None,
+                         org_id=org_id)
+
+        elif event == 'message.sent':
+            # Enviado desde el celular (coexistence) o desde el panel de Zernio
+            phone = zernio.to_e164(conv.get('participantId') or '')
+            if phone and not _message_exists(wa_id):
+                _save_conv_id(phone, conv.get('id'), org_id)
+                _record_outbound(phone, msg.get('text') or '[mensaje]', wa_id, org_id)
+
+        elif event in ('message.delivered', 'message.read', 'message.failed'):
+            _update_status(wa_id, event.split('.', 1)[1])
+            if event == 'message.failed':
+                log.warning('Zernio message.failed: %s', payload.get('error'))
+    except Exception:
+        log.exception('Error procesando webhook de Zernio')
+        # 200 igual: el error es nuestro, reintentar no lo arregla
+    return jsonify({'ok': True})
 
 
 @whatsapp_bp.route('/whatsapp/send', methods=['POST'])
 def send_message():
-    """Send a WhatsApp message from the CRM."""
+    """Enviar WhatsApp desde el CRM."""
     org_id    = _get_org_id()
     data      = request.get_json(silent=True) or {}
     phone     = data.get('phone', '').strip()
     message   = data.get('message', '').strip()
-    client_id = data.get('client_id')     # optional: provided from client detail page
+    client_id = data.get('client_id')
+    template  = data.get('template')  # opcional {'name','language','params'}
 
-    if not phone or not message:
+    if not phone or (not message and not template):
         return jsonify({'success': False, 'error': 'phone and message required'}), 400
 
-    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-    auth_token  = os.getenv('TWILIO_AUTH_TOKEN')
-    from_number = os.getenv('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
-
-    if not account_sid or not auth_token:
-        return jsonify({'success': False, 'error': 'Twilio credentials not configured'}), 503
-
     try:
-        from twilio.rest import Client as TwilioClient
-        tw = TwilioClient(account_sid, auth_token)
-        msg = tw.messages.create(
-            from_=from_number,
-            to=f'whatsapp:{phone}',
-            body=message,
-        )
-
-        # Resolve client_id from phone if not provided explicitly
-        resolved_client_id = client_id
-        if not resolved_client_id:
-            matched = find_client_by_phone(phone, org_id)
-            resolved_client_id = matched['id'] if matched else None
-
-        save_message(
-            phone=phone,
-            direction='outbound',
-            message=message,
-            wa_message_id=msg.sid,
-            client_id=resolved_client_id,
-            status='sent',
-            org_id=org_id,
-        )
-
-        # Register in client activity history when client_id is known
-        if resolved_client_id:
-            try:
-                save_client_note(int(resolved_client_id), message)
-            except Exception:
-                pass  # note failure must not break the send response
-
-        return jsonify({'success': True, 'sid': msg.sid})
-
+        wa_id = deliver(phone, message, org_id, template=template)
+        shown = message or f"[plantilla: {template.get('name')}]"
+        _record_outbound(phone, shown, wa_id, org_id, client_id)
+        return jsonify({'success': True, 'sid': wa_id})
+    except zernio.TemplateRequired as exc:
+        return jsonify({'success': False, 'template_required': True, 'error': str(exc)}), 409
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500
 
@@ -268,45 +403,61 @@ def conversation_json(phone):
     })
 
 
+@whatsapp_bp.route('/whatsapp/templates.json')
+def templates_json():
+    """Plantillas aprobadas en Zernio/Meta, para el formulario de nueva conversación."""
+    if _provider() != 'zernio':
+        return jsonify({'templates': []})
+    try:
+        data = zernio.list_templates()
+        items = data.get('templates') or data.get('data') or []
+        out = [{'name': t.get('name'), 'language': t.get('language'),
+                'status': t.get('status'), 'category': t.get('category')}
+               for t in items if str(t.get('status', '')).upper() == 'APPROVED']
+        return jsonify({'templates': out})
+    except Exception as exc:
+        return jsonify({'templates': [], 'error': str(exc)})
+
+
+@whatsapp_bp.route('/whatsapp/status')
+def provider_status():
+    """Diagnóstico rápido: proveedor activo y estado del número en Meta."""
+    info = {'provider': _provider(), 'zernio_configured': zernio.is_configured()}
+    if _provider() == 'zernio':
+        try:
+            info['number'] = zernio.number_info()
+        except Exception as exc:
+            info['number_error'] = str(exc)
+    return jsonify(info)
+
+
 @whatsapp_bp.route('/whatsapp/new-conversation', methods=['GET', 'POST'])
 def new_conversation():
-    """Start a conversation with any phone number."""
+    """Iniciar conversación con cualquier número."""
     org_id = _get_org_id()
     if request.method == 'POST':
-        phone   = normalize_phone(request.form.get('phone', ''))
-        message = request.form.get('message', '').strip()
+        phone    = zernio.to_e164(normalize_phone(request.form.get('phone', '')))
+        message  = request.form.get('message', '').strip()
+        tpl_name = request.form.get('template_name', '').strip()
+        tpl_lang = request.form.get('template_language', '').strip() or 'es'
+        tpl_params = [p.strip() for p in request.form.get('template_params', '').split('|') if p.strip()]
+
         if not phone:
             flash('Número de teléfono requerido.', 'danger')
             return redirect(url_for('whatsapp.new_conversation'))
 
-        if message:
-            account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-            auth_token  = os.getenv('TWILIO_AUTH_TOKEN')
-            from_number = os.getenv('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
-
-            if account_sid and auth_token:
-                try:
-                    from twilio.rest import Client as TwilioClient
-                    tw = TwilioClient(account_sid, auth_token)
-                    msg = tw.messages.create(
-                        from_=from_number,
-                        to=f'whatsapp:{phone}',
-                        body=message,
-                    )
-                    client = find_client_by_phone(phone, org_id)
-                    save_message(
-                        phone=phone, direction='outbound', message=message,
-                        wa_message_id=msg.sid,
-                        client_id=client['id'] if client else None,
-                        status='sent',
-                        org_id=org_id,
-                    )
-                except Exception as exc:
-                    flash(f'Error al enviar: {exc}', 'danger')
-                    return redirect(url_for('whatsapp.new_conversation'))
-            else:
-                flash('Credenciales de Twilio no configuradas.', 'danger')
-                return redirect(url_for('whatsapp.new_conversation'))
+        if message or tpl_name:
+            template = {'name': tpl_name, 'language': tpl_lang, 'params': tpl_params} if tpl_name else None
+            try:
+                wa_id = deliver(phone, message, org_id, template=template)
+                _record_outbound(phone, message if not template else f'[plantilla: {tpl_name}]',
+                                 wa_id, org_id)
+            except zernio.TemplateRequired as exc:
+                flash(f'{exc} Elige una plantilla aprobada abajo.', 'danger')
+                return redirect(url_for('whatsapp.new_conversation', phone=phone, need_template=1))
+            except Exception as exc:
+                flash(f'Error al enviar: {exc}', 'danger')
+                return redirect(url_for('whatsapp.new_conversation', phone=phone))
 
         return redirect(url_for('whatsapp.index', phone=phone))
 

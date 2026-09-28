@@ -74,7 +74,7 @@ def set_org_context():
 # ── Auth guard: protect every route except login, logout, static, and webhook ──
 @app.before_request
 def require_login():
-    open_endpoints = {'auth.login', 'auth.logout', 'static', 'whatsapp.webhook',
+    open_endpoints = {'auth.login', 'auth.logout', 'static', 'whatsapp.webhook', 'whatsapp.zernio_webhook',
                       'payments.stripe_webhook', 'payments.success',
                       'meta_webhook.verify', 'meta_webhook.receive'}
     if request.endpoint in open_endpoints:

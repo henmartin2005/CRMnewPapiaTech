@@ -354,6 +354,18 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_meta_msg_sender ON meta_messages(sender_id);
         CREATE INDEX IF NOT EXISTS idx_meta_msg_org    ON meta_messages(org_id);
         CREATE INDEX IF NOT EXISTS idx_meta_msg_client ON meta_messages(client_id);
+
+        -- WhatsApp vía Zernio: teléfono → conversationId de Zernio
+        CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id                 INTEGER NOT NULL DEFAULT 1,
+            phone                  TEXT NOT NULL,
+            zernio_conversation_id TEXT NOT NULL,
+            last_inbound_at        DATETIME,
+            updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(org_id, phone)
+        );
+        CREATE INDEX IF NOT EXISTS idx_wa_msgid ON whatsapp_messages(wa_message_id);
         CREATE INDEX IF NOT EXISTS idx_emails_client ON emails(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_client ON proposals(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
