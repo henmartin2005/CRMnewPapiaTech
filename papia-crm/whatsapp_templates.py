@@ -76,10 +76,10 @@ def existing():
 
 
 def build(body, examples, buttons):
-    comps = [{'type': 'BODY', 'text': body, 'example': {'body_text': [examples]}}]
+    comps = [{'type': 'body', 'text': body, 'example': {'body_text': [examples]}}]
     if buttons:
-        comps.append({'type': 'BUTTONS',
-                      'buttons': [{'type': 'QUICK_REPLY', 'text': b} for b in buttons]})
+        comps.append({'type': 'buttons',
+                      'buttons': [{'type': 'quick_reply', 'text': b} for b in buttons]})
     return comps
 
 
