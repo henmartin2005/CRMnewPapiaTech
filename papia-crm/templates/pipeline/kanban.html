@@ -3,154 +3,552 @@
 
 {% block head %}
 <style>
-  .main-content { padding-bottom: 0; }
+.main-content { padding-bottom: 0; }
+
+.pl {
+  --pl-bg:      #f6f7f9;
+  --pl-col:     #f1f3f6;
+  --pl-card:    #ffffff;
+  --pl-line:    #e4e7ec;
+  --pl-line-2:  #d0d5dd;
+  --pl-text:    #101828;
+  --pl-text-2:  #475467;
+  --pl-text-3:  #98a2b3;
+  --pl-link:    #2a5bff;
+  --pl-radius:  10px;
+  display: flex; flex-direction: column; gap: 14px;
+  height: calc(100vh - 32px); min-height: 520px;
+}
+
+/* ── Header ─────────────────────────── */
+.pl-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pl-title { font-size: 22px; font-weight: 700; letter-spacing: -.3px; color: var(--pl-text); margin: 0; }
+.pl-sub   { font-size: 13px; color: var(--pl-text-2); margin-top: 3px; }
+.pl-sub b { color: var(--pl-text); font-weight: 600; }
+.pl-actions { display: flex; gap: 8px; align-items: center; }
+
+/* ── Toolbar ────────────────────────── */
+.pl-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding-bottom: 12px; border-bottom: 1px solid var(--pl-line);
+}
+.pl-bar-left, .pl-bar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.pl-seg { display: inline-flex; border: 1px solid var(--pl-line-2); border-radius: 8px; overflow: hidden; background: #fff; }
+.pl-seg button {
+  border: none; background: transparent; padding: 6px 14px; font-size: 13px; font-weight: 500;
+  color: var(--pl-text-2); cursor: pointer; border-right: 1px solid var(--pl-line-2);
+}
+.pl-seg button:last-child { border-right: none; }
+.pl-seg button.on { background: #eef3ff; color: var(--pl-link); }
+
+.pl-search {
+  display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px;
+  border: 1px solid var(--pl-line-2); border-radius: 8px; background: #fff; min-width: 220px;
+}
+.pl-search i { color: var(--pl-text-3); font-size: 13px; }
+.pl-search input { border: none; outline: none; font-size: 13px; flex: 1; background: transparent; color: var(--pl-text); }
+.pl-select {
+  height: 34px; border: 1px solid var(--pl-line-2); border-radius: 8px; background: #fff;
+  font-size: 13px; color: var(--pl-text-2); padding: 0 28px 0 10px;
+}
+.pl-btn {
+  height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px;
+  border: 1px solid var(--pl-line-2); border-radius: 8px; background: #fff;
+  font-size: 13px; font-weight: 500; color: var(--pl-text-2); cursor: pointer; text-decoration: none;
+}
+.pl-btn:hover { background: #f9fafb; color: var(--pl-text); }
+.pl-btn.on { background: #eef3ff; border-color: #b8ccff; color: var(--pl-link); }
+
+/* ── Board ──────────────────────────── */
+.pl-board {
+  flex: 1; min-height: 0; display: flex; gap: 12px;
+  overflow-x: auto; overflow-y: hidden; padding-bottom: 12px;
+}
+.pl-col {
+  flex: 0 0 272px; display: flex; flex-direction: column; min-height: 0;
+  background: var(--pl-col); border-radius: var(--pl-radius);
+}
+.pl-col.hide { display: none; }
+.pl-col-head { padding: 12px 12px 8px; }
+.pl-col-row  { display: flex; align-items: center; gap: 8px; }
+.pl-dot      { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.pl-col-name { font-size: 13px; font-weight: 600; color: var(--pl-text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-count {
+  font-size: 11.5px; font-weight: 600; color: var(--pl-text-2);
+  background: #fff; border: 1px solid var(--pl-line); border-radius: 10px; padding: 1px 8px;
+}
+.pl-col-total { font-size: 11.5px; color: var(--pl-text-3); margin: 4px 0 0 18px; font-variant-numeric: tabular-nums; }
+.pl-kebab-wrap { position: relative; display: inline-flex; }
+.pl-kebab {
+  width: 26px; height: 26px; border: none; background: transparent; border-radius: 6px;
+  color: var(--pl-text-3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.pl-kebab:hover { background: rgba(16,24,40,.06); color: var(--pl-text-2); }
+.pl-menu {
+  position: absolute; top: 30px; right: 0; z-index: 20; min-width: 190px;
+  background: #fff; border: 1px solid var(--pl-line); border-radius: 8px;
+  box-shadow: 0 12px 24px -6px rgba(16,24,40,.16); padding: 4px; display: none; text-align: left;
+}
+.pl-menu.open { display: block; }
+.pl-menu-label { font-size: 11px; font-weight: 600; color: var(--pl-text-3); text-transform: uppercase; letter-spacing: .4px; padding: 6px 10px 4px; }
+.pl-menu button, .pl-menu a {
+  display: flex; align-items: center; gap: 8px; width: 100%; border: none; background: none;
+  padding: 7px 10px; border-radius: 6px; font-size: 13px; color: var(--pl-text); cursor: pointer; text-decoration: none;
+}
+.pl-menu button:hover, .pl-menu a:hover { background: #f2f4f7; }
+.pl-menu button.on::after { content: '✓'; margin-left: auto; color: var(--pl-link); }
+
+.pl-body {
+  flex: 1; min-height: 60px; overflow-y: auto; padding: 4px 8px 10px;
+  display: flex; flex-direction: column; gap: 8px; border-radius: 0 0 var(--pl-radius) var(--pl-radius);
+  transition: background .15s;
+}
+.pl-body.over { background: rgba(42,91,255,.06); box-shadow: inset 0 0 0 2px rgba(42,91,255,.25); }
+.pl-empty {
+  border: 1.5px dashed var(--pl-line-2); border-radius: 8px; padding: 18px 8px;
+  text-align: center; font-size: 12px; color: var(--pl-text-3);
+}
+
+/* ── Card ───────────────────────────── */
+.pl-card {
+  position: relative; background: var(--pl-card); border: 1px solid var(--pl-line); border-radius: 8px;
+  padding: 10px 12px; cursor: grab; transition: box-shadow .15s, border-color .15s, transform .15s;
+}
+.pl-card:hover { border-color: var(--pl-line-2); box-shadow: 0 2px 6px rgba(16,24,40,.06); }
+.pl-card.dragging { opacity: .45; transform: rotate(1.5deg); }
+.pl-card.hide { display: none; }
+.pl-card.sel { border-color: var(--pl-link); box-shadow: 0 0 0 2px rgba(42,91,255,.18); }
+
+.pl-card-top { display: flex; align-items: center; gap: 10px; }
+.pl-av {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; letter-spacing: .2px;
+}
+.pl-who { min-width: 0; flex: 1; }
+.pl-name {
+  display: block; font-size: 13px; font-weight: 600; color: var(--pl-text); line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none;
+}
+.pl-profile { font-size: 12px; color: var(--pl-link); text-decoration: none; line-height: 1.4; }
+.pl-profile:hover { text-decoration: underline; }
+.pl-check {
+  display: none; width: 16px; height: 16px; accent-color: var(--pl-link); margin: 0; cursor: pointer;
+}
+.pl.selecting .pl-check { display: block; }
+.pl.selecting .pl-card { cursor: pointer; }
+
+.pl-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.pl-tag {
+  font-size: 11px; font-weight: 500; line-height: 1; padding: 4px 7px; border-radius: 5px;
+  background: #f2f4f7; color: var(--pl-text-2); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pl-tag.t-website    { background: #eef4ff; color: #3538cd; }
+.pl-tag.t-crm        { background: #f4f3ff; color: #5925dc; }
+.pl-tag.t-mobile_app { background: #ecfdf3; color: #027a48; }
+.pl-tag.t-consulting { background: #fff6ed; color: #c4320a; }
+
+.pl-card-foot { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+.pl-age { font-size: 11.5px; color: var(--pl-text-3); flex: 1; white-space: nowrap; }
+.pl-money { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pl-money.due  { color: #b42318; }
+.pl-money.paid { color: #027a48; }
+.pl-quick { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
+.pl-card:hover .pl-quick { opacity: 1; }
+.pl-quick a {
+  width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--pl-text-3); text-decoration: none; font-size: 13px;
+}
+.pl-quick a:hover { background: #f2f4f7; color: var(--pl-text); }
+.pl-quick a.wa:hover { color: #00a884; }
+
+/* ── Bulk bar ───────────────────────── */
+.pl-bulk {
+  position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 220%);
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px;
+  background: #101828; color: #fff; border-radius: 12px; z-index: 50;
+  box-shadow: 0 20px 40px -12px rgba(16,24,40,.45); transition: transform .2s, visibility .2s; font-size: 13px;
+  visibility: hidden;
+}
+.pl-bulk.show { transform: translate(-50%, 0); visibility: visible; }
+.pl-bulk select { height: 32px; border-radius: 7px; border: none; font-size: 13px; padding: 0 8px; }
+.pl-bulk button {
+  height: 32px; border: none; border-radius: 7px; padding: 0 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.pl-bulk .go { background: #2a5bff; color: #fff; }
+.pl-bulk .x  { background: transparent; color: rgba(255,255,255,.7); }
+
+/* ── Toast ──────────────────────────── */
+.pl-toast {
+  position: fixed; right: 24px; bottom: 24px; z-index: 60;
+  background: #101828; color: #fff; font-size: 13px; padding: 10px 14px; border-radius: 8px;
+  box-shadow: 0 10px 24px -8px rgba(16,24,40,.4); opacity: 0; transform: translateY(8px);
+  transition: opacity .2s, transform .2s; pointer-events: none;
+}
+.pl-toast.show { opacity: 1; transform: none; }
+.pl-toast.err { background: #b42318; }
+
+.pl-board::-webkit-scrollbar, .pl-body::-webkit-scrollbar { height: 8px; width: 6px; }
+.pl-board::-webkit-scrollbar-thumb, .pl-body::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
+
+@media (max-width: 1023px) {
+  .pl { height: auto; }
+  .pl-board { height: calc(100vh - 230px); }
+  .pl-search { min-width: 0; flex: 1; }
+  .pl-quick { opacity: 1; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
+{% set stage_hex = {
+  'new_lead': '#0ba5ec', 'contacted': '#2a5bff', 'proposal_sent': '#f79009',
+  'negotiation': '#ef6820', 'active_client': '#12b76a', 'recurring': '#7a5af8'
+} %}
+{% set client_stages = ['active_client', 'recurring'] %}
+{% set ns = namespace(total=0, value=0) %}
+{% for s, _ in pipeline_stages %}{% for c in stages_data.get(s, []) %}{% set ns.total = ns.total + 1 %}{% set ns.value = ns.value + (c.total_cost or 0) %}{% endfor %}{% endfor %}
 
-<div class="pg-header">
-  <div>
-    <h1 class="pg-title">Pipeline</h1>
-    <p class="pg-sub">Arrastra las tarjetas para mover leads entre etapas</p>
-  </div>
-  <div class="pg-actions">
-    <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus"></i> Nuevo lead
-    </a>
-  </div>
-</div>
+<div class="pl" id="pl">
 
-<div class="kanban-wrap" id="kanbanBoard">
-  {% for stage_val, stage_name in pipeline_stages %}
-    {% set cards = stages_data.get(stage_val, []) %}
-    <div class="kn-col" data-stage="{{ stage_val }}">
-
-      <div class="kn-head kn-head-{{ stage_val }}">
-        <span class="kn-title kn-title-{{ stage_val }}">{{ stage_name }}</span>
-        <span class="kn-count">{{ cards | length }}</span>
-      </div>
-
-      <div class="kn-body" data-stage="{{ stage_val }}"
-           ondragover="onDragOver(event)"
-           ondragleave="onDragLeave(event)"
-           ondrop="onDrop(event, '{{ stage_val }}')">
-
-        {% for client in cards %}
-          <div class="kn-card kn-border-{{ stage_val }}"
-               draggable="true"
-               data-id="{{ client.id }}"
-               ondragstart="onDragStart(event, {{ client.id }})"
-               ondragend="onDragEnd(event)">
-
-            <a href="{{ url_for('clients.detail', client_id=client.id) }}"
-               class="kn-card-name"
-               onclick="event.stopPropagation()">
-              {{ client.first_name }} {{ client.last_name }}
-            </a>
-
-            <div class="kn-card-type">
-              {{ project_labels.get(client.project_type, client.project_type) }}{% if client.company %} &middot; {{ client.company }}{% endif %}
-            </div>
-
-            <div class="kn-card-amount {% if client.pending > 0 %}amount-pending{% else %}amount-clear{% endif %}">
-              {% if client.pending > 0 %}
-                <i class="bi bi-exclamation-circle-fill" style="font-size:10px;"></i>
-              {% else %}
-                <i class="bi bi-check-circle-fill" style="font-size:10px;"></i>
-              {% endif %}
-              {{ client.pending | currency }}
-            </div>
-
-          </div>
-        {% endfor %}
-
-        {% if not cards %}
-          <div style="text-align:center;padding:20px 8px;font-size:11.5px;color:var(--c-text-3);opacity:.6;" class="kn-empty">
-            <i class="bi bi-inbox" style="display:block;font-size:18px;margin-bottom:4px;"></i>
-            Sin leads
-          </div>
-        {% endif %}
-
-      </div>
+  <div class="pl-top">
+    <div>
+      <h1 class="pl-title">Pipeline</h1>
+      <div class="pl-sub"><b id="plTotal">{{ ns.total }}</b> contactos · valor total <b>{{ ns.value | currency }}</b></div>
     </div>
-  {% endfor %}
+    <div class="pl-actions">
+      <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg"></i> Nuevo lead
+      </a>
+    </div>
+  </div>
+
+  <div class="pl-bar">
+    <div class="pl-bar-left">
+      <div class="pl-seg" id="plSeg">
+        <button class="on" data-view="all">Todos</button>
+        <button data-view="leads">Leads</button>
+        <button data-view="clients">Clientes</button>
+      </div>
+      <label class="pl-search">
+        <i class="bi bi-search"></i>
+        <input type="search" id="plSearch" placeholder="Buscar por nombre, empresa, email…" autocomplete="off" />
+      </label>
+      <select class="pl-select" id="plType">
+        <option value="">Todos los proyectos</option>
+        {% for val, label in project_labels.items() %}
+          <option value="{{ val }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="pl-bar-right">
+      <button class="pl-btn" id="plSelectMode" type="button"><i class="bi bi-check2-square"></i> Modo selección</button>
+    </div>
+  </div>
+
+  <div class="pl-board" id="plBoard">
+    {% for stage_val, stage_name in pipeline_stages %}
+      {% set cards = stages_data.get(stage_val, []) %}
+      <section class="pl-col" data-stage="{{ stage_val }}" data-group="{{ 'clients' if stage_val in client_stages else 'leads' }}">
+        <header class="pl-col-head">
+          <div class="pl-col-row">
+            <span class="pl-dot" style="background:{{ stage_hex.get(stage_val, '#98a2b3') }}"></span>
+            <span class="pl-col-name">{{ stage_name }}</span>
+            <span class="pl-count" data-count>{{ cards | length }}</span>
+            <div class="pl-kebab-wrap" data-menu>
+              <button class="pl-kebab" type="button" title="Opciones"><i class="bi bi-three-dots-vertical"></i></button>
+              <div class="pl-menu">
+                <div class="pl-menu-label">Ordenar por</div>
+                <button type="button" data-sort="recent" class="on">Más recientes</button>
+                <button type="button" data-sort="oldest">Más antiguos</button>
+                <button type="button" data-sort="value">Mayor valor</button>
+                <button type="button" data-sort="due">Mayor saldo pendiente</button>
+                <button type="button" data-sort="name">Nombre (A–Z)</button>
+              </div>
+            </div>
+          </div>
+          <div class="pl-col-total" data-total></div>
+        </header>
+
+        <div class="pl-body" data-stage="{{ stage_val }}">
+          {% for c in cards %}
+            {% set full = (c.first_name ~ ' ' ~ (c.last_name or '')) | trim %}
+            <article class="pl-card" draggable="true"
+                     data-id="{{ c.id }}"
+                     data-name="{{ full | lower }}"
+                     data-search="{{ (full ~ ' ' ~ (c.company or '') ~ ' ' ~ (c.email or '') ~ ' ' ~ (c.phone or '')) | lower }}"
+                     data-type="{{ c.project_type }}"
+                     data-value="{{ c.total_cost or 0 }}"
+                     data-due="{{ c.pending or 0 }}"
+                     data-created="{{ c.created_at }}"
+                     data-updated="{{ c.updated_at or c.created_at }}">
+              <div class="pl-card-top">
+                <div class="pl-av" data-initials="{{ ((c.first_name or '?')[0] ~ ((c.last_name or '')[0] or '')) | upper }}"></div>
+                <div class="pl-who">
+                  <a class="pl-name" href="{{ url_for('clients.detail', client_id=c.id) }}" draggable="false">{{ full }}</a>
+                  <a class="pl-profile" href="{{ url_for('clients.detail', client_id=c.id) }}" draggable="false">Ver perfil</a>
+                </div>
+                <input type="checkbox" class="pl-check" aria-label="Seleccionar {{ full }}" />
+              </div>
+
+              <div class="pl-tags">
+                <span class="pl-tag t-{{ c.project_type }}">{{ project_labels.get(c.project_type, c.project_type) }}</span>
+                {% if c.company %}<span class="pl-tag">{{ c.company }}</span>{% endif %}
+              </div>
+
+              <div class="pl-card-foot">
+                <span class="pl-age" data-age></span>
+                {% if (c.total_cost or 0) > 0 %}
+                  {% if (c.pending or 0) > 0 %}
+                    <span class="pl-money due" title="Saldo pendiente de {{ c.total_cost | currency }}">{{ c.pending | currency }}</span>
+                  {% else %}
+                    <span class="pl-money paid" title="Pagado"><i class="bi bi-check-circle-fill"></i> {{ c.total_cost | currency }}</span>
+                  {% endif %}
+                {% endif %}
+                <span class="pl-quick">
+                  {% if c.phone %}
+                    <a class="wa" href="{{ url_for('whatsapp.index', phone=c.phone) }}" title="WhatsApp" draggable="false"><i class="bi bi-whatsapp"></i></a>
+                  {% endif %}
+                  {% if c.email %}
+                    <a href="mailto:{{ c.email }}" title="{{ c.email }}" draggable="false"><i class="bi bi-envelope"></i></a>
+                  {% endif %}
+                </span>
+              </div>
+            </article>
+          {% endfor %}
+          <div class="pl-empty" {% if cards %}hidden{% endif %}>Arrastra aquí para mover a {{ stage_name }}</div>
+        </div>
+      </section>
+    {% endfor %}
+  </div>
 </div>
 
+<div class="pl-bulk" id="plBulk">
+  <span><b id="plSelCount">0</b> seleccionados</span>
+  <select id="plBulkStage">
+    {% for stage_val, stage_name in pipeline_stages %}
+      <option value="{{ stage_val }}">Mover a: {{ stage_name }}</option>
+    {% endfor %}
+  </select>
+  <button class="go" id="plBulkGo" type="button">Mover</button>
+  <button class="x" id="plBulkCancel" type="button">Cancelar</button>
+</div>
+
+<div class="pl-toast" id="plToast"></div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let dragId  = null;
-let dragEl  = null;
+(function () {
+  'use strict';
+  const MOVE_URL = {{ url_for('pipeline.move_card') | tojson }};
+  const STAGE_NAMES = {{ dict(pipeline_stages) | tojson }};
+  const root  = document.getElementById('pl');
+  const board = document.getElementById('plBoard');
+  const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
-function onDragStart(e, id) {
-  dragId = id;
-  dragEl = e.currentTarget;
-  dragEl.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-}
-
-function onDragEnd(e) {
-  e.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.kn-body').forEach(c => c.classList.remove('over'));
-}
-
-function onDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  e.currentTarget.classList.add('over');
-}
-
-function onDragLeave(e) {
-  if (!e.currentTarget.contains(e.relatedTarget)) {
-    e.currentTarget.classList.remove('over');
-  }
-}
-
-function onDrop(e, newStage) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('over');
-  if (!dragId) return;
-
-  const fromStage = dragEl.closest('[data-stage]').dataset.stage;
-  if (fromStage === newStage) return;
-
-  fetch('/pipeline/move', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({client_id: dragId, stage: newStage}),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (!d.ok) return;
-
-    const target = e.currentTarget;
-    const empty  = target.querySelector('.kn-empty');
-    if (empty) empty.remove();
-
-    // Update card border
-    dragEl.className = dragEl.className.replace(/kn-border-\w+/, 'kn-border-' + newStage);
-    target.insertBefore(dragEl, target.firstChild);
-
-    updateCount(fromStage);
-    updateCount(newStage);
-
-    const oldBody = document.querySelector(`.kn-body[data-stage="${fromStage}"]`);
-    if (!oldBody.querySelector('.kn-card')) {
-      oldBody.innerHTML = `<div style="text-align:center;padding:20px 8px;font-size:11.5px;color:var(--c-text-3);opacity:.6;" class="kn-empty">
-        <i class="bi bi-inbox" style="display:block;font-size:18px;margin-bottom:4px;"></i>Sin leads</div>`;
-    }
+  // ── Avatares con color estable ──
+  const PALETTE = [['#e0eaff','#3538cd'],['#fce7f6','#c11574'],['#dcfae6','#067647'],['#fef0c7','#b54708'],
+                   ['#ebe9fe','#5925dc'],['#d1e9ff','#175cd3'],['#ffe4e8','#c01048'],['#ccfbef','#107569']];
+  document.querySelectorAll('.pl-card').forEach(card => {
+    const av = card.querySelector('.pl-av');
+    let h = 0; for (const ch of card.dataset.id + card.dataset.name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const [bg, fg] = PALETTE[h % PALETTE.length];
+    av.style.background = bg; av.style.color = fg; av.textContent = av.dataset.initials;
   });
 
-  dragId = null;
-}
+  // ── "hace X días" (SQLite guarda UTC) ──
+  function toDate(s) {
+    if (!s) return null;
+    let iso = String(s).replace(' ', 'T'); if (!/[zZ]|[+-]\d\d:?\d\d$/.test(iso)) iso += 'Z';
+    const d = new Date(iso); return isNaN(d) ? null : d;
+  }
+  function ago(d) {
+    if (!d) return '';
+    const s = (Date.now() - d) / 1000;
+    if (s < 60) return 'justo ahora';
+    const m = s / 60, h = m / 60, day = h / 24;
+    if (m < 60) return `hace ${Math.floor(m)} min`;
+    if (h < 24) return `hace ${Math.floor(h)} h`;
+    if (day < 2) return 'ayer';
+    if (day < 30) return `hace ${Math.floor(day)} días`;
+    const mo = Math.floor(day / 30);
+    if (mo < 12) return `hace ${mo} ${mo === 1 ? 'mes' : 'meses'}`;
+    const y = Math.floor(mo / 12); return `hace ${y} ${y === 1 ? 'año' : 'años'}`;
+  }
+  function refreshAges() {
+    document.querySelectorAll('.pl-card').forEach(c => {
+      const d = toDate(c.dataset.updated);
+      const el = c.querySelector('[data-age]');
+      el.textContent = ago(d);
+      if (d) el.title = 'Última actividad: ' + d.toLocaleString('es-US');
+    });
+  }
+  refreshAges(); setInterval(refreshAges, 60000);
 
-function updateCount(stage) {
-  const col    = document.querySelector(`.kn-col[data-stage="${stage}"]`);
-  const count  = col.querySelector('.kn-count');
-  const cards  = col.querySelectorAll('.kn-card');
-  count.textContent = cards.length;
-}
+  // ── Contadores y totales por columna ──
+  function refreshCol(col) {
+    const cards = [...col.querySelectorAll('.pl-card')];
+    const visible = cards.filter(c => !c.classList.contains('hide'));
+    const val = visible.reduce((a, c) => a + (+c.dataset.value || 0), 0);
+    const due = visible.reduce((a, c) => a + (+c.dataset.due || 0), 0);
+    col.querySelector('[data-count]').textContent =
+      visible.length === cards.length ? cards.length : `${visible.length}/${cards.length}`;
+    col.querySelector('[data-total]').textContent = val
+      ? `${money.format(val)}${due > 0 ? ` · ${money.format(due)} por cobrar` : ''}` : '';
+    col.querySelector('.pl-empty').hidden = cards.length > 0;
+  }
+  function refreshAll() {
+    document.querySelectorAll('.pl-col').forEach(refreshCol);
+    document.getElementById('plTotal').textContent = document.querySelectorAll('.pl-card').length;
+  }
+  refreshAll();
+
+  // ── Vista / búsqueda / tipo ──
+  let view = 'all';
+  const search = document.getElementById('plSearch');
+  const typeSel = document.getElementById('plType');
+  function applyFilters() {
+    const q = search.value.trim().toLowerCase();
+    const t = typeSel.value;
+    document.querySelectorAll('.pl-col').forEach(col => {
+      col.classList.toggle('hide', view !== 'all' && col.dataset.group !== view);
+    });
+    document.querySelectorAll('.pl-card').forEach(c => {
+      const ok = (!q || c.dataset.search.includes(q)) && (!t || c.dataset.type === t);
+      c.classList.toggle('hide', !ok);
+    });
+    refreshAll();
+  }
+  document.querySelectorAll('#plSeg button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#plSeg button').forEach(x => x.classList.toggle('on', x === b));
+    view = b.dataset.view; applyFilters();
+  }));
+  search.addEventListener('input', applyFilters);
+  typeSel.addEventListener('change', applyFilters);
+
+  // ── Menú ⋮ y orden ──
+  const SORTS = {
+    recent: (a, b) => (toDate(b.dataset.updated) || 0) - (toDate(a.dataset.updated) || 0),
+    oldest: (a, b) => (toDate(a.dataset.updated) || 0) - (toDate(b.dataset.updated) || 0),
+    value:  (a, b) => (+b.dataset.value) - (+a.dataset.value),
+    due:    (a, b) => (+b.dataset.due) - (+a.dataset.due),
+    name:   (a, b) => a.dataset.name.localeCompare(b.dataset.name, 'es'),
+  };
+  document.querySelectorAll('[data-menu]').forEach(btn => {
+    const menu = btn.querySelector('.pl-menu');
+    btn.addEventListener('click', e => {
+      if (e.target.closest('.pl-menu')) return;
+      e.stopPropagation();
+      document.querySelectorAll('.pl-menu.open').forEach(m => m !== menu && m.classList.remove('open'));
+      menu.classList.toggle('open');
+    });
+    menu.querySelectorAll('[data-sort]').forEach(opt => opt.addEventListener('click', e => {
+      e.stopPropagation();
+      menu.querySelectorAll('[data-sort]').forEach(o => o.classList.toggle('on', o === opt));
+      const body = btn.closest('.pl-col').querySelector('.pl-body');
+      const empty = body.querySelector('.pl-empty');
+      [...body.querySelectorAll('.pl-card')].sort(SORTS[opt.dataset.sort]).forEach(c => body.insertBefore(c, empty));
+      menu.classList.remove('open');
+    }));
+  });
+  document.addEventListener('click', () => document.querySelectorAll('.pl-menu.open').forEach(m => m.classList.remove('open')));
+
+  // ── Toast ──
+  const toastEl = document.getElementById('plToast'); let toastT;
+  function toast(msg, err) {
+    toastEl.textContent = msg; toastEl.classList.toggle('err', !!err); toastEl.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 2600);
+  }
+
+  // ── Mover (con reversión si falla) ──
+  function moveCard(card, stage, silent) {
+    const fromBody = card.closest('.pl-body');
+    const fromStage = fromBody.dataset.stage;
+    if (fromStage === stage) return Promise.resolve(true);
+    const toBody = board.querySelector(`.pl-body[data-stage="${stage}"]`);
+    const next = card.nextElementSibling;
+    toBody.insertBefore(card, toBody.firstChild);
+    card.dataset.updated = new Date().toISOString();
+    refreshAges(); refreshCol(fromBody.closest('.pl-col')); refreshCol(toBody.closest('.pl-col'));
+
+    return fetch(MOVE_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: +card.dataset.id, stage }),
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) throw new Error(d.error || 'error');
+      if (!silent) toast(`Movido a ${STAGE_NAMES[stage]}`);
+      return true;
+    }).catch(() => {
+      fromBody.insertBefore(card, next && next.parentNode === fromBody ? next : fromBody.querySelector('.pl-empty'));
+      refreshCol(fromBody.closest('.pl-col')); refreshCol(toBody.closest('.pl-col'));
+      toast('No se pudo mover. Intenta de nuevo.', true);
+      return false;
+    });
+  }
+
+  // ── Drag & drop ──
+  let dragCard = null;
+  board.addEventListener('dragstart', e => {
+    const card = e.target.closest('.pl-card');
+    if (!card || root.classList.contains('selecting')) { e.preventDefault(); return; }
+    dragCard = card; card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', card.dataset.id);
+  });
+  board.addEventListener('dragend', () => {
+    if (dragCard) dragCard.classList.remove('dragging');
+    dragCard = null;
+    board.querySelectorAll('.pl-body.over').forEach(b => b.classList.remove('over'));
+  });
+  board.querySelectorAll('.pl-body').forEach(body => {
+    body.addEventListener('dragover', e => { if (!dragCard) return; e.preventDefault(); body.classList.add('over'); });
+    body.addEventListener('dragleave', e => { if (!body.contains(e.relatedTarget)) body.classList.remove('over'); });
+    body.addEventListener('drop', e => {
+      e.preventDefault(); body.classList.remove('over');
+      if (dragCard) moveCard(dragCard, body.dataset.stage);
+    });
+  });
+
+  // ── Modo selección + mover en lote ──
+  const selBtn = document.getElementById('plSelectMode');
+  const bulk = document.getElementById('plBulk');
+  const selCount = document.getElementById('plSelCount');
+  function selected() { return [...document.querySelectorAll('.pl-card.sel')]; }
+  function syncBulk() {
+    const n = selected().length; selCount.textContent = n;
+    bulk.classList.toggle('show', root.classList.contains('selecting') && n > 0);
+  }
+  function exitSelect() {
+    root.classList.remove('selecting'); selBtn.classList.remove('on');
+    document.querySelectorAll('.pl-card.sel').forEach(c => { c.classList.remove('sel'); c.querySelector('.pl-check').checked = false; });
+    document.querySelectorAll('.pl-card').forEach(c => c.draggable = true);
+    syncBulk();
+  }
+  selBtn.addEventListener('click', () => {
+    if (root.classList.toggle('selecting')) {
+      selBtn.classList.add('on');
+      document.querySelectorAll('.pl-card').forEach(c => c.draggable = false);
+    } else exitSelect();
+  });
+  board.addEventListener('click', e => {
+    if (!root.classList.contains('selecting')) return;
+    const card = e.target.closest('.pl-card'); if (!card) return;
+    if (e.target.closest('a')) e.preventDefault();
+    const on = !card.classList.contains('sel');
+    card.classList.toggle('sel', on); card.querySelector('.pl-check').checked = on;
+    syncBulk();
+  });
+  document.getElementById('plBulkCancel').addEventListener('click', exitSelect);
+  document.getElementById('plBulkGo').addEventListener('click', async () => {
+    const stage = document.getElementById('plBulkStage').value;
+    const cards = selected(); let ok = 0;
+    for (const c of cards) { if (await moveCard(c, stage, true)) ok++; }
+    toast(`${ok} de ${cards.length} movidos a ${STAGE_NAMES[stage]}`, ok < cards.length);
+    exitSelect();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && root.classList.contains('selecting')) exitSelect(); });
+})();
 </script>
 {% endblock %}
