@@ -23,6 +23,7 @@ from routes.clients import clients_bp
 from routes.pipeline import pipeline_bp
 from routes.followups import followups_bp
 from routes.whatsapp import whatsapp_bp, get_unread_count
+from routes.vault import vault_bp
 from routes.auth import auth_bp
 from routes.leads import leads_bp
 from routes.emails import emails_bp
@@ -59,6 +60,7 @@ app.register_blueprint(super_bp)
 app.register_blueprint(payments_bp)
 app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
+app.register_blueprint(vault_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────

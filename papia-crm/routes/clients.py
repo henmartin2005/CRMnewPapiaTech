@@ -198,10 +198,9 @@ def _validate_client_form(form):
     errors = []
     if not form.get('first_name', '').strip():
         errors.append('El nombre es requerido.')
-    if not form.get('last_name', '').strip():
-        errors.append('El apellido es requerido.')
-    if not form.get('email', '').strip():
-        errors.append('El email es requerido.')
+    # Leads from WhatsApp may arrive with only a name + phone
+    if not form.get('email', '').strip() and not form.get('phone', '').strip():
+        errors.append('Se requiere email o teléfono.')
     if not form.get('project_type', '').strip():
         errors.append('El tipo de proyecto es requerido.')
     try:

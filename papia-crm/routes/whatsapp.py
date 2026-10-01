@@ -41,6 +41,82 @@ def find_client_by_phone(phone: str, org_id=1):
     return None
 
 
+def _split_profile_name(profile_name: str, phone: str):
+    """Turn Twilio's ProfileName into (first_name, last_name)."""
+    name = (profile_name or '').strip()
+    if not name:
+        return 'WhatsApp', phone
+    parts = name.split(' ', 1)
+    return parts[0], (parts[1] if len(parts) > 1 else '')
+
+
+def get_or_create_client_from_whatsapp(phone: str, profile_name: str = '',
+                                       first_message: str = '', org_id: int = 1):
+    """
+    Find the client for this phone or create it as a new lead in the pipeline.
+
+    Runs inside a BEGIN IMMEDIATE transaction so two messages arriving at the
+    same time from an unknown number can't create duplicate leads.
+    Returns (client_id, created).
+    """
+    db = get_db()
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        rows = db.execute(
+            "SELECT id, phone FROM clients WHERE phone IS NOT NULL AND phone != '' AND org_id=?",
+            (org_id,)
+        ).fetchall()
+        for r in rows:
+            if phones_match(phone, r['phone']):
+                db.execute("COMMIT")
+                return r['id'], False
+
+        first_name, last_name = _split_profile_name(profile_name, phone)
+        cur = db.execute("""
+            INSERT INTO clients
+                (first_name, last_name, email, phone, company, project_type,
+                 project_details, pipeline_stage, source, total_cost, amount_paid, org_id)
+            VALUES (?, ?, '', ?, '', 'other', ?, 'new_lead', 'whatsapp', 0, 0, ?)
+        """, (first_name, last_name, phone, first_message[:500], org_id))
+        client_id = cur.lastrowid
+
+        note = 'Lead creado automáticamente desde WhatsApp'
+        if first_message:
+            note += f' | Primer mensaje: {first_message[:300]}'
+        db.execute(
+            "INSERT INTO notes (client_id, note_type, content) VALUES (?, 'whatsapp_lead', ?)",
+            (client_id, note),
+        )
+
+        # Link any earlier orphan messages from this number to the new client
+        db.execute(
+            "UPDATE whatsapp_messages SET client_id=? WHERE phone=? AND org_id=? AND client_id IS NULL",
+            (client_id, phone, org_id),
+        )
+        db.execute("COMMIT")
+        return client_id, True
+    except Exception:
+        try:
+            db.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
+    finally:
+        db.close()
+
+
+def _resolve_client_id(phone: str, name: str = '', first_message: str = '', org_id: int = 1):
+    """Existing client id, or a new lead auto-created in the pipeline. Never raises."""
+    try:
+        client_id, _created = get_or_create_client_from_whatsapp(
+            phone, profile_name=name, first_message=first_message, org_id=org_id)
+        return client_id
+    except Exception:
+        log.exception('WhatsApp: no se pudo auto-crear el lead para %s', phone)
+        client = find_client_by_phone(phone, org_id)
+        return client['id'] if client else None
+
+
 def save_message(phone, direction, message, wa_message_id=None, client_id=None,
                  status=None, org_id=1):
     if status is None:
@@ -340,12 +416,16 @@ def webhook():
     body      = request.form.get('Body', '').strip()
     wa_id     = request.form.get('MessageSid', '')
 
+    profile   = request.form.get('ProfileName', '').strip()
+
     phone  = normalize_phone(raw_from)
     org_id = 1
-    client = find_client_by_phone(phone, org_id)
+    if not phone or _message_exists(wa_id):   # Twilio reintenta webhooks
+        return '<Response></Response>', 200, {'Content-Type': 'text/xml'}
 
-    save_message(phone=phone, direction='inbound', message=body, wa_message_id=wa_id,
-                 client_id=client['id'] if client else None, org_id=org_id)
+    client_id = _resolve_client_id(phone, profile, body, org_id)
+    save_message(phone=phone, direction='inbound', message=body or '[mensaje sin texto]',
+                 wa_message_id=wa_id, client_id=client_id, org_id=org_id)
     return '<Response></Response>', 200, {'Content-Type': 'text/xml'}
 
 
@@ -387,9 +467,12 @@ def zernio_webhook():
                 kinds = ', '.join(a.get('type', 'archivo') for a in msg['attachments'])
                 text = f'[{kinds}]'
             _save_conv_id(phone, conv.get('id') or msg.get('conversationId'), org_id, inbound=True)
-            client = find_client_by_phone(phone, org_id)
+            name = (sender.get('name') or sender.get('displayName')
+                    or conv.get('participantName') or conv.get('name') or '')
+            # Número desconocido → se crea como cliente en "Nuevo Lead" (pipeline)
+            client_id = _resolve_client_id(phone, name, text, org_id)
             save_message(phone=phone, direction='inbound', message=text or '[mensaje]',
-                         wa_message_id=wa_id, client_id=client['id'] if client else None,
+                         wa_message_id=wa_id, client_id=client_id,
                          org_id=org_id)
 
         elif event == 'message.sent':

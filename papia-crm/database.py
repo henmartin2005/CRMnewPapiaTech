@@ -365,6 +365,34 @@ def init_db():
             updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(org_id, phone)
         );
+        CREATE TABLE IF NOT EXISTS client_vault_pins (
+            client_id       INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            org_id          INTEGER NOT NULL DEFAULT 1,
+            pin_hash        TEXT NOT NULL,
+            failed_attempts INTEGER NOT NULL DEFAULT 0,
+            locked_until    TEXT,
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS client_credentials (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            org_id      INTEGER NOT NULL DEFAULT 1,
+            data_enc    TEXT NOT NULL,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_cred_client ON client_credentials(client_id);
+        CREATE TABLE IF NOT EXISTS vault_access_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id   INTEGER NOT NULL,
+            org_id      INTEGER NOT NULL DEFAULT 1,
+            user_id     INTEGER,
+            username    TEXT,
+            action      TEXT NOT NULL,
+            ip          TEXT,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE INDEX IF NOT EXISTS idx_wa_msgid ON whatsapp_messages(wa_message_id);
         CREATE INDEX IF NOT EXISTS idx_emails_client ON emails(client_id);
         CREATE INDEX IF NOT EXISTS idx_proposals_client ON proposals(client_id);

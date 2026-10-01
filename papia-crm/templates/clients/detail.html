@@ -173,6 +173,39 @@
       </div>
     </div>
 
+    <!-- Vault: accesos y contraseñas (protegido con PIN) -->
+    <div class="section-card" id="vaultCard" data-client-id="{{ client.id }}">
+      <div class="card-header">
+        <span class="card-header-left">
+          <i class="bi bi-shield-lock"></i> Accesos y contraseñas
+        </span>
+        <span id="vaultHeaderActions" style="display:flex;gap:6px;align-items:center;"></span>
+      </div>
+      <div class="card-body" id="vaultBody">
+        <div class="vault-muted">Cargando…</div>
+      </div>
+    </div>
+
+    <style>
+      #vaultCard .vault-muted { font-size:12.5px; color:var(--c-text-3); }
+      #vaultCard .vault-pin { letter-spacing:.6em; text-align:center; font-size:20px; font-weight:600;
+                              max-width:150px; margin:8px auto 0; display:block; }
+      #vaultCard .vault-center { text-align:center; padding:6px 0; }
+      #vaultCard .vault-err { color:var(--c-danger); font-size:12px; margin-top:6px; min-height:16px; }
+      #vaultCard .vault-item { border:1px solid var(--c-border); border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+      #vaultCard .vault-item-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+      #vaultCard .vault-item-title { font-weight:600; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      #vaultCard .vault-item a.vault-url { font-size:12px; word-break:break-all; }
+      #vaultCard .vault-field { display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12.5px; }
+      #vaultCard .vault-field-label { width:62px; color:var(--c-text-3); flex-shrink:0; }
+      #vaultCard .vault-field-val { flex:1; min-width:0; font-family:ui-monospace,Menlo,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      #vaultCard .vault-icon-btn { border:none; background:none; padding:2px 5px; color:var(--c-text-3); cursor:pointer; border-radius:6px; }
+      #vaultCard .vault-icon-btn:hover { background:var(--c-surface-2); color:inherit; }
+      #vaultCard .vault-notes { font-size:12px; color:var(--c-text-3); margin-top:6px; white-space:pre-wrap; }
+      #vaultCard .vault-form .form-control { margin-bottom:6px; font-size:13px; }
+      #vaultCard .vault-timer { font-size:11px; color:var(--c-text-3); font-variant-numeric:tabular-nums; }
+    </style>
+
     <!-- Pipeline stage -->
     <div class="section-card">
       <div class="card-header">
@@ -792,5 +825,251 @@ function sendStripeEmail() {
   bootstrap.Modal.getInstance(document.getElementById('stripeModal')).hide();
   window.location.href = `/emails?client_id=${CLIENT_ID}&compose=1&subject=${subject}&body=${body}`;
 }
+
+/* ── Vault: accesos y contraseñas ─────────────────────────────────────── */
+(function () {
+  const card = document.getElementById('vaultCard');
+  if (!card) return;
+  const CID = card.dataset.clientId;
+  const BASE = `/clients/${CID}/vault`;
+  const body = document.getElementById('vaultBody');
+  const actions = document.getElementById('vaultHeaderActions');
+  let state = {}, timer = null, expiresAt = 0;
+
+  // tiny DOM helper — always textContent, never innerHTML with user data
+  function el(tag, attrs = {}, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') n.className = v;
+      else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v);
+    }
+    kids.flat().forEach(c => c != null && n.append(c));
+    return n;
+  }
+  const icon = cls => el('i', {class: 'bi ' + cls});
+
+  async function api(path, data) {
+    const opts = data === undefined ? {} : {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data),
+    };
+    const r = await fetch(BASE + path, Object.assign({credentials: 'same-origin'}, opts));
+    let j = {};
+    try { j = await r.json(); } catch (e) { j = {ok: false, error: 'Error del servidor'}; }
+    if (j.locked) { stopTimer(); await refresh(); }
+    return j;
+  }
+
+  function pinInput(onDone) {
+    const inp = el('input', {type: 'password', inputmode: 'numeric', autocomplete: 'off',
+                             maxlength: '4', pattern: '[0-9]*', class: 'form-control vault-pin',
+                             placeholder: '••••'});
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.replace(/\D/g, '').slice(0, 4);
+      if (inp.value.length === 4) onDone(inp.value, inp);
+    });
+    return inp;
+  }
+
+  function stopTimer() { clearInterval(timer); timer = null; actions.replaceChildren(); }
+  function startTimer(seconds) {
+    expiresAt = Date.now() + seconds * 1000;
+    const t = el('span', {class: 'vault-timer'});
+    const lockBtn = el('button', {class: 'btn btn-ghost btn-sm', title: 'Bloquear', onclick: doLock,
+                                 style: 'padding:2px 8px;font-size:11.5px;'},
+                       icon('bi-lock'), ' Bloquear');
+    actions.replaceChildren(t, lockBtn);
+    clearInterval(timer);
+    const tick = () => {
+      const left = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+      t.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+      if (left <= 0) doLock();
+    };
+    tick(); timer = setInterval(tick, 1000);
+  }
+
+  async function doLock() {
+    stopTimer();
+    await api('/lock', {});
+    refresh();
+  }
+
+  async function refresh() {
+    const r = await fetch(BASE + '/status', {credentials: 'same-origin'});
+    state = await r.json();
+    if (!state.ok) { body.replaceChildren(el('div', {class: 'vault-err', text: state.error || 'Error'})); return; }
+    if (!state.configured) {
+      body.replaceChildren(el('div', {class: 'vault-muted',
+        text: 'La bóveda no está configurada en el servidor (falta VAULT_KEY).'}));
+      return;
+    }
+    if (!state.has_pin) return renderNoPin();
+    if (state.unlocked) return loadEntries();
+    renderLocked();
+  }
+
+  function renderNoPin() {
+    stopTimer();
+    if (!state.can_manage_pin) {
+      body.replaceChildren(el('div', {class: 'vault-muted vault-center',
+        text: 'Este cliente aún no tiene PIN. Pide al administrador que lo configure.'}));
+      return;
+    }
+    const err = el('div', {class: 'vault-err'});
+    let first = null;
+    const label = el('div', {class: 'vault-muted', text: 'Crea un PIN de 4 dígitos para este cliente'});
+    const inp = pinInput(async (v, i) => {
+      if (!first) { first = v; i.value = ''; label.textContent = 'Repite el PIN'; err.textContent = ''; return; }
+      if (v !== first) { first = null; i.value = ''; label.textContent = 'Crea un PIN de 4 dígitos para este cliente';
+                         err.textContent = 'Los PIN no coinciden.'; return; }
+      const j = await api('/pin', {new_pin: v});
+      if (!j.ok) { err.textContent = j.error; first = null; i.value = ''; return; }
+      refresh();
+    });
+    body.replaceChildren(el('div', {class: 'vault-center'}, icon('bi-shield-plus'), ' ', label, inp, err));
+    inp.focus();
+  }
+
+  function renderLocked() {
+    stopTimer();
+    const err = el('div', {class: 'vault-err'});
+    const n = state.count;
+    const info = el('div', {class: 'vault-muted',
+      text: n ? `${n} acceso${n === 1 ? '' : 's'} guardado${n === 1 ? '' : 's'} · introduce el PIN` : 'Introduce el PIN para ver o agregar accesos'});
+    const inp = pinInput(async (v, i) => {
+      i.disabled = true;
+      const j = await api('/unlock', {pin: v});
+      i.disabled = false; i.value = '';
+      if (!j.ok) { err.textContent = j.error; i.focus(); return; }
+      loadEntries();
+    });
+    if (state.locked_until) {
+      inp.disabled = true;
+      err.textContent = 'Bloqueada temporalmente por intentos fallidos.';
+    }
+    body.replaceChildren(el('div', {class: 'vault-center'}, icon('bi-lock-fill'), ' ', info, inp, err));
+  }
+
+  function copy(text, btn) {
+    navigator.clipboard.writeText(text || '').then(() => {
+      const old = btn.innerHTML; btn.innerHTML = '<i class="bi bi-check2"></i>';
+      setTimeout(() => (btn.innerHTML = old), 1200);
+    });
+  }
+
+  function field(label, value, secret) {
+    const val = el('span', {class: 'vault-field-val', text: secret ? '••••••••' : (value || '—')});
+    const btns = [];
+    if (secret && value) {
+      let shown = false;
+      const eye = el('button', {class: 'vault-icon-btn', title: 'Mostrar', type: 'button', onclick: () => {
+        shown = !shown; val.textContent = shown ? value : '••••••••';
+        eye.replaceChildren(icon(shown ? 'bi-eye-slash' : 'bi-eye'));
+      }}, icon('bi-eye'));
+      btns.push(eye);
+    }
+    if (value) {
+      const cb = el('button', {class: 'vault-icon-btn', title: 'Copiar', type: 'button'}, icon('bi-clipboard'));
+      cb.addEventListener('click', () => copy(value, cb));
+      btns.push(cb);
+    }
+    return el('div', {class: 'vault-field'}, el('span', {class: 'vault-field-label', text: label}), val, btns);
+  }
+
+  function entryForm(entry, onCancel) {
+    const f = {};
+    const mk = (name, ph, type = 'text') => (f[name] = el('input', {class: 'form-control', placeholder: ph, type,
+                                                       autocomplete: 'off', value: entry ? (entry[name] || '') : ''}));
+    f.notes = el('textarea', {class: 'form-control', rows: '2', placeholder: 'Notas (opcional)'});
+    f.notes.value = entry ? (entry.notes || '') : '';
+    const err = el('div', {class: 'vault-err'});
+    const save = el('button', {class: 'btn btn-primary btn-sm', type: 'submit'}, icon('bi-check2'), ' Guardar');
+    const cancel = el('button', {class: 'btn btn-ghost btn-sm', type: 'button', onclick: onCancel}, 'Cancelar');
+    const form = el('form', {class: 'vault-form vault-item'},
+      mk('platform', 'Plataforma o página (ej. Hostinger, Instagram)'),
+      mk('url', 'URL de acceso (ej. hostinger.com/login)'),
+      mk('username', 'Usuario o email'),
+      mk('password', 'Contraseña', 'password'),
+      f.notes, err, el('div', {style: 'display:flex;gap:6px;justify-content:flex-end;'}, cancel, save));
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const data = {}; for (const k in f) data[k] = f[k].value;
+      save.disabled = true;
+      const j = await api(entry ? `/entries/${entry.id}` : '/entries', data);
+      save.disabled = false;
+      if (!j.ok) { err.textContent = j.error; return; }
+      loadEntries();
+    });
+    return form;
+  }
+
+  function renderEntries(entries) {
+    const list = el('div');
+    entries.forEach(e => {
+      const item = el('div', {class: 'vault-item'});
+      const edit = el('button', {class: 'vault-icon-btn', title: 'Editar', type: 'button',
+        onclick: () => item.replaceWith(entryForm(e, () => loadEntries()))}, icon('bi-pencil'));
+      const del = el('button', {class: 'vault-icon-btn', title: 'Eliminar', type: 'button', onclick: async () => {
+        if (!confirm(`¿Eliminar el acceso de "${e.platform}"? No se puede deshacer.`)) return;
+        const j = await api(`/entries/${e.id}/delete`, {});
+        if (j.ok) loadEntries(); else alert(j.error);
+      }}, icon('bi-trash'));
+      const top = el('div', {class: 'vault-item-top'},
+        el('div', {class: 'vault-item-title', text: e.platform}), el('div', {}, edit, del));
+      item.append(top);
+      if (e.url && /^https?:\/\//i.test(e.url)) {
+        item.append(el('a', {class: 'vault-url', href: e.url, target: '_blank', rel: 'noopener noreferrer', text: e.url}));
+      }
+      item.append(field('Usuario', e.username, false), field('Clave', e.password, true));
+      if (e.notes) item.append(el('div', {class: 'vault-notes', text: e.notes}));
+      list.append(item);
+    });
+    if (!entries.length) list.append(el('div', {class: 'vault-muted vault-center', text: 'Aún no hay accesos guardados.'}));
+
+    const add = el('button', {class: 'btn btn-ghost btn-sm', type: 'button', style: 'width:100%;justify-content:center;',
+      onclick: () => add.replaceWith(entryForm(null, () => loadEntries()))}, icon('bi-plus-lg'), ' Agregar acceso');
+    const footer = [add];
+    if (state.can_manage_pin) {
+      footer.push(el('button', {class: 'btn btn-ghost btn-sm', type: 'button',
+        style: 'width:100%;justify-content:center;margin-top:6px;font-size:11.5px;', onclick: changePin},
+        icon('bi-key'), ' Cambiar PIN'));
+    }
+    body.replaceChildren(list, ...footer);
+  }
+
+  function changePin() {
+    const err = el('div', {class: 'vault-err'});
+    const label = el('div', {class: 'vault-muted', text: 'PIN actual'});
+    let current = null, next = null;
+    const inp = pinInput(async (v, i) => {
+      i.value = '';
+      if (current === null) { current = v; label.textContent = 'Nuevo PIN'; return; }
+      if (next === null) { next = v; label.textContent = 'Repite el nuevo PIN'; return; }
+      if (v !== next) { next = null; label.textContent = 'Nuevo PIN'; err.textContent = 'Los PIN no coinciden.'; return; }
+      const j = await api('/pin', {current_pin: current, new_pin: next});
+      if (!j.ok) { err.textContent = j.error; current = next = null; label.textContent = 'PIN actual'; return; }
+      loadEntries();
+    });
+    const cancel = el('button', {class: 'btn btn-ghost btn-sm', type: 'button', style: 'margin-top:8px;',
+                                 onclick: () => loadEntries()}, 'Cancelar');
+    body.replaceChildren(el('div', {class: 'vault-center'}, icon('bi-key'), ' ', label, inp, err, cancel));
+    inp.focus();
+  }
+
+  async function loadEntries() {
+    const j = await api('/entries');
+    if (!j.ok) { if (!j.locked) body.replaceChildren(el('div', {class: 'vault-err', text: j.error})); return; }
+    startTimer(j.expires_in);
+    renderEntries(j.entries);
+  }
+
+  // Lock when leaving the page
+  window.addEventListener('pagehide', () => {
+    if (timer) navigator.sendBeacon(BASE + '/lock');
+  });
+
+  refresh();
+})();
 </script>
 {% endblock %}
