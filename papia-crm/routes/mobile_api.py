@@ -25,6 +25,13 @@ from models.client import (
     update_client,
     update_pipeline_stage,
 )
+from routes.whatsapp import (
+    get_conversation,
+    get_conversations,
+    get_unread_count as get_whatsapp_unread_count,
+    mark_read as mark_whatsapp_read,
+    messages_to_dicts,
+)
 
 mobile_api_bp = Blueprint("mobile_api", __name__, url_prefix="/api/mobile")
 
@@ -280,6 +287,44 @@ def tasks():
     return jsonify({"ok": True, "tasks": [_task_payload(row) for row in rows]})
 
 
+@mobile_api_bp.route("/whatsapp")
+@mobile_login_required
+def whatsapp_summary():
+    conversations = [_whatsapp_conversation_payload(row) for row in get_conversations(g.org_id)]
+    return jsonify({
+        "ok": True,
+        "unread": get_whatsapp_unread_count(g.org_id),
+        "conversations": conversations,
+    })
+
+
+@mobile_api_bp.route("/whatsapp/messages")
+@mobile_login_required
+def whatsapp_messages():
+    phone = (request.args.get("phone") or "").strip()
+    if not phone:
+        return _json_error("phone is required")
+    rows = get_conversation(phone, g.org_id)
+    if request.args.get("mark_read") == "1":
+        mark_whatsapp_read(phone, g.org_id)
+    return jsonify({
+        "ok": True,
+        "phone": phone,
+        "messages": messages_to_dicts(rows),
+    })
+
+
+@mobile_api_bp.route("/whatsapp/read", methods=["POST"])
+@mobile_login_required
+def whatsapp_mark_read():
+    data = request.get_json(silent=True) or {}
+    phone = (data.get("phone") or "").strip()
+    if not phone:
+        return _json_error("phone is required")
+    mark_whatsapp_read(phone, g.org_id)
+    return jsonify({"ok": True, "unread": get_whatsapp_unread_count(g.org_id)})
+
+
 @mobile_api_bp.route("/tasks/<int:followup_id>/complete", methods=["POST"])
 @mobile_login_required
 def complete_task(followup_id):
@@ -295,6 +340,22 @@ def complete_task(followup_id):
         return _json_error("Task not found", 404)
     complete_followup(followup_id)
     return jsonify({"ok": True})
+
+
+def _whatsapp_conversation_payload(row):
+    first = row["first_name"] or ""
+    last = row["last_name"] or ""
+    name = f"{first} {last}".strip()
+    return {
+        "phone": row["phone"],
+        "client_id": row["client_id"],
+        "client_name": name,
+        "last_message": row["last_message"] or "",
+        "last_direction": row["last_direction"] or "",
+        "last_status": row["last_status"] or "",
+        "last_at": row["last_at"] or "",
+        "unread": int(row["unread"] or 0),
+    }
 
 
 def _validate_client_payload(data):
