@@ -29,7 +29,7 @@
         <label class="form-label">Logo de la empresa</label>
         <input type="text" name="company_logo_url" id="logoUrl" class="form-control"
                value="{{ settings.get('company_logo_url', '') }}"
-               placeholder="https://papiatech.com/logo.png" />
+               placeholder="{{ brand.website or 'https://tuempresa.com' }}/logo.png" />
         <div class="form-text">Pega la URL directa de la imagen (PNG, JPG o WEBP — Gmail no muestra SVG) o súbela aquí:</div>
         <input type="file" name="logo_file" id="logoFile" accept=".png,.jpg,.jpeg,.gif,.webp" class="form-control" style="margin-top:8px;" />
         <div id="logoCheck" class="form-text" style="margin-top:6px;"></div>
@@ -72,7 +72,7 @@
         <label class="form-label">Nombre</label>
         <input type="text" name="signature_name" class="form-control"
                value="{{ settings.get('signature_name', '') }}"
-               placeholder="Henrry Martín" />
+               placeholder="{{ brand.owner_name }}" />
       </div>
 
       <div>
@@ -93,14 +93,14 @@
         <label class="form-label">Email de contacto</label>
         <input type="email" name="signature_email" class="form-control"
                value="{{ settings.get('signature_email', '') }}"
-               placeholder="hola@papiatech.com" />
+               placeholder="{{ brand.contact_email }}" />
       </div>
 
       <div>
         <label class="form-label">Sitio web</label>
         <input type="url" name="signature_website" class="form-control"
                value="{{ settings.get('signature_website', '') }}"
-               placeholder="https://papiatech.com" />
+               placeholder="{{ brand.website }}" />
       </div>
 
       <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px;">

@@ -4,7 +4,7 @@
 {% block head %}
 <style>
 /* ═══════════════════════════════════════════════
-   WhatsApp Web look — Papia CRM
+   WhatsApp Web look
 ═══════════════════════════════════════════════ */
 .main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; box-sizing: border-box; }
 @media (max-width: 1023px) {
@@ -511,8 +511,8 @@
   {% else %}
     <div class="wa-intro">
       <div class="wa-intro-ring"><i class="bi bi-whatsapp"></i></div>
-      <h2>WhatsApp · Papia CRM</h2>
-      <p>Atiende a tus clientes desde aquí. Los mensajes al +1 305-902-4632 llegan en tiempo real y cada chat se enlaza con su ficha del CRM.</p>
+      <h2>WhatsApp · {{ brand.crm_name }}</h2>
+      <p>Atiende a tus clientes desde aquí. Los mensajes{% if brand.whatsapp_display %} al {{ brand.whatsapp_display }}{% endif %} llegan en tiempo real y cada chat se enlaza con su ficha del CRM.</p>
       <a class="wa-intro-cta" href="{{ url_for('whatsapp.new_conversation') }}"><i class="bi bi-plus-lg"></i> Nuevo chat</a>
     </div>
   {% endif %}

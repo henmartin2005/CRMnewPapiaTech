@@ -791,7 +791,7 @@ if (reminderInput) {
 (function () {
 
   // Pre-rendered templates (variables substituted server-side)
-  {% set tpl_saludo %}Hola {{ client.first_name }}, soy Henrry de Papia Technology Solutions. ¿Cómo estás? Me pongo en contacto contigo para presentarte nuestros servicios de desarrollo web y CRM. ¿Tienes unos minutos para conversar?{% endset %}
+  {% set tpl_saludo %}Hola {{ client.first_name }}, soy {{ brand.owner_first_name }} de {{ brand.company_name }}. ¿Cómo estás? Me pongo en contacto contigo para presentarte {{ brand.services_pitch or 'nuestros servicios' }}. ¿Tienes unos minutos para conversar?{% endset %}
   {% set tpl_followup %}Hola {{ client.first_name }}, espero que estés muy bien. Te escribo para dar seguimiento a nuestra conversación anterior sobre tu proyecto de {{ project_labels.get(client.project_type, client.project_type) }}. ¿Has tenido oportunidad de revisar la información que te compartí?{% endset %}
   {% set tpl_propuesta %}Hola {{ client.first_name }}, adjunto encontrarás la propuesta formal para tu proyecto de {{ project_labels.get(client.project_type, client.project_type) }} por un valor de {{ client.total_cost | currency }}. Quedo atento a cualquier pregunta. ¡Estamos listos para comenzar cuando tú lo decidas!{% endset %}
   {% set tpl_pago %}Hola {{ client.first_name }}, espero estés bien. Te recuerdo que tienes un saldo pendiente de {{ client.pending | currency }} por el proyecto de {{ project_labels.get(client.project_type, client.project_type) }}. ¿Podemos coordinar el pago esta semana?{% endset %}
@@ -1017,11 +1017,12 @@ function sendStripeWA() {
   window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
 }
 
+const BRAND_SIGNATURE = {{ (brand.owner_name ~ '\n' ~ brand.legal_name) | tojson }};
 function sendStripeEmail() {
   if (!stripeUrl) return;
-  const subject = encodeURIComponent('Link de pago — Papia Technology Solutions');
+  const subject = encodeURIComponent({{ ('Link de pago — ' ~ brand.company_name) | tojson }});
   const body    = encodeURIComponent(
-    `Hola ${CLIENT_NAME},\n\nAquí tienes el link para realizar tu pago de forma segura:\n\n${stripeUrl}\n\nSi tienes alguna pregunta, con gusto te ayudo.\n\nGracias,\nHenrry Martín\nPapia Technology Solutions LLC`
+    `Hola ${CLIENT_NAME},\n\nAquí tienes el link para realizar tu pago de forma segura:\n\n${stripeUrl}\n\nSi tienes alguna pregunta, con gusto te ayudo.\n\nGracias,\n${BRAND_SIGNATURE}`
   );
   bootstrap.Modal.getInstance(document.getElementById('stripeModal')).hide();
   window.location.href = `/emails?client_id=${CLIENT_ID}&compose=1&subject=${subject}&body=${body}`;

@@ -14,9 +14,11 @@ from reportlab.platypus import (
     ListItem,
 )
 from models.proposal_whatsapp import acceptance_button_label, create_acceptance_link
+import instance_config as _cfg
 
 
-BLUE = colors.HexColor('#2563EB')
+_BRAND_COLORS = _cfg.brand().get('colors') or {}
+BLUE = colors.HexColor(_BRAND_COLORS.get('pdf') or _BRAND_COLORS.get('accent') or '#2563EB')
 LIGHT_BLUE = colors.HexColor('#EFF6FF')
 TEXT = colors.HexColor('#111827')
 MUTED = colors.HexColor('#6B7280')
@@ -101,7 +103,7 @@ def build_proposal_pdf(proposal, project_types):
     ))
     story.append(Spacer(1, 28))
     story.append(Table(
-        [[labels['client_signature'], 'Papia Technology Solutions LLC / date']],
+        [[labels['client_signature'], f"{_cfg.brand()['legal_name']} / date"]],
         colWidths=[3.3 * inch, 3.3 * inch],
         style=[
             ('LINEABOVE', (0, 0), (-1, 0), 1, colors.HexColor('#9CA3AF')),
@@ -124,6 +126,15 @@ class ProposalPdfService:
 proposalPdfService = ProposalPdfService()
 
 
+def _initials():
+    words = [w for w in (_cfg.brand().get('short_name') or '').replace('-', ' ').split() if w]
+    if len(words) >= 2:
+        return (words[0][0] + words[1][0]).upper()
+    w = words[0] if words else 'CR'
+    caps = [ch for ch in w if ch.isupper()]
+    return (''.join(caps[:2]) if len(caps) >= 2 else w[:2]).upper()
+
+
 def _styles():
     base = getSampleStyleSheet()
     base.add(ParagraphStyle('proposalTitle', parent=base['Title'], fontName='Helvetica-Bold', fontSize=26, leading=30, textColor=TEXT, spaceAfter=8))
@@ -142,7 +153,7 @@ def _styles():
 
 def _header(proposal, styles, labels):
     logo = Table(
-        [['PT']],
+        [[_initials()]],
         colWidths=[0.45 * inch],
         rowHeights=[0.45 * inch],
         style=[
@@ -153,7 +164,8 @@ def _header(proposal, styles, labels):
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
         ],
     )
-    left = [logo, Paragraph('<b>Papia Technology Solutions LLC</b>', styles['body']), Paragraph('Professional technology proposals and CRM solutions.', styles['muted'])]
+    b = _cfg.brand()
+    left = [logo, Paragraph(f"<b>{b['legal_name']}</b>", styles['body']), Paragraph(b.get('tagline') or '', styles['muted'])]
     right = [Paragraph(f"<b>{labels['proposal']}</b>", styles['body']), Paragraph(f"#{proposal['id']}<br/>{proposal['created_at'][:10]}<br/>Status: {proposal['status'].title()}", styles['muted'])]
     return Table(
         [[left, right]],
@@ -248,6 +260,7 @@ def _box_style():
 
 
 def _labels(language):
+    company = _cfg.brand()['legal_name']
     if language == 'es':
         return {
             'proposal': 'Propuesta',
@@ -272,7 +285,7 @@ def _labels(language):
             'estimated_start': 'Inicio estimado',
             'estimated_delivery': 'Entrega estimada',
             'business_days': 'Días laborables',
-            'approval_text': 'Al firmar abajo, el cliente aprueba esta propuesta y autoriza a Papia Technology Solutions LLC a comenzar el proyecto bajo los términos descritos.',
+            'approval_text': f'Al firmar abajo, el cliente aprueba esta propuesta y autoriza a {company} a comenzar el proyecto bajo los términos descritos.',
             'client_signature': 'Firma del cliente / fecha',
         }
     return {
@@ -298,6 +311,6 @@ def _labels(language):
         'estimated_start': 'Estimated start',
         'estimated_delivery': 'Estimated delivery',
         'business_days': 'Business days',
-        'approval_text': 'By signing below, the client approves this proposal and authorizes Papia Technology Solutions LLC to begin the project under the terms described above.',
+        'approval_text': f'By signing below, the client approves this proposal and authorizes {company} to begin the project under the terms described above.',
         'client_signature': 'Client signature / date',
     }

@@ -1,5 +1,8 @@
 """
-Google Calendar de PapiaTech para el asistente de WhatsApp.
+Google Calendar del negocio para el asistente de WhatsApp.
+
+Zona horaria y horario de llamadas: instance/brand.json (timezone) e instance/business.json
+(calendar). Se leen al arrancar: tras cambiarlos, haz Reload de la web app.
 
 - Usa la misma conexión OAuth de Gmail del CRM (tabla gmail_tokens).
 - Consulta disponibilidad con freeBusy para no encimar citas.
@@ -13,21 +16,46 @@ import requests
 
 log = logging.getLogger(__name__)
 
-TZ_NAME = 'America/New_York'          # hora de Miami
+import instance_config as _cfg
+
+_CAL = _cfg.calendar_settings()
+TZ_NAME = _cfg.timezone_name()
 TZ = ZoneInfo(TZ_NAME)
 API = 'https://www.googleapis.com/calendar/v3'
 CALENDAR_ID = 'primary'
 SCOPE = 'https://www.googleapis.com/auth/calendar'
 
-CALL_MINUTES = 30                     # duración de cada llamada
-WORK_START = 9                        # primera hora agendable
-WORK_END = 19                         # la llamada debe terminar antes de esta hora
-WORK_DAYS = {0, 1, 2, 3, 4, 5}        # lunes a sábado
-MIN_NOTICE_MIN = 60                   # no agendar con menos de 1 h de anticipación
+CALL_MINUTES = int(_CAL.get('call_minutes', 30))         # duración de cada llamada
+WORK_START = int(_CAL.get('work_start', 9))              # primera hora agendable
+WORK_END = int(_CAL.get('work_end', 19))                 # la llamada debe terminar antes de esta hora
+WORK_DAYS = set(_CAL.get('work_days', [0, 1, 2, 3, 4, 5]))  # 0 = lunes
+MIN_NOTICE_MIN = int(_CAL.get('min_notice_min', 60))     # anticipación mínima en minutos
 
 DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
 MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
          'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+
+def call_minutes():
+    return CALL_MINUTES
+
+
+def work_start():
+    return WORK_START
+
+
+def work_end():
+    return WORK_END
+
+
+def days_label():
+    """'lunes a sábado', 'lunes a viernes', o la lista de días."""
+    days = sorted(WORK_DAYS)
+    if not days:
+        return 'sin días configurados'
+    if days == list(range(days[0], days[-1] + 1)) and len(days) > 2:
+        return f'{DIAS[days[0]]} a {DIAS[days[-1]]}'
+    return ', '.join(DIAS[d] for d in days)
 
 
 def now():
@@ -42,7 +70,7 @@ def human(dt):
 
 
 def parse_local(value):
-    """ISO 'YYYY-MM-DDTHH:MM' (hora de Miami si no trae zona)."""
+    """ISO 'YYYY-MM-DDTHH:MM' (hora local de la instancia si no trae zona)."""
     value = (value or '').strip().replace(' ', 'T')
     if value.endswith('Z'):
         value = value[:-1] + '+00:00'

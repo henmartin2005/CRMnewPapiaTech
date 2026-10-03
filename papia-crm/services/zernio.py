@@ -168,7 +168,7 @@ def list_templates():
                     params={'accountId': account_id()})
 
 
-def create_webhook(url: str, secret: str, name='Papia CRM WhatsApp'):
+def create_webhook(url: str, secret: str, name='CRM WhatsApp'):
     return _request('POST', '/v1/webhooks/settings', headers=_headers(), json={
         'name': name,
         'url': url,

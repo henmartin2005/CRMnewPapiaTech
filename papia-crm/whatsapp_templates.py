@@ -1,5 +1,6 @@
 """
-whatsapp_templates.py — crea las plantillas de WhatsApp de Papia en Zernio/Meta.
+whatsapp_templates.py — crea las plantillas de WhatsApp del negocio en Zernio/Meta
+(nombre y dueño salen de instance/brand.json).
 
 Uso (con el venv activo, desde papia-crm):
     python whatsapp_templates.py          # crea las que falten (es + en)
@@ -15,18 +16,21 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 from services import zernio  # noqa: E402
+import instance_config as cfg  # noqa: E402
 
-BRAND = 'Papia Technology Solutions'
+BRAND = cfg.get('company_name')
+OWNER = cfg.get('owner_first_name')
+EXAMPLE_BASE = cfg.base_url() or 'https://crm.example.com'
 
 # name: (category, {lang: (body, example_values, [quick_reply_buttons])})
 TEMPLATES = {
     'seguimiento_propuesta': ('UTILITY', {
         'es': ("Hola {{1}}, tu propuesta para *{{2}}* ya está lista. Puedes revisarla aquí: {{3}}\n\n"
                "Si tienes alguna pregunta, responde a este mensaje.",
-               ['Ana', 'App de reservas', 'https://datos.papiatech.com/p/1234'], []),
+               ['Ana', 'App de reservas', f'{EXAMPLE_BASE}/p/1234'], []),
         'en': ("Hi {{1}}, your proposal for *{{2}}* is ready. You can review it here: {{3}}\n\n"
                "If you have any questions, just reply to this message.",
-               ['Ana', 'Booking app', 'https://datos.papiatech.com/p/1234'], []),
+               ['Ana', 'Booking app', f'{EXAMPLE_BASE}/p/1234'], []),
     }),
     'recordatorio_reunion': ('UTILITY', {
         'es': (f"Hola {{{{1}}}}, te recordamos tu reunión con {BRAND} el {{{{2}}}} a las {{{{3}}}}. ¿Nos confirmas tu asistencia?",
@@ -38,11 +42,11 @@ TEMPLATES = {
         'es': ("Hola {{1}}, tienes un saldo pendiente de {{2}} correspondiente a *{{3}}*. "
                "Puedes pagar de forma segura aquí: {{4}}\n\n"
                "Si ya realizaste el pago, ignora este mensaje. ¡Gracias!",
-               ['Ana', '$450.00', 'Sitio web corporativo', 'https://datos.papiatech.com/pay/1234'], []),
+               ['Ana', '$450.00', 'Sitio web corporativo', f'{EXAMPLE_BASE}/pay/1234'], []),
         'en': ("Hi {{1}}, you have an outstanding balance of {{2}} for *{{3}}*. "
                "You can pay securely here: {{4}}\n\n"
                "If you have already paid, please disregard this message. Thank you!",
-               ['Ana', '$450.00', 'Company website', 'https://datos.papiatech.com/pay/1234'], []),
+               ['Ana', '$450.00', 'Company website', f'{EXAMPLE_BASE}/pay/1234'], []),
     }),
     'avance_proyecto': ('UTILITY', {
         'es': ("Hola {{1}}, hay una actualización en tu proyecto *{{2}}*: {{3}}\n\n"
@@ -53,10 +57,10 @@ TEMPLATES = {
                ['Ana', 'Booking app', 'we finished the design of the main screens'], []),
     }),
     'primer_contacto': ('MARKETING', {
-        'es': (f"Hola {{{{1}}}}, soy Henrry de {BRAND}. Te escribo por tu interés en {{{{2}}}}. "
+        'es': (f"Hola {{{{1}}}}, soy {OWNER} de {BRAND}. Te escribo por tu interés en {{{{2}}}}. "
                "¿Tienes unos minutos para conversar?",
                ['Ana', 'una página web para tu negocio'], ['Sí, hablemos', 'Ahora no']),
-        'en': (f"Hi {{{{1}}}}, this is Henrry from {BRAND}. I'm reaching out about your interest in {{{{2}}}}. "
+        'en': (f"Hi {{{{1}}}}, this is {OWNER} from {BRAND}. I'm reaching out about your interest in {{{{2}}}}. "
                "Do you have a few minutes to talk?",
                ['Ana', 'a website for your business'], ["Yes, let's talk", 'Not now']),
     }),

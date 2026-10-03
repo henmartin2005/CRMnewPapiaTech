@@ -1,11 +1,11 @@
 """
 zernio_setup.py — configuración y diagnóstico de WhatsApp vía Zernio.
 
-Uso (desde /home/henmartin2005/CRMnewPapiaTech/papia-crm con el venv activo):
+Uso (desde la carpeta papia-crm con el venv activo):
     python zernio_setup.py accounts          # lista cuentas y muestra el accountId de WhatsApp
     python zernio_setup.py number            # estado del número en Meta (nombre, calidad, tier)
     python zernio_setup.py templates         # plantillas y su estado de aprobación
-    python zernio_setup.py webhook           # registra https://datos.papiatech.com/webhook/zernio
+    python zernio_setup.py webhook           # registra <APP_BASE_URL>/webhook/zernio
     python zernio_setup.py test +1786XXXXXXX # envía un texto de prueba (requiere que ese número te haya escrito)
 """
 import json
@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 from services import zernio  # noqa: E402
+import instance_config as cfg  # noqa: E402
 
 
 def pretty(obj):
@@ -49,7 +50,9 @@ def cmd_templates():
 
 
 def cmd_webhook():
-    base = os.getenv('APP_BASE_URL', 'https://datos.papiatech.com').rstrip('/')
+    base = cfg.base_url()
+    if not base:
+        sys.exit('Define APP_BASE_URL en .env (ej. https://crm.tucliente.com).')
     secret = os.getenv('ZERNIO_WEBHOOK_SECRET', '').strip()
     if not secret:
         sys.exit('Define ZERNIO_WEBHOOK_SECRET en .env antes de registrar el webhook.')
@@ -60,8 +63,8 @@ def cmd_test(phone):
     conv = zernio.find_conversation_id(phone)
     if not conv:
         sys.exit('Ese número no tiene conversación abierta: escríbele primero desde tu celular '
-                 'al número de Papia, o usa una plantilla.')
-    pretty(zernio.send_text(conv, 'Prueba desde el CRM de Papia Technology ✅'))
+                 'al número del negocio, o usa una plantilla.')
+    pretty(zernio.send_text(conv, f"Prueba desde el CRM de {cfg.get('company_name')} ✅"))
 
 
 if __name__ == '__main__':

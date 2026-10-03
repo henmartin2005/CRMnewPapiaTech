@@ -213,11 +213,7 @@
 {% endblock %}
 
 {% block content %}
-{% set stage_hex = {
-  'new_lead': '#0ba5ec', 'contacted': '#2a5bff', 'proposal_sent': '#f79009',
-  'negotiation': '#ef6820', 'active_client': '#12b76a', 'recurring': '#7a5af8'
-} %}
-{% set client_stages = ['active_client', 'recurring'] %}
+{# stage_hex y client_stages vienen de instance/business.json (context processor) #}
 {% set ns = namespace(total=0, value=0) %}
 {% for s, _ in pipeline_stages %}{% for c in stages_data.get(s, []) %}{% set ns.total = ns.total + 1 %}{% set ns.value = ns.value + (c.total_cost or 0) %}{% endfor %}{% endfor %}
 

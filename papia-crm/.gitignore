@@ -10,3 +10,7 @@ client_docs/
 *.bak-*
 *.db.bak*
 wa_media/
+
+# Configuración y datos de cada instancia (cliente) — nunca al repo
+instance/
+*.db

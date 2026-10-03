@@ -50,7 +50,7 @@
   <header class="top">
     <div>
       <div class="mark">PT</div>
-      <div class="brand">Papia Technology Solutions LLC</div>
+      <div class="brand">{{ brand.legal_name }}</div>
       <div class="muted">Professional technology solutions, websites, CRM systems, and automation.</div>
     </div>
     <div class="meta">
@@ -141,10 +141,10 @@
 
   <section>
     <h2>Approval</h2>
-    <p class="muted">By signing below, the client approves this proposal and authorizes Papia Technology Solutions LLC to begin the project under the terms described above.</p>
+    <p class="muted">By signing below, the client approves this proposal and authorizes {{ brand.legal_name }} to begin the project under the terms described above.</p>
     <div class="sign">
       <div class="line">Client signature / date</div>
-      <div class="line">Papia Technology Solutions LLC / date</div>
+      <div class="line">{{ brand.legal_name }} / date</div>
     </div>
   </section>
 

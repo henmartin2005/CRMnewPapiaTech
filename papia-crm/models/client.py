@@ -1,23 +1,13 @@
 from datetime import datetime
 
 from database import get_db
+import instance_config as _cfg
 
-PIPELINE_STAGES = [
-    ('new_lead', 'Nuevo Lead'),
-    ('contacted', 'Contactado'),
-    ('proposal_sent', 'Propuesta Enviada'),
-    ('negotiation', 'Negociación'),
-    ('active_client', 'Cliente Activo'),
-    ('recurring', 'Recurrente'),
-]
+# Etapas del pipeline y tipos de servicio: vienen de instance/business.json
+# (o config_defaults/business.json). Cambiarlos requiere Reload de la web app.
+PIPELINE_STAGES = _cfg.pipeline_stages()
 
-PROJECT_TYPES = [
-    ('website', 'Website'),
-    ('crm', 'CRM'),
-    ('mobile_app', 'Mobile App'),
-    ('consulting', 'Consulting'),
-    ('other', 'Other'),
-]
+PROJECT_TYPES = _cfg.project_types()
 
 NOTE_TYPES = [
     ('note', 'Nota'),
@@ -36,14 +26,7 @@ FOLLOW_UP_METHODS = [
     ('other', 'Otro'),
 ]
 
-STAGE_COLORS = {
-    'new_lead': 'info',
-    'contacted': 'primary',
-    'proposal_sent': 'warning',
-    'negotiation': 'orange',
-    'active_client': 'success',
-    'recurring': 'purple',
-}
+STAGE_COLORS = _cfg.stage_colors()
 
 
 def get_all_clients(org_id, search=None):

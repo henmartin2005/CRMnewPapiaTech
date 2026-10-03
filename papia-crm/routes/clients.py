@@ -21,7 +21,8 @@ from werkzeug.utils import secure_filename
 from zoneinfo import ZoneInfo
 from models.payment_schedule import list_installments
 from models.client_layout import get_layout, reset_layout, save_layout
-SCHED_TZ = ZoneInfo(os.getenv('APP_TIMEZONE', 'America/New_York'))
+import instance_config as _cfg
+SCHED_TZ = ZoneInfo(_cfg.timezone_name())
 
 from models.client_document import (
     ACCEPT_ATTR, ALLOWED_EXTS, MAX_FILE_BYTES, add_file_document, add_link_document,

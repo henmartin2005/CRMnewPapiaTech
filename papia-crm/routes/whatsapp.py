@@ -880,7 +880,7 @@ def zernio_webhook():
     if platform and platform != 'whatsapp':
         return jsonify({'ignored': platform})   # IG/Messenger siguen por Meta directo
 
-    org_id = 1  # PapiaTech (single-tenant para este número)
+    org_id = 1  # organización principal (una instancia = un número de WhatsApp)
     wa_id  = msg.get('platformMessageId') or msg.get('id')
 
     try:
@@ -1104,7 +1104,7 @@ def bot_test():
 
 @whatsapp_bp.route('/whatsapp/bot/learn', methods=['POST'])
 def bot_learn():
-    """Analiza las conversaciones de WhatsApp para que el bot escriba como Henrry."""
+    """Analiza las conversaciones de WhatsApp para que el bot escriba como el dueño."""
     from services import ai_learning
     try:
         if ai_learning.start_learning(_get_org_id()):

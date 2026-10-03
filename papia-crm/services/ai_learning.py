@@ -1,14 +1,15 @@
 """
-Aprendizaje del asistente de WhatsApp a partir de las conversaciones reales de Henrry.
+Aprendizaje del asistente de WhatsApp a partir de las conversaciones reales del dueño del negocio
+(nombre en instance/brand.json → owner_name).
 
-- Lee los chats de WhatsApp guardados en el CRM y separa lo que escribió Henrry (desde el CRM
+- Lee los chats de WhatsApp guardados en el CRM y separa lo que escribió el dueño (desde el CRM
   o desde su celular) de lo que respondió el bot.
-- Le pide a Claude que extraiga: cómo escribe Henrry, qué explica, cómo maneja objeciones y
-  cómo cierra, más ejemplos reales (cliente → Henrry) con los precios tachados.
+- Le pide a Claude que extraiga: cómo escribe el dueño, qué explica, cómo maneja objeciones y
+  cómo cierra, más ejemplos reales (cliente → dueño) con los precios tachados.
 - El resultado se guarda en ai_bot_learning y se inyecta en el prompt del bot.
 - Se vuelve a aprender solo cada RELEARN_DAYS días (o con el botón del panel).
 
-Los precios que Henrry menciona se guardan aparte SOLO como referencia interna: nunca entran
+Los precios que el dueño menciona se guardan aparte SOLO como referencia interna: nunca entran
 al prompt del bot ni se envían al cliente.
 """
 import json
@@ -21,6 +22,7 @@ from datetime import datetime, timedelta
 import requests
 
 from database import get_db
+import instance_config as cfg
 
 log = logging.getLogger(__name__)
 
@@ -117,7 +119,7 @@ def _save(org_id, **fields):
 
 
 def save_style_guide(org_id, text):
-    """Henrry corrige a mano lo aprendido desde el panel."""
+    """El dueño corrige a mano lo aprendido desde el panel."""
     _save(org_id, style_guide=(text or '').strip())
 
 
@@ -149,9 +151,10 @@ def has_price(text):
 
 
 def _looks_like_bot(text):
-    """Mensajes viejos del bot (antes de marcarlos): hablan de Henrry en tercera persona."""
+    """Mensajes viejos del bot (antes de marcarlos): hablan del dueño en tercera persona."""
     t = (text or '').lower()
-    return bool(re.search(r'(?<!soy )\bhenrry\b', t)          # Henrry no habla de sí mismo en tercera persona
+    owner = re.escape((cfg.brand().get('owner_first_name') or '').lower().strip())
+    return bool((owner and re.search(r'(?<!soy )\b' + owner + r'\b', t))   # el dueño no habla de sí mismo en tercera persona
                 or 'asistente' in t or 'no puedo escuchar audios' in t)
 
 
@@ -195,7 +198,7 @@ def _collect(org_id):
                 elif sent_by == 'bot' or (not sent_by and too_fast) or _looks_like_bot(msg):
                     who = 'BOT'
                 else:
-                    who = 'HENRRY'
+                    who = 'DUEÑO'
                     has_mine = True
                     mine += 1
                 lines.append(f'{who}: {msg}')
@@ -209,27 +212,30 @@ def _collect(org_id):
             convs.append(f'### Conversación {used}\n{block}')
     finally:
         db.close()
-    return convs, {'conversaciones': used, 'mensajes_henrry': mine, 'caracteres': total}
+    return convs, {'conversaciones': used, 'mensajes_dueno': mine, 'caracteres': total}
 
 
 # ── Análisis con Claude ─────────────────────────────────────────────────────
 
-ANALYSIS_SYSTEM = """Analizas conversaciones reales de WhatsApp entre Henrry Martín (fundador de Papia Technology Solutions, agencia de desarrollo web, CRMs, apps y automatizaciones en Miami) y sus clientes o prospectos.
-Las líneas HENRRY las escribió él. Las líneas BOT son de un asistente automático: IGNÓRALAS para el estilo y el conocimiento.
-Tu trabajo es destilar cómo vende y cómo escribe Henrry para que otro asistente pueda responder exactamente como él.
+def analysis_system():
+    b = cfg.brand()
+    return f"""Analizas conversaciones reales de WhatsApp entre {b['owner_name']} ({b['owner_role']} de {b['legal_name']}, {b['city']}) y sus clientes o prospectos.
+Las líneas DUEÑO las escribió {b['owner_first_name']}. Las líneas BOT son de un asistente automático: IGNÓRALAS para el estilo y el conocimiento.
+Tu trabajo es destilar cómo vende y cómo escribe {b['owner_first_name']} para que otro asistente pueda responder exactamente como él o ella.
 Reglas:
 - Usa solo lo que aparece en las conversaciones. No inventes servicios, plazos ni políticas.
 - En guia_estilo, conocimiento, objeciones y ejemplos NO incluyas ningún precio, monto ni rango: reemplázalos por [precio].
 - Los precios solo pueden aparecer en precios_internos.
 - Responde ÚNICAMENTE con un objeto JSON válido, sin texto antes ni después."""
 
+
 ANALYSIS_USER = """Estas son las conversaciones ({n} chats). Devuelve este JSON:
 {{
-  "guia_estilo": "Viñetas (- ...) concretas sobre cómo escribe Henrry: saludo típico, tuteo o usted, tono, longitud de los mensajes, si manda varios mensajes cortos, uso de emojis (cuáles), signos de puntuación, muletillas y frases exactas que repite, cómo pide datos, cómo propone la llamada, cómo cierra y cómo hace seguimiento. Cita frases textuales entre comillas.",
-  "conocimiento": "Viñetas con lo que Henrry explica a los clientes: servicios, qué incluye cada uno, su proceso de trabajo, tiempos que menciona, formas de pago, preguntas frecuentes y cómo las responde. Sin montos.",
-  "objeciones": "Viñetas 'objeción → cómo responde Henrry' (precio, lo voy a pensar, ya tengo web, no tengo tiempo, etc.). Solo las que aparezcan.",
-  "ejemplos": [{{"cliente": "mensaje real del cliente", "henrry": "respuesta real de Henrry"}}],
-  "precios_internos": "Resumen de los precios o rangos que Henrry ha mencionado y para qué servicio (referencia interna).",
+  "guia_estilo": "Viñetas (- ...) concretas sobre cómo escribe el DUEÑO: saludo típico, tuteo o usted, tono, longitud de los mensajes, si manda varios mensajes cortos, uso de emojis (cuáles), signos de puntuación, muletillas y frases exactas que repite, cómo pide datos, cómo propone la llamada, cómo cierra y cómo hace seguimiento. Cita frases textuales entre comillas.",
+  "conocimiento": "Viñetas con lo que el DUEÑO explica a los clientes: servicios, qué incluye cada uno, su proceso de trabajo, tiempos que menciona, formas de pago, preguntas frecuentes y cómo las responde. Sin montos.",
+  "objeciones": "Viñetas 'objeción → cómo responde el DUEÑO' (precio, lo voy a pensar, ya tengo web, no tengo tiempo, etc.). Solo las que aparezcan.",
+  "ejemplos": [{{"cliente": "mensaje real del cliente", "respuesta": "respuesta real del DUEÑO"}}],
+  "precios_internos": "Resumen de los precios o rangos que el DUEÑO ha mencionado y para qué servicio (referencia interna).",
   "observaciones": "Una o dos líneas sobre qué tan representativa es la muestra."
 }}
 Para "ejemplos" elige de 8 a 12 intercambios reales y variados que muestren bien su estilo y su forma de cerrar (sin precios).
@@ -264,7 +270,7 @@ def _run(org_id):
             API_URL,
             headers={'x-api-key': os.getenv('ANTHROPIC_API_KEY', ''),
                      'anthropic-version': '2023-06-01', 'content-type': 'application/json'},
-            json={'model': model, 'max_tokens': 4000, 'system': ANALYSIS_SYSTEM,
+            json={'model': model, 'max_tokens': 4000, 'system': analysis_system(),
                   'messages': [{'role': 'user', 'content': ANALYSIS_USER.format(
                       n=len(convs), convs='\n\n'.join(convs))}]},
             timeout=180,
@@ -287,7 +293,7 @@ def _run(org_id):
         result = _parse_json(text)
 
         sections = []
-        for title, key in (('ESTILO DE HENRRY', 'guia_estilo'), ('LO QUE EXPLICA A LOS CLIENTES', 'conocimiento'),
+        for title, key in (('ESTILO DEL DUEÑO', 'guia_estilo'), ('LO QUE EXPLICA A LOS CLIENTES', 'conocimiento'),
                            ('CÓMO RESPONDE OBJECIONES', 'objeciones')):
             body = strip_prices(_as_text(result.get(key)))
             if body:
@@ -296,9 +302,9 @@ def _run(org_id):
         for ex in result.get('ejemplos') or []:
             if not isinstance(ex, dict):
                 continue
-            c, h = strip_prices(str(ex.get('cliente') or '')).strip(), strip_prices(str(ex.get('henrry') or '')).strip()
+            c, h = strip_prices(str(ex.get('cliente') or '')).strip(), strip_prices(str(ex.get('respuesta') or ex.get('henrry') or '')).strip()
             if c and h and not _looks_like_bot(h):   # nunca imitar mensajes del bot
-                examples.append({'cliente': c[:400], 'henrry': h[:400]})
+                examples.append({'cliente': c[:400], 'respuesta': h[:400]})
         stats['observaciones'] = str(result.get('observaciones') or '')[:400]
         stats['modelo'] = data.get('model') or model
         _save(org_id, status='ready', style_guide='\n\n'.join(sections), examples=examples[:12],
@@ -352,12 +358,13 @@ def prompt_block(org_id=1):
     examples = data.get('examples') or []
     if not guide and not examples:
         return ''
-    parts = ['LO QUE APRENDISTE DE LAS CONVERSACIONES REALES DE HENRRY. Imita al detalle su forma de escribir '
+    owner = cfg.brand().get('owner_first_name') or 'el dueño'
+    parts = [f'LO QUE APRENDISTE DE LAS CONVERSACIONES REALES DE {owner.upper()}. Imita al detalle su forma de escribir '
              '(tono, expresiones, emojis, longitud). La estrategia de venta, los precios y las reglas las manda '
              'la sección TU MISIÓN y las REGLAS, aunque aquí diga otra cosa:', guide]
     if examples:
-        parts.append('EJEMPLOS REALES (cliente → Henrry). Copia el tono, la longitud y las expresiones; '
+        parts.append(f'EJEMPLOS REALES (cliente → {owner}). Copia el tono, la longitud y las expresiones; '
                      'no copies datos concretos de otros clientes:')
         for ex in examples[:12]:
-            parts.append(f"- Cliente: {strip_prices(ex.get('cliente'))}\n  Henrry: {strip_prices(ex.get('henrry'))}")
+            parts.append(f"- Cliente: {strip_prices(ex.get('cliente'))}\n  {owner}: {strip_prices(ex.get('respuesta') or ex.get('henrry'))}")
     return '\n'.join(p for p in parts if p)

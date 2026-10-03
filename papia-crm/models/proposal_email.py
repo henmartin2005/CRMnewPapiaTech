@@ -1,4 +1,5 @@
 from database import get_db
+import instance_config as cfg
 from models.proposal_whatsapp import create_acceptance_link
 
 
@@ -7,34 +8,36 @@ def build_proposal_email(proposal):
     title = proposal.get('title', '')
     client = proposal.get('client_name', '')
     whatsapp_link = proposal.get('whatsapp_acceptance_link') or create_acceptance_link(proposal)
+    b = cfg.brand()
+    company, site = b['legal_name'], b['website_host']
 
     if language == 'es':
-        subject = f"Propuesta para {title} - Papia Technology Solutions LLC"
+        subject = f"Propuesta para {title} - {company}"
         body = (
             f"Hola {client},\n\n"
-            "Gracias por considerar a Papia Technology Solutions LLC para tu proyecto.\n\n"
+            f"Gracias por considerar a {company} para tu proyecto.\n\n"
             f"Hemos adjuntado la propuesta para {title}, donde se incluye el alcance del proyecto, "
             "los servicios seleccionados, el tiempo estimado de entrega, el precio y los términos de pago.\n\n"
             "Por favor revisa el documento adjunto. Si todo está correcto, puedes responder este correo "
             "o confirmar tu aprobación por WhatsApp.\n\n"
             f"Aceptar propuesta por WhatsApp:\n{whatsapp_link}\n\n"
             "Saludos cordiales,\n"
-            "Papia Technology Solutions LLC\n"
-            "www.papiatech.com"
+            f"{company}\n"
+            f"{site}"
         )
     else:
-        subject = f"Proposal for {title} - Papia Technology Solutions LLC"
+        subject = f"Proposal for {title} - {company}"
         body = (
             f"Hi {client},\n\n"
-            "Thank you for considering Papia Technology Solutions LLC for your project.\n\n"
+            f"Thank you for considering {company} for your project.\n\n"
             f"We have attached the proposal for {title}, including the project scope, selected services, "
             "estimated timeline, pricing, and payment terms.\n\n"
             "Please review the attached document. If everything looks good, you can reply to this email "
             "or confirm your approval through WhatsApp.\n\n"
             f"Accept Proposal by WhatsApp:\n{whatsapp_link}\n\n"
             "Best regards,\n"
-            "Papia Technology Solutions LLC\n"
-            "www.papiatech.com"
+            f"{company}\n"
+            f"{site}"
         )
     return subject, body, whatsapp_link
 

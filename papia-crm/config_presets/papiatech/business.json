@@ -1,0 +1,10 @@
+{
+  "project_types": [
+    {"key": "website",    "label": "Website",    "keywords": ["web", "landing", "pagina", "página", "tienda", "shopify", "ecommerce"]},
+    {"key": "crm",        "label": "CRM",        "keywords": []},
+    {"key": "mobile_app", "label": "Mobile App", "keywords": ["app", "aplicacion", "aplicación"]},
+    {"key": "consulting", "label": "Consulting", "keywords": ["consultoria", "consultoría"]},
+    {"key": "other",      "label": "Other",      "keywords": ["automatizacion", "automatización", "chatbot"]}
+  ],
+  "default_project_type": "other"
+}

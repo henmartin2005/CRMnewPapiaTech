@@ -260,7 +260,7 @@
           <span class="section-head-label"><i class="bi bi-eye" style="margin-right:5px;"></i>Live preview</span>
         </div>
         <div class="proposal-mini-preview">
-          <div class="mini-brand">Papia Technology Solutions LLC · <span id="miniLanguage">{{ (proposal.proposal_language or 'en') | upper }}</span></div>
+          <div class="mini-brand">{{ brand.legal_name }} · <span id="miniLanguage">{{ (proposal.proposal_language or 'en') | upper }}</span></div>
           <h3 id="miniTitle">{{ proposal.title or 'Proposal title' }}</h3>
           <p id="miniClient">{{ proposal.client_name or 'Client name' }}</p>
           <div class="mini-line"><span>Services</span><strong id="miniServices">0</strong></div>
@@ -502,7 +502,7 @@ function updateDraftAcceptanceLink() {
   const msg = lang === 'es'
     ? `Hola, revisé la propuesta para ${title} y me gustaría aceptarla. Mi nombre es ${client}.`
     : `Hello, I reviewed the proposal for ${title} and I would like to accept it. My name is ${client}.`;
-  const link = 'https://wa.me/17869157096?text=' + encodeURIComponent(msg);
+  const link = 'https://wa.me/{{ brand.proposal_whatsapp_number }}?text=' + encodeURIComponent(msg);
   document.getElementById('draftAcceptanceLink').textContent = link;
 }
 

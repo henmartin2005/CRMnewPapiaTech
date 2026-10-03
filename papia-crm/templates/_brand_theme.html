@@ -1,0 +1,15 @@
+{# Colores de la marca (instance/brand.json → colors). Sobrescribe los tokens de style.css. #}
+{% set _c = brand.colors or {} %}
+<style>
+  :root {
+    {% if _c.accent %}--c-accent: {{ _c.accent }};{% endif %}
+    {% if _c.accent_hover %}--c-accent-h: {{ _c.accent_hover }};{% endif %}
+    {% if _c.sidebar_bg %}--sidebar-bg: {{ _c.sidebar_bg }};{% endif %}
+    {% if _c.background %}--c-bg: {{ _c.background }};{% endif %}
+  }
+  .brand-wordmark {
+    display: inline-block; color: #fff; font-weight: 700; font-size: 17px; letter-spacing: -.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
+  body.sidebar-light .sidebar .brand-wordmark { color: var(--c-text); }
+</style>

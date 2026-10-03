@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
 from database import get_db
+import instance_config as cfg
 
 leads_bp = Blueprint('leads', __name__)
 
-VALID_PROJECT_TYPES = {'website', 'crm', 'mobile_app', 'consulting', 'other'}
 
 
 def _find_client_by_email(email: str):
@@ -77,9 +77,10 @@ def new_lead():
         return jsonify({'success': False, 'error': 'first_name y email son requeridos'}), 400
 
     # ── Normalize project_type ──
-    project_type = (data.get('project_type') or 'other').strip().lower()
-    if project_type not in VALID_PROJECT_TYPES:
-        project_type = 'other'
+    # Acepta la clave del servicio o una palabra clave (instance/business.json → project_types)
+    default_type = cfg.business().get('default_project_type', 'other')
+    project_type = (data.get('project_type') or '').strip().lower()
+    project_type = cfg.service_keywords().get(project_type, default_type)
 
     budget          = (data.get('budget')          or '').strip()
     project_details = (data.get('project_details') or '').strip()

@@ -12,6 +12,7 @@ except ImportError:
     pass
 
 from database import init_db
+import instance_config as cfg
 from models.client import (
     get_dashboard_stats,
     get_due_task_count,
@@ -36,14 +37,19 @@ from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
+_secret = os.environ.get('SECRET_KEY', '').strip()
+if not _secret:
+    import secrets as _secrets
+    import logging as _logging
+    _secret = _secrets.token_hex(32)
+    _logging.getLogger(__name__).warning(
+        'SECRET_KEY no está en el .env: se usa una clave temporal (las sesiones se cierran al reiniciar).')
+app.secret_key = _secret
 app.permanent_session_lifetime = timedelta(days=7)
 
 # CORS solo para el endpoint público de leads
-CORS(app, resources={r"/api/*": {"origins": [
-    "https://www.papiatech.com",
-    "https://papiatech.com",
-]}})
+# Orígenes permitidos: CORS_ORIGINS en el .env (separados por coma) o brand.json → cors_origins
+CORS(app, resources={r"/api/*": {"origins": cfg.cors_origins()}})
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(leads_bp)
@@ -180,7 +186,13 @@ def inject_globals():
     except Exception:
         enabled_modules = _ALL_MODULES if role in ('admin', 'superadmin') else set()
 
+    brand = cfg.brand()
     return {
+        'brand':            brand,
+        'now_year':         datetime.now().year,
+        'stage_hex':        {s['key']: s.get('hex', '#94a3b8') for s in cfg.business().get('pipeline_stages', [])},
+        'client_stages':    cfg.business().get('client_stages', ['active_client', 'recurring']),
+        'pipeline_stages_cfg': cfg.pipeline_stages(),
         'wa_unread':        wa_unread,
         'messenger_unread': messenger_unread,
         'instagram_unread': instagram_unread,
@@ -227,7 +239,7 @@ def localtime_filter(value, fmt='%I:%M %p'):
     try:
         dt = datetime.strptime(str(value)[:19], '%Y-%m-%d %H:%M:%S')
         dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(ZoneInfo('America/New_York')).strftime(fmt)
+        return dt.astimezone(ZoneInfo(cfg.timezone_name())).strftime(fmt)
     except Exception:
         return str(value)[11:16] if len(str(value)) > 16 else str(value)
 

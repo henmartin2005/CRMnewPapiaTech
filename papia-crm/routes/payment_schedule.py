@@ -16,7 +16,9 @@ from models.payment_schedule import (
 
 payment_schedule_bp = Blueprint('payment_schedule', __name__)
 
-TZ = ZoneInfo(os.getenv('APP_TIMEZONE', 'America/New_York'))
+import instance_config as cfg
+
+TZ = ZoneInfo(cfg.timezone_name())
 MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
          'septiembre', 'octubre', 'noviembre', 'diciembre']
 DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
@@ -119,8 +121,8 @@ def _email_html(r, payment_email, crm_name):
   <p><strong>Método de pago:</strong> Zelle a <strong>{escape(payment_email)}</strong>
   ({escape(crm_name)}). Por favor incluya <em>“{nota}”</em> en la nota del pago.</p>
   <p>Si ya realizó el pago, ignore este mensaje. ¡Gracias por su confianza!</p>
-  <p style="margin-top:24px;">Henrry Martin<br>{escape(crm_name)}<br>
-  <a href="https://papiatech.com">papiatech.com</a></p>
+  <p style="margin-top:24px;">{escape(cfg.get('owner_name'))}<br>{escape(crm_name)}<br>
+  <a href="{escape(cfg.get('website'))}">{escape(cfg.get('website_host'))}</a></p>
 </div>"""
 
 
@@ -136,9 +138,9 @@ def api_due():
         target = request.args['date']
     include_sent = request.args.get('include_sent') == '1'
 
-    payment_email = os.getenv('PAYMENT_ZELLE_EMAIL', 'henrry@papiatech.com')
-    company_name = os.getenv('COMPANY_NAME', 'Papia Technology Solutions LLC')
-    base = os.getenv('APP_BASE_URL', 'https://datos.papiatech.com').rstrip('/')
+    payment_email = cfg.get('payment_email') or cfg.get('contact_email')
+    company_name = cfg.get('legal_name')
+    base = cfg.base_url()
 
     items = []
     for r in due_for_reminder(target, include_sent=include_sent):

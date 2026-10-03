@@ -1,0 +1,30 @@
+{
+  "company_name": "Mi Empresa",
+  "legal_name": "Mi Empresa LLC",
+  "short_name": "Mi Empresa",
+  "crm_name": "CRM",
+  "tagline": "Soluciones profesionales para tu negocio.",
+  "services_pitch": "nuestros servicios",
+  "owner_name": "Nombre Apellido",
+  "owner_first_name": "Nombre",
+  "owner_title": "CEO & Founder",
+  "owner_role": "fundador",
+  "website": "https://example.com",
+  "contact_email": "info@example.com",
+  "payment_email": "",
+  "whatsapp_number": "",
+  "whatsapp_display": "",
+  "proposal_whatsapp_number": "",
+  "logo_url": "",
+  "logo_white_url": "",
+  "city": "Miami",
+  "timezone": "America/New_York",
+  "language": "es",
+  "cors_origins": [],
+  "colors": {
+    "accent": "#2A5BFF",
+    "accent_hover": "#1A4AEF",
+    "sidebar_bg": "#0B0E14",
+    "background": "#F5F0EB"
+  }
+}

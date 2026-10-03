@@ -1,3 +1,4 @@
+import instance_config as cfg
 import os
 import time
 from flask import Blueprint, request, jsonify, render_template, session, g
@@ -32,7 +33,7 @@ def _get_org_stripe(org_id):
     if not webhook_secret:
         webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET', '')
     if not base_url:
-        base_url = os.getenv('APP_BASE_URL', 'https://datos.papiatech.com')
+        base_url = cfg.base_url()
 
     return secret_key, webhook_secret, base_url
 
@@ -50,7 +51,7 @@ def create_link():
     data        = request.get_json(silent=True) or {}
     client_id   = data.get('client_id')
     amount      = data.get('amount')
-    description = (data.get('description') or 'Pago — Papia Technology Solutions').strip()
+    description = (data.get('description') or f"Pago — {cfg.get('company_name')}").strip()
     currency    = (data.get('currency') or 'usd').lower()
 
     if not client_id or not amount:
@@ -83,7 +84,7 @@ def create_link():
                     'currency': currency,
                     'product_data': {
                         'name': description,
-                        'description': 'Papia Technology Solutions LLC',
+                        'description': cfg.get('legal_name'),
                     },
                     'unit_amount': int(round(amount * 100)),
                 },
@@ -93,7 +94,7 @@ def create_link():
             customer_email=client['email'] if client and client['email'] else None,
             success_url=f'{base_url}/payments/success?session_id={{CHECKOUT_SESSION_ID}}',
             cancel_url=f'{base_url}/clients/{client_id}',
-            metadata={'client_id': str(client_id), 'crm': 'papia'},
+            metadata={'client_id': str(client_id), 'crm': cfg.get('short_name')},
         )
 
         db = get_db()

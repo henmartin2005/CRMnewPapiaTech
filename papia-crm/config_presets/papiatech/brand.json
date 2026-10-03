@@ -1,0 +1,30 @@
+{
+  "company_name": "Papia Technology Solutions",
+  "legal_name": "Papia Technology Solutions LLC",
+  "short_name": "PapiaTech",
+  "crm_name": "Papia CRM",
+  "tagline": "Professional technology proposals and CRM solutions.",
+  "services_pitch": "nuestros servicios de desarrollo web y CRM",
+  "owner_name": "Henrry Martín",
+  "owner_first_name": "Henrry",
+  "owner_title": "CEO & Founder",
+  "owner_role": "fundador",
+  "website": "https://www.papiatech.com",
+  "contact_email": "info@papiatech.com",
+  "payment_email": "henrry@papiatech.com",
+  "whatsapp_number": "13059024632",
+  "whatsapp_display": "+1 305-902-4632",
+  "proposal_whatsapp_number": "17869157096",
+  "logo_url": "https://www.papiatech.com/assets/logo-papiatech-white-CnoB7BBt.png",
+  "logo_white_url": "https://www.papiatech.com/assets/logo-papiatech-white-CnoB7BBt.png",
+  "city": "Miami",
+  "timezone": "America/New_York",
+  "language": "es",
+  "cors_origins": [
+    "https://www.papiatech.com",
+    "https://papiatech.com"
+  ],
+  "colors": {
+    "pdf": "#2563EB"
+  }
+}

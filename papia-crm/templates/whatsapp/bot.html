@@ -129,7 +129,7 @@
     {% if L.stats %}
     <div class="bot-learn-stats">
       <span><strong>{{ L.stats.conversaciones or 0 }}</strong> chats analizados</span>
-      <span><strong>{{ L.stats.mensajes_henrry or 0 }}</strong> mensajes tuyos</span>
+      <span><strong>{{ L.stats.mensajes_dueno or L.stats.mensajes_henrry or 0 }}</strong> mensajes tuyos</span>
       {% if L.examples %}<span><strong>{{ L.examples|length }}</strong> ejemplos reales</span>{% endif %}
       {% if L.stats.observaciones %}<span class="bot-hint">{{ L.stats.observaciones }}</span>{% endif %}
     </div>
@@ -154,7 +154,7 @@
       <div class="bot-learn-examples">
         {% for ex in L.examples %}
         <div class="bot-msg in">{{ ex.cliente }}</div>
-        <div class="bot-msg out">{{ ex.henrry }}</div>
+        <div class="bot-msg out">{{ ex.respuesta or ex.henrry }}</div>
         {% endfor %}
       </div>
     </details>
@@ -171,7 +171,7 @@
   <div class="bot-cal {{ 'ok' if calendar.ok else 'warn' }}">
     <i class="bi bi-calendar-check"></i>
     {% if calendar.ok %}
-      <span><strong>Google Calendar conectado</strong> ({{ calendar.detail }}) · el bot agenda llamadas de {{ calendar.minutes }} min, lunes a sábado {{ calendar.hours }} (Miami), solo en horarios libres.</span>
+      <span><strong>Google Calendar conectado</strong> ({{ calendar.detail }}) · el bot agenda llamadas de {{ calendar.minutes }} min, {{ calendar.days or "lunes a sábado" }} {{ calendar.hours }} ({{ calendar.tz or brand.tz_label }}), solo en horarios libres.</span>
     {% else %}
       <span><strong>Google Calendar sin conectar:</strong> {{ calendar.detail }}</span>
       <a href="/emails/auth">Reconectar Google</a>

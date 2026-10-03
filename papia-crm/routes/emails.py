@@ -8,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from flask import (Blueprint, request, jsonify, render_template,
                    redirect, url_for, flash, session, g)
 from database import get_db
+import instance_config as cfg
 from models.proposal_email import get_email_draft
 
 emails_bp = Blueprint('emails', __name__)
@@ -52,9 +53,18 @@ def _abs_url(url):
                 base = request.url_root.rstrip('/')
         except Exception:
             base = ''
-        base = base or os.getenv('APP_BASE_URL', 'https://datos.papiatech.com').rstrip('/')
+        base = base or cfg.base_url()
         return base + url
     return url
+
+
+def _accent():
+    return (cfg.brand().get('colors') or {}).get('accent') or '#2A5BFF'
+
+
+def html_escape(value):
+    from html import escape
+    return escape(value or '')
 
 
 def _is_image_url(url):
@@ -99,7 +109,7 @@ def _build_html_email(body_text, settings):
         logo_html = (
             f'<div style="text-align:{logo_align};padding:24px 0 20px 0;">{logo_img}</div>'
             if logo_url else
-            '<div style="text-align:center;font-size:20px;font-weight:700;color:#2A5BFF;padding:28px 0 20px 0;">Papia Technology Solutions</div>'
+            f'<div style="text-align:center;font-size:20px;font-weight:700;color:{_accent()};padding:28px 0 20px 0;">{html_escape(cfg.get("company_name"))}</div>'
         )
     else:
         logo_html = ''
@@ -111,7 +121,7 @@ def _build_html_email(body_text, settings):
     phone_line   = f'<tr><td style="color:#6B7280;padding:0;">📞 {sig_phone}</td></tr>' if sig_phone else ''
     email_line   = f'<tr><td style="color:#6B7280;padding:0;">✉️ {sig_email}</td></tr>'  if sig_email else ''
     website_line = (
-        f'<tr><td style="padding:0;"><a href="{sig_web}" style="color:#2A5BFF;text-decoration:none;">{sig_web}</a></td></tr>'
+        f'<tr><td style="padding:0;"><a href="{sig_web}" style="color:{_accent()};text-decoration:none;">{sig_web}</a></td></tr>'
         if sig_web else ''
     )
     title_line   = f'<tr><td style="color:#6B7280;padding:0;">{sig_title}</td></tr>' if sig_title else ''
@@ -142,7 +152,7 @@ def _build_html_email(body_text, settings):
                    style="font-size:13px;line-height:1.6;border-collapse:collapse;">
               <tr><td style="padding:0;">{sig_logo_html}<strong style="color:#111827;">{sig_name}</strong></td></tr>
               {title_line}
-              <tr><td style="color:#6B7280;padding:0;">Papia Technology Solutions LLC</td></tr>
+              <tr><td style="color:#6B7280;padding:0;">{html_escape(cfg.get('legal_name'))}</td></tr>
               {phone_line}{email_line}{website_line}
             </table>
           </td>

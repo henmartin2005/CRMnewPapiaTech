@@ -261,7 +261,7 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
         </div>
         <div>
           <label class="form-label">Nombre</label>
-          <input type="text" name="page_name" class="form-control" placeholder="Ej: Papia Tech" />
+          <input type="text" name="page_name" class="form-control" placeholder="Ej: {{ brand.short_name }}" />
         </div>
         <div style="grid-column:1 / -1;">
           <label class="form-label">Access Token</label>
@@ -318,11 +318,11 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
     </div>
 
     {% if user.role in ('admin', 'superadmin') %}
-    <!-- Admin: read-only view of org-enabled modules (set by PapiaTech) -->
+    <!-- Admin: read-only view of org-enabled modules (set by superadmin) -->
     <div style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;
                 letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
       <i class="bi bi-shield-lock" style="color:var(--c-accent);font-size:13px;"></i>
-      Módulos habilitados por PapiaTech para esta organización
+      Módulos habilitados por el administrador para esta organización
     </div>
     <div class="mod-grid">
       {% if org_modules %}
@@ -335,7 +335,7 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
         {% endfor %}
       {% else %}
         <span style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
-          Ningún módulo habilitado aún. Contacta a PapiaTech.
+          Ningún módulo habilitado aún. Contacta al administrador.
         </span>
       {% endif %}
     </div>
@@ -378,7 +378,7 @@ input:checked + .mod-slider:before { transform:translateX(16px); }
     {% endif %}
     {% else %}
     <span style="font-size:12.5px;color:var(--c-text-3);font-style:italic;">
-      Tu organización no tiene módulos habilitados. Contacta a PapiaTech.
+      Tu organización no tiene módulos habilitados. Contacta al administrador.
     </span>
     {% endif %}
     {% endif %}

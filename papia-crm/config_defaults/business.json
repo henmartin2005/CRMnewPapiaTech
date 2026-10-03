@@ -1,0 +1,27 @@
+{
+  "_comentario": "Las claves de etapa new_lead, contacted, proposal_sent, active_client y recurring las usa el código: cambia sus nombres (label) y colores, pero no sus claves (key). Puedes agregar etapas nuevas. Los cambios en este archivo requieren Reload de la web app.",
+  "pipeline_stages": [
+    {"key": "new_lead",      "label": "Nuevo Lead",        "color": "info",    "hex": "#0ba5ec"},
+    {"key": "contacted",     "label": "Contactado",        "color": "primary", "hex": "#2a5bff"},
+    {"key": "proposal_sent", "label": "Propuesta Enviada", "color": "warning", "hex": "#f79009"},
+    {"key": "negotiation",   "label": "Negociación",       "color": "orange",  "hex": "#ef6820"},
+    {"key": "active_client", "label": "Cliente Activo",    "color": "success", "hex": "#12b76a"},
+    {"key": "recurring",     "label": "Recurrente",        "color": "purple",  "hex": "#7a5af8"}
+  ],
+  "client_stages": ["active_client", "recurring"],
+  "project_types": [
+    {"key": "service",      "label": "Servicio",     "keywords": ["servicio", "service"]},
+    {"key": "consulting",   "label": "Consultoría",  "keywords": ["consultoria", "consultoría", "asesoria", "asesoría"]},
+    {"key": "subscription", "label": "Suscripción",  "keywords": ["suscripcion", "suscripción", "plan", "mensual"]},
+    {"key": "other",        "label": "Otro",         "keywords": []}
+  ],
+  "default_project_type": "other",
+  "modules": ["whatsapp", "messenger", "instagram", "emails", "calendar", "proposals", "tasks", "chat"],
+  "calendar": {
+    "call_minutes": 30,
+    "work_start": 9,
+    "work_end": 19,
+    "work_days": [0, 1, 2, 3, 4, 5],
+    "min_notice_min": 60
+  }
+}

@@ -44,14 +44,7 @@
            class="chip {% if not request.args.get('stage') %}active{% endif %}">
           Todos
         </a>
-        {% set stages = [
-          ('new_lead','Nuevo Lead','#7DD3FC'),
-          ('contacted','Contactado','#93C5FD'),
-          ('proposal_sent','Propuesta','#FCD34D'),
-          ('negotiation','Negociación','#FDBA74'),
-          ('active_client','Activo','#86EFAC'),
-          ('recurring','Recurrente','#C4B5FD'),
-        ] %}
+        {% set stages = [] %}{% for key, label in pipeline_stages_cfg %}{% if stages.append((key, label, stage_hex.get(key, '#94a3b8'))) %}{% endif %}{% endfor %}
         {% for val, label, dot_color in stages %}
           <a href="{{ url_for('clients.list_clients', q=search, stage=val) }}"
              class="chip {% if request.args.get('stage') == val %}active{% endif %}">

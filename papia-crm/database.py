@@ -1,11 +1,18 @@
-import sqlite3
+import logging
 import os
+import re
+import sqlite3
 from werkzeug.security import generate_password_hash as _gen_hash
+
+import instance_config as _cfg
+
+_WEAK_PASSWORDS = {'admin', 'password', '123456', 'cambia-esta-contrasena', 'changeme'}
 
 def generate_password_hash(password):
     return _gen_hash(password, method='pbkdf2:sha256')
 
-DATABASE = os.path.join(os.path.dirname(__file__), 'papia_crm.db')
+# Ruta de la base: DATABASE_PATH en el .env (por defecto papia_crm.db junto a este archivo)
+DATABASE = os.getenv('DATABASE_PATH') or os.path.join(os.path.dirname(__file__), 'papia_crm.db')
 
 
 def get_db():
@@ -402,20 +409,24 @@ def init_db():
 
     conn.commit()
 
-    # ── Seed PapiaTech as org_id=1 ────────────────────────────────────────────
+    # ── Seed la organización principal (org_id=1) con la marca de la instancia ──
+    brand = _cfg.brand()
     if not conn.execute("SELECT 1 FROM organizations WHERE id=1").fetchone():
+        slug = re.sub(r'[^a-z0-9]+', '-', brand['short_name'].lower()).strip('-') or 'main'
         conn.execute(
-            "INSERT INTO organizations (id, name, slug, plan) VALUES (1, 'Papia Technology Solutions', 'papiatech', 'enterprise')"
+            "INSERT INTO organizations (id, name, slug, plan) VALUES (1, ?, ?, 'enterprise')",
+            (brand['company_name'], slug),
         )
         conn.commit()
 
-    # ── Seed org_modules for every org that doesn't have them yet ────────────
+    # ── Seed org_modules: activos los de business.json → modules ─────────────
     _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat']
+    _enabled = set(_cfg.modules())
     for org_row in conn.execute("SELECT id FROM organizations").fetchall():
         for mod in _ORG_MODULES:
             conn.execute(
-                "INSERT OR IGNORE INTO org_modules (org_id, module, enabled) VALUES (?, ?, 1)",
-                (org_row['id'], mod),
+                "INSERT OR IGNORE INTO org_modules (org_id, module, enabled) VALUES (?, ?, ?)",
+                (org_row['id'], mod, 1 if mod in _enabled else 0),
             )
     conn.commit()
 
@@ -466,31 +477,32 @@ def init_db():
         except Exception:
             pass
 
-    # ── Seed default email templates ──────────────────────────────────────────
+    # ── Seed default email templates (con la marca de la instancia) ────────────
     existing = conn.execute("SELECT COUNT(*) FROM email_templates").fetchone()[0]
     if existing == 0:
+        firma = f"{brand['owner_name']}\n{brand['legal_name']}"
         conn.executemany(
             "INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)",
             [
                 (
                     'Saludo inicial',
-                    'Hola {nombre}, bienvenido a Papia Tech',
-                    'Hola {nombre},\n\nMi nombre es Henrry y soy parte del equipo de Papia Technology Solutions LLC.\n\nNos alegra mucho que estés considerando trabajar con nosotros. Estamos especializados en desarrollo web, aplicaciones móviles y soluciones CRM a medida.\n\nMe gustaría agendar una llamada para entender mejor tus necesidades y cómo podemos ayudarte.\n\n¿Tienes disponibilidad esta semana?\n\nQuedo atento,\nHenrry Martín\nPapia Technology Solutions LLC',
+                    f"Hola {{nombre}}, bienvenido a {brand['short_name']}",
+                    f"Hola {{nombre}},\n\nMi nombre es {brand['owner_first_name']} y soy parte del equipo de {brand['legal_name']}.\n\nNos alegra mucho que estés considerando trabajar con nosotros.\n\nMe gustaría agendar una llamada para entender mejor tus necesidades y cómo podemos ayudarte.\n\n¿Tienes disponibilidad esta semana?\n\nQuedo atento,\n{firma}",
                 ),
                 (
                     'Envío de propuesta',
-                    'Propuesta de proyecto — Papia Technology Solutions',
-                    'Hola {nombre},\n\nEspero que estés muy bien. Tal como conversamos, adjunto la propuesta detallada para tu proyecto.\n\nEn ella encontrarás:\n• Alcance y entregables\n• Cronograma estimado\n• Inversión total\n\nQuedo disponible para resolver cualquier duda o hacer ajustes según tus necesidades.\n\nSaludos,\nHenrry Martín\nPapia Technology Solutions LLC',
+                    f"Propuesta — {brand['company_name']}",
+                    f"Hola {{nombre}},\n\nEspero que estés muy bien. Tal como conversamos, adjunto la propuesta detallada.\n\nEn ella encontrarás:\n• Alcance y entregables\n• Cronograma estimado\n• Inversión total\n\nQuedo disponible para resolver cualquier duda o hacer ajustes según tus necesidades.\n\nSaludos,\n{firma}",
                 ),
                 (
                     'Follow-up',
-                    'Seguimiento — Papia Technology Solutions',
-                    'Hola {nombre},\n\nEspero que todo esté marchando bien. Quería dar seguimiento a nuestra conversación y ver si tuviste oportunidad de revisar la información que te compartí.\n\nEstoy aquí para responder cualquier pregunta o brindar información adicional que necesites para tomar una decisión.\n\n¿Hay algo en lo que pueda ayudarte?\n\nSaludos,\nHenrry Martín\nPapia Technology Solutions LLC',
+                    f"Seguimiento — {brand['company_name']}",
+                    f"Hola {{nombre}},\n\nEspero que todo esté marchando bien. Quería dar seguimiento a nuestra conversación y ver si tuviste oportunidad de revisar la información que te compartí.\n\nEstoy aquí para responder cualquier pregunta o brindar información adicional que necesites para tomar una decisión.\n\n¿Hay algo en lo que pueda ayudarte?\n\nSaludos,\n{firma}",
                 ),
                 (
                     'Recordatorio de pago',
-                    'Recordatorio de pago — Papia Technology Solutions',
-                    'Hola {nombre},\n\nEspero que estés bien. Te escribimos para recordarte que tienes un saldo pendiente con nosotros.\n\nSi ya realizaste el pago, por favor ignora este mensaje. De lo contrario, te agradecería que te pongas en contacto para coordinar el método de pago más conveniente para ti.\n\nQuedamos a tu disposición.\n\nSaludos,\nHenrry Martín\nPapia Technology Solutions LLC',
+                    f"Recordatorio de pago — {brand['company_name']}",
+                    f"Hola {{nombre}},\n\nEspero que estés bien. Te escribimos para recordarte que tienes un saldo pendiente con nosotros.\n\nSi ya realizaste el pago, por favor ignora este mensaje. De lo contrario, te agradecería que te pongas en contacto para coordinar el método de pago más conveniente para ti.\n\nQuedamos a tu disposición.\n\nSaludos,\n{firma}",
                 ),
             ]
         )
@@ -508,8 +520,12 @@ def init_db():
     conn.commit()
 
     admin_user = os.getenv('ADMIN_USERNAME', 'admin').strip()
-    admin_pass = os.getenv('ADMIN_PASSWORD', 'admin').strip()
-    if not conn.execute("SELECT 1 FROM users WHERE username=?", (admin_user,)).fetchone():
+    admin_pass = os.getenv('ADMIN_PASSWORD', '').strip()
+    exists = conn.execute("SELECT 1 FROM users WHERE username=?", (admin_user,)).fetchone()
+    if not exists and (not admin_pass or admin_pass in _WEAK_PASSWORDS):
+        logging.getLogger(__name__).error(
+            'No se creó el superadmin: define ADMIN_PASSWORD (segura) en el .env y recarga la app.')
+    elif not exists:
         conn.execute(
             "INSERT INTO users (username, password_hash, display_name, role, org_id) VALUES (?, ?, 'Admin', 'superadmin', 1)",
             (admin_user, generate_password_hash(admin_pass)),
@@ -523,27 +539,16 @@ def init_db():
         )
         conn.commit()
 
-    if not conn.execute("SELECT 1 FROM users WHERE username='Testing'").fetchone():
-        conn.execute(
-            "INSERT INTO users (username, password_hash, display_name, role, org_id) VALUES ('Testing', ?, 'Testing', 'user', 1)",
-            (generate_password_hash('Testing'),),
-        )
-        conn.commit()
-        testing_id = conn.execute("SELECT id FROM users WHERE username='Testing'").fetchone()['id']
-        conn.executemany(
-            "INSERT OR IGNORE INTO user_modules (user_id, module, enabled) VALUES (?, ?, 1)",
-            [(testing_id, m) for m in ALL_MODULES],
-        )
-        conn.commit()
+    # (La plantilla ya no crea el usuario de prueba 'Testing'.)
 
     # ── Seed default company settings ────────────────────────────────────────
     defaults = [
         ('company_logo_url',  ''),
-        ('signature_name',    'Henrry Martín'),
-        ('signature_title',   'CEO & Founder'),
-        ('signature_phone',   ''),
-        ('signature_email',   ''),
-        ('signature_website', 'https://papiatech.com'),
+        ('signature_name',    brand.get('owner_name', '')),
+        ('signature_title',   brand.get('owner_title', '')),
+        ('signature_phone',   brand.get('whatsapp_display', '')),
+        ('signature_email',   brand.get('contact_email', '')),
+        ('signature_website', brand.get('website', '')),
     ]
     for key, value in defaults:
         conn.execute(

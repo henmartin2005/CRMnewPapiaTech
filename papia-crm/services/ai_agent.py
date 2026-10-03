@@ -1,8 +1,10 @@
 """
 Agente de IA para WhatsApp (Claude).
 
-- Responde como Henrry (estilo aprendido de sus chats reales, ver services/ai_learning.py) y empuja a cerrar la venta.
-- Nunca da precios: lleva al cliente a la llamada con Henrry.
+- Responde como el dueño del negocio (estilo aprendido de sus chats reales, ver services/ai_learning.py)
+  y empuja a cerrar la venta.
+- Nunca da precios: lleva al cliente a la llamada con el dueño.
+- Prompt, información del negocio, servicios y horario salen de instance/ (ver instance_config.py).
 - Capta datos del cliente (nombre, email, servicio de interés) y los guarda en su ficha.
 - Ofrece agendar una llamada y deja la solicitud como nota en el CRM.
 - Se pausa en una conversación cuando un humano escribe en ella (desde el CRM o el celular).
@@ -20,6 +22,7 @@ import requests
 
 from database import get_db
 from services import google_calendar as gcal
+import instance_config as cfg
 
 log = logging.getLogger(__name__)
 
@@ -28,59 +31,61 @@ DEFAULT_MODEL = 'claude-haiku-4-5'
 HISTORY_LIMIT = 20          # mensajes previos que se envían como contexto
 MAX_TOOL_ROUNDS = 4
 
-DEFAULT_BUSINESS_INFO = """Papia Technology Solutions LLC (PapiaTech) — Miami, Florida.
-Fundador y CEO: Henrry Martín. Atendemos en español e inglés.
-Servicios: páginas web y landing pages, tiendas online (Shopify), CRMs a la medida,
-apps móviles, chatbots con IA, automatizaciones (n8n, Make, Zapier), dashboards y hosting.
-Web: https://www.papiatech.com — Formulario: https://www.papiatech.com/cuentanos-tu-proyecto
-Planes de pago flexibles disponibles (AfterPay).
-Los precios dependen del proyecto: Henrry prepara una cotización personalizada después de una llamada corta."""
+def _owner():
+    return cfg.brand().get('owner_first_name') or 'el equipo'
 
-SERVICE_MAP = {
-    'website': 'website', 'web': 'website', 'landing': 'website', 'pagina': 'website',
-    'página': 'website', 'tienda': 'website', 'shopify': 'website', 'ecommerce': 'website',
-    'crm': 'crm', 'mobile_app': 'mobile_app', 'app': 'mobile_app', 'aplicacion': 'mobile_app',
-    'aplicación': 'mobile_app', 'consulting': 'consulting', 'consultoria': 'consulting',
-    'consultoría': 'consulting', 'automatizacion': 'other', 'automatización': 'other',
-    'chatbot': 'other', 'other': 'other',
-}
 
-TOOLS = [
-    {
-        'name': 'guardar_datos_cliente',
-        'description': ('Guarda en el CRM los datos que el cliente haya dado. Llama esta herramienta '
-                        'en cuanto el cliente comparta su nombre, email o el servicio que le interesa. '
-                        'Envía solo los campos que el cliente dijo explícitamente.'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'nombre': {'type': 'string', 'description': 'Nombre(s) del cliente'},
-                'apellido': {'type': 'string', 'description': 'Apellido(s) del cliente'},
-                'email': {'type': 'string', 'description': 'Correo electrónico'},
-                'servicio': {'type': 'string',
-                             'description': 'Servicio de interés: website, crm, mobile_app, consulting u other'},
-                'detalles': {'type': 'string', 'description': 'Resumen breve de lo que necesita'},
+def _tz():
+    return cfg.brand()['tz_label']
+
+
+def default_business_info():
+    return cfg.render_text('business_info.md').strip()
+
+
+def _service_key(servicio):
+    keys = cfg.service_keywords()
+    return keys.get((servicio or '').lower(), cfg.business().get('default_project_type', 'other'))
+
+
+def _tools():
+    services = ', '.join(k for k, _ in cfg.project_types())
+    return [
+        {
+            'name': 'guardar_datos_cliente',
+            'description': ('Guarda en el CRM los datos que el cliente haya dado. Llama esta herramienta '
+                            'en cuanto el cliente comparta su nombre, email o el servicio que le interesa. '
+                            'Envía solo los campos que el cliente dijo explícitamente.'),
+            'input_schema': {
+                'type': 'object',
+                'properties': {
+                    'nombre': {'type': 'string', 'description': 'Nombre(s) del cliente'},
+                    'apellido': {'type': 'string', 'description': 'Apellido(s) del cliente'},
+                    'email': {'type': 'string', 'description': 'Correo electrónico'},
+                    'servicio': {'type': 'string',
+                                 'description': f'Servicio de interés: {services}'},
+                    'detalles': {'type': 'string', 'description': 'Resumen breve de lo que necesita'},
+                },
             },
         },
-    },
-    {
-        'name': 'agendar_llamada',
-        'description': ('Agenda una llamada de 30 minutos con Henrry en su Google Calendar. Úsala cuando el cliente '
-                        'acepte la llamada y haya dicho día y hora. Comprueba que el horario esté libre: '
-                        'responde AGENDADA, OCUPADO (con horarios libres) o NO_AGENDADA. Si el cliente ya tenía '
-                        'una cita, la mueve al nuevo horario (no crea duplicados).'),
-        'input_schema': {
-            'type': 'object',
-            'properties': {
-                'fecha_hora': {'type': 'string',
-                               'description': 'Inicio de la llamada en hora de Miami, formato YYYY-MM-DDTHH:MM '
-                                              '(ej. 2026-10-05T18:00)'},
-                'motivo': {'type': 'string', 'description': 'Tema de la llamada'},
+        {
+            'name': 'agendar_llamada',
+            'description': (f'Agenda una llamada de {gcal.call_minutes()} minutos con {_owner()} en su Google Calendar. Úsala cuando el cliente '
+                            'acepte la llamada y haya dicho día y hora. Comprueba que el horario esté libre: '
+                            'responde AGENDADA, OCUPADO (con horarios libres) o NO_AGENDADA. Si el cliente ya tenía '
+                            'una cita, la mueve al nuevo horario (no crea duplicados).'),
+            'input_schema': {
+                'type': 'object',
+                'properties': {
+                    'fecha_hora': {'type': 'string',
+                                   'description': f'Inicio de la llamada en {_tz()}, formato YYYY-MM-DDTHH:MM '
+                                                  '(ej. 2026-10-05T18:00)'},
+                    'motivo': {'type': 'string', 'description': 'Tema de la llamada'},
+                },
+                'required': ['fecha_hora'],
             },
-            'required': ['fecha_hora'],
         },
-    },
-]
+    ]
 
 
 # ── Persistencia ────────────────────────────────────────────────────────────
@@ -136,10 +141,10 @@ def get_settings(org_id=1):
     finally:
         db.close()
     if not row:
-        return {'enabled': False, 'business_info': DEFAULT_BUSINESS_INFO, 'pause_hours': 24}
+        return {'enabled': False, 'business_info': default_business_info(), 'pause_hours': 24}
     return {
         'enabled': bool(row[0]),
-        'business_info': row[1] or DEFAULT_BUSINESS_INFO,
+        'business_info': cfg.render(row[1]) if row[1] else default_business_info(),
         'pause_hours': int(row[2] or 24),
     }
 
@@ -327,46 +332,13 @@ def _system_prompt(settings, client_id, org_id=1):
         log.exception('Bot WhatsApp: no se pudo cargar el aprendizaje')
         learned = ''
     learned_block = (learned + '\n\n') if learned else ''
-    return f"""Atiendes el WhatsApp de Papia Technology Solutions (PapiaTech) en nombre de Henrry Martín, su fundador.
-Escribes exactamente como escribe Henrry con sus clientes: mismo tono, mismas expresiones, misma longitud y mismo uso de emojis.
-Nada de sonar a robot ni a plantilla: mensajes cortos y naturales de WhatsApp (1 a 3 líneas), sin listas, sin negritas, sin despedidas largas.
-Responde en el idioma del cliente (español o inglés).
-
-FECHA Y HORA ACTUAL: {gcal.human(gcal.now())} (hora de Miami).
-
-{learned_block}INFORMACIÓN DEL NEGOCIO (única fuente de verdad sobre servicios y condiciones):
-{settings['business_info']}
-
-DATOS ACTUALES DEL CLIENTE EN EL CRM:
-{_client_summary(client_id)}
-
-TU MISIÓN: CERRAR LA VENTA. Cada mensaje tiene que acercar al cliente a una llamada con Henrry, que es donde se cotiza y se cierra el proyecto.
-1. Descubre rápido qué necesita y para qué: tipo de negocio, objetivo y para cuándo. Una sola pregunta concreta por mensaje.
-2. Conecta lo que necesita con el resultado que busca (más clientes, más ventas, menos trabajo manual). Beneficios concretos, no tecnicismos.
-3. Lleva siempre la iniciativa: termina CADA mensaje con una pregunta o un siguiente paso claro. Nunca cierres con "cualquier cosa me avisas".
-4. Propón la llamada en cuanto haya interés y ciérrala con dos opciones concretas ("¿te queda mejor hoy a las 4 o mañana a las 11?").
-   Si duda, insiste con un argumento nuevo (es corta, sin compromiso, sale con la cotización exacta), nunca repitiendo el mismo mensaje.
-5. Objeciones ("está caro", "lo voy a pensar", "después te escribo", "ya tengo web"): valida en pocas palabras, da una razón de valor y vuelve a proponer fecha y hora.
-6. Consigue sin interrogar el nombre, el email y el servicio de interés. Cuando el cliente dé un dato, llama a guardar_datos_cliente.
-7. Para agendar, convierte lo que diga el cliente ("el lunes", "mañana a las 6") en una fecha exacta usando la FECHA ACTUAL.
-   Si el día de la semana no coincide con la fecha que dio, pregúntale cuál es antes de agendar.
-   Llama a agendar_llamada con fecha_hora en formato YYYY-MM-DDTHH:MM (hora de Miami):
-   - AGENDADA → confírmale día y hora exactos.
-   - OCUPADO o NO_AGENDADA → díselo y ofrécele los horarios libres que devuelve la herramienta.
-   Nunca digas que la cita quedó agendada si la herramienta no respondió AGENDADA.
-
-PRECIOS — REGLA ABSOLUTA:
-- Nunca des precios, montos, rangos, "desde", descuentos ni comparaciones de precio. Aunque el cliente insista, aunque aparezcan en la información del negocio o en mensajes anteriores del chat.
-- Si preguntan cuánto cuesta: el precio depende de lo que necesite y en la llamada Henrry le da la cotización exacta; ofrécele dos horarios para esa llamada.
-
-CERO INVENTOS:
-- Afirma solo lo que está en la información del negocio o en lo aprendido de Henrry. Si no lo sabes (plazos, integraciones, detalles técnicos, garantías), no supongas: di que eso lo ve Henrry con él en la llamada y vuelve a ofrecerla.
-- No prometas fechas de entrega, resultados garantizados, descuentos ni promociones. No inventes urgencia falsa (cupos, ofertas que vencen).
-
-OTRAS REGLAS:
-- No pidas datos sensibles (tarjetas, contraseñas, documentos).
-- Si el cliente está molesto, pide hablar con una persona o el tema es delicado: dile que Henrry le escribe personalmente en breve y deja de vender.
-- No te presentes como IA. Pero si el cliente pregunta directamente si habla con un bot o con una persona, no lo niegues: di que eres el asistente de Henrry, que él revisa la conversación y que lo atiende personalmente en la llamada."""
+    return cfg.render_text(
+        'agent_prompt.md',
+        now=gcal.human(gcal.now()),
+        learned_block=learned_block,
+        business_info=settings['business_info'],
+        client_summary=_client_summary(client_id),
+    ).strip()
 
 
 def _no_prices(text, system, messages):
@@ -383,7 +355,7 @@ def _no_prices(text, system, messages):
             {'role': 'assistant', 'content': text},
             {'role': 'user', 'content': '[INSTRUCCIÓN INTERNA, no es del cliente] Reescribe tu último mensaje sin '
                                         'mencionar ningún precio, monto ni rango. Explica que la cotización exacta '
-                                        'se la da Henrry en la llamada y ofrece dos horarios. Responde solo con el mensaje.'},
+                                        f'se la da {_owner()} en la llamada y ofrece dos horarios. Responde solo con el mensaje.'},
         ]
         data = _call_claude(system, retry)
         new = '\n'.join(b.get('text', '') for b in data.get('content') or [] if b.get('type') == 'text').strip()
@@ -391,7 +363,7 @@ def _no_prices(text, system, messages):
             return new
     except Exception:
         log.exception('Bot WhatsApp: no se pudo reescribir la respuesta sin precios')
-    return ('El precio depende de lo que necesites exactamente 👌 En una llamada corta Henrry te da la '
+    return (f'El precio depende de lo que necesites exactamente 👌 En una llamada corta {_owner()} te da la '
             'cotización exacta. ¿Te queda mejor hoy en la tarde o mañana en la mañana?')
 
 
@@ -428,7 +400,7 @@ def _tool_guardar_datos(args, client_id, phone):
             return f'El email "{email}" no parece válido; pídele que lo confirme.'
         fields.append('email = ?'); values.append(email[:255])
     if servicio:
-        fields.append('project_type = ?'); values.append(SERVICE_MAP.get(servicio, 'other'))
+        fields.append('project_type = ?'); values.append(_service_key(servicio))
     if detalles:
         fields.append("project_details = TRIM(COALESCE(project_details, '') || ' ' || ?)")
         values.append(detalles[:500])
@@ -458,7 +430,7 @@ def _tool_solicitar_llamada(args, client_id, phone):
             db.commit()
         finally:
             db.close()
-    return 'Solicitud de llamada registrada. Henrry confirmará el horario.'
+    return f'Solicitud de llamada registrada. {_owner()} confirmará el horario.'
 
 
 PRICES_PER_MTOK = {                  # USD por millón de tokens (entrada, salida)
@@ -484,7 +456,7 @@ def _price_for(model):
 
 
 def _record_usage(model, usage, org_id=1):
-    """Suma el consumo real (tokens que devuelve la API) por día de Miami."""
+    """Suma el consumo real (tokens que devuelve la API) por día (zona horaria de la instancia)."""
     try:
         t_in = int(usage.get('input_tokens') or 0)
         t_out = int(usage.get('output_tokens') or 0)
@@ -614,7 +586,7 @@ def _tool_agendar_llamada(args, client_id, phone):
     try:
         start = gcal.parse_local(args.get('fecha_hora') or '')
     except ValueError:
-        return ('ERROR: fecha_hora no válida. Usa el formato YYYY-MM-DDTHH:MM (hora de Miami) '
+        return (f'ERROR: fecha_hora no válida. Usa el formato YYYY-MM-DDTHH:MM ({_tz()}) '
                 'y vuelve a llamar la herramienta.')
 
     def fmt(slots):
@@ -635,15 +607,15 @@ def _tool_agendar_llamada(args, client_id, phone):
         _add_note(client_id, f'📞 Solicitud de llamada (bot WhatsApp, SIN agendar: calendario no disponible) — '
                              f'{gcal.human(start)}' + (f' | Motivo: {motivo}' if motivo else '') + f' | Tel: {phone}')
         return (f'NO_AGENDADA: el calendario no está disponible ({str(exc)[:80]}). Dile al cliente que '
-                'Henrry le confirmará el horario personalmente.')
+                f'{_owner()} le confirmará el horario personalmente.')
 
     if state == 'pasado':
         return f'NO_AGENDADA: esa fecha/hora ya pasó o es demasiado pronto. Horarios libres: {fmt(alternatives)}.'
     if state == 'fuera_horario':
-        return (f'NO_AGENDADA: fuera del horario de llamadas (lunes a sábado, {gcal.WORK_START}:00 a '
-                f'{gcal.WORK_END}:00, hora de Miami). Horarios libres: {fmt(alternatives)}.')
+        return (f'NO_AGENDADA: fuera del horario de llamadas ({gcal.days_label()}, {gcal.work_start()}:00 a '
+                f'{gcal.work_end()}:00, {_tz()}). Horarios libres: {fmt(alternatives)}.')
     if state == 'ocupado':
-        return f'OCUPADO: Henrry ya tiene algo a esa hora. Horarios libres cercanos: {fmt(alternatives)}.'
+        return f'OCUPADO: {_owner()} ya tiene algo a esa hora. Horarios libres cercanos: {fmt(alternatives)}.'
 
     if phone == 'preview':
         return f'AGENDADA (simulación de prueba, no se creó evento): {gcal.human(start)}.'
@@ -653,11 +625,11 @@ def _tool_agendar_llamada(args, client_id, phone):
         f'Cliente: {name}', f'WhatsApp: {phone}', f'Email: {email}' if email else '',
         f'Motivo: {motivo}' if motivo else '', 'Agendada por el asistente de WhatsApp del CRM.') if x)
     try:
-        event_id, _link = gcal.create_or_move(start, f'📞 Llamada con {name} (PapiaTech)', description,
+        event_id, _link = gcal.create_or_move(start, f'📞 Llamada con {name} ({cfg.get("short_name")})', description,
                                               event_id=previous[0] if previous else None, org_id=org_id)
     except Exception as exc:
         log.exception('Bot WhatsApp: no se pudo crear el evento')
-        return f'NO_AGENDADA: error al crear el evento ({str(exc)[:80]}). Dile que Henrry le confirmará.'
+        return f'NO_AGENDADA: error al crear el evento ({str(exc)[:80]}). Dile que {_owner()} le confirmará.'
 
     _bookings_set(org_id, phone, client_id, event_id, start.isoformat())
     verb = 'Reagendada' if previous else 'Agendada'
@@ -678,7 +650,7 @@ def _tool_agendar_llamada(args, client_id, phone):
         finally:
             db.close()
     extra = ' (se movió su cita anterior, no hay duplicado)' if previous else ''
-    return f'AGENDADA: {gcal.human(start)} (hora de Miami), 30 minutos{extra}. Confírmale al cliente día y hora.'
+    return f'AGENDADA: {gcal.human(start)} ({_tz()}), {gcal.call_minutes()} minutos{extra}. Confírmale al cliente día y hora.'
 
 
 def _fallback_after_tool(out):
@@ -690,10 +662,10 @@ def _fallback_after_tool(out):
             alt = out.split('Horarios libres', 1)[1].split(':', 1)[-1].strip().rstrip('.')
         return ('Ese horario no está disponible 😕.'
                 + (f' Tengo libre: {alt}. ¿Cuál te va mejor?' if alt
-                   else ' Henrry te escribirá para coordinar otro horario.'))
+                   else f' {_owner()} te escribirá para coordinar otro horario.'))
     if 'AGENDADA:' in out:
-        when = out.split('AGENDADA:', 1)[1].split('(hora de Miami)')[0].strip()
-        return f'¡Listo! ✅ Tu llamada con Henrry quedó agendada para el {when} (hora de Miami). 📞'
+        when = out.split('AGENDADA:', 1)[1].split(f'({_tz()})')[0].strip()
+        return f'¡Listo! ✅ Tu llamada con {_owner()} quedó agendada para el {when} ({_tz()}). 📞'
     if 'Datos guardados' in out or 'guardad' in out.lower():
         return '¡Gracias! Ya lo tengo anotado ✅ ¿En qué más te puedo ayudar?'
     return ''
@@ -704,8 +676,8 @@ def calendar_status(org_id=1):
         ok, detail = gcal.status(org_id)
     except Exception as exc:
         ok, detail = False, str(exc)[:200]
-    return {'ok': ok, 'detail': detail, 'hours': f'{gcal.WORK_START}:00–{gcal.WORK_END}:00',
-            'minutes': gcal.CALL_MINUTES}
+    return {'ok': ok, 'detail': detail, 'hours': f'{gcal.work_start()}:00–{gcal.work_end()}:00',
+            'minutes': gcal.call_minutes(), 'days': gcal.days_label(), 'tz': _tz()}
 
 
 TOOL_HANDLERS = {
@@ -729,7 +701,7 @@ def _call_claude(system, messages):
             'model': os.getenv('AI_BOT_MODEL', DEFAULT_MODEL),
             'max_tokens': 500,
             'system': system,
-            'tools': TOOLS,
+            'tools': _tools(),
             'messages': messages,
         },
         timeout=25,
