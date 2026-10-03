@@ -1,0 +1,6 @@
+.android-sdk/
+.gradle/
+.gradle-home/
+local.properties
+**/build/
+*.iml

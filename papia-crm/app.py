@@ -34,6 +34,7 @@ from routes.super import super_bp
 from routes.payments import payments_bp
 from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
+from routes.mobile_api import mobile_api_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -63,6 +64,7 @@ app.register_blueprint(payments_bp)
 app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
 app.register_blueprint(vault_bp)
+app.register_blueprint(mobile_api_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────
