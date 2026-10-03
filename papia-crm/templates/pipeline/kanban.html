@@ -198,6 +198,17 @@
   .pl-search { min-width: 0; flex: 1; }
   .pl-quick { opacity: 1; }
 }
+
+/* ── Columnas: reordenar y renombrar ── */
+.pl-col-head[draggable="true"] { cursor: grab; }
+.pl-col-head[draggable="true"]:active { cursor: grabbing; }
+.pl-col.col-dragging { opacity: .45; }
+.pl-col.col-drop-before { box-shadow: -3px 0 0 0 #6366f1; }
+.pl-col.col-drop-after { box-shadow: 3px 0 0 0 #6366f1; }
+.pl-col-name { cursor: text; }
+.pl-col-name.editing { outline: 2px solid #6366f1; outline-offset: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface, #fff); cursor: text; min-width: 40px; }
+.pl-menu button[data-rename] { display: flex; align-items: center; gap: 6px; }
+.pl-menu-sep { height: 1px; background: rgba(127,127,127,.2); margin: 4px 0; }
 </style>
 {% endblock %}
 
@@ -251,7 +262,7 @@
     {% for stage_val, stage_name in pipeline_stages %}
       {% set cards = stages_data.get(stage_val, []) %}
       <section class="pl-col" data-stage="{{ stage_val }}" data-group="{{ 'clients' if stage_val in client_stages else 'leads' }}">
-        <header class="pl-col-head">
+        <header class="pl-col-head" draggable="true" title="Arrastra para reordenar · doble clic en el nombre para renombrar">
           <div class="pl-col-row">
             <span class="pl-dot" style="background:{{ stage_hex.get(stage_val, '#98a2b3') }}"></span>
             <span class="pl-col-name">{{ stage_name }}</span>
@@ -259,7 +270,9 @@
             <div class="pl-kebab-wrap" data-menu>
               <button class="pl-kebab" type="button" title="Opciones"><i class="bi bi-three-dots-vertical"></i></button>
               <div class="pl-menu">
-                <div class="pl-menu-label">Ordenar por</div>
+                <button type="button" data-rename><i class="bi bi-pencil"></i> Renombrar columna</button>
+<div class="pl-menu-sep"></div>
+<div class="pl-menu-label">Ordenar por</div>
                 <button type="button" data-sort="recent" class="on">Más recientes</button>
                 <button type="button" data-sort="oldest">Más antiguos</button>
                 <button type="button" data-sort="value">Mayor valor</button>
@@ -492,7 +505,8 @@
   let dragCard = null;
   board.addEventListener('dragstart', e => {
     const card = e.target.closest('.pl-card');
-    if (!card || root.classList.contains('selecting')) { e.preventDefault(); return; }
+    if (!card && e.target.closest && e.target.closest('.pl-col-head')) return;
+  if (!card || root.classList.contains('selecting')) { e.preventDefault(); return; }
     dragCard = card; card.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', card.dataset.id);
@@ -549,6 +563,129 @@
     exitSelect();
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && root.classList.contains('selecting')) exitSelect(); });
+
+// ── Columnas: renombrar y reordenar ──
+const STAGE_LABEL_URL = {{ url_for('pipeline.rename_stage') | tojson }};
+const STAGE_ORDER_URL = {{ url_for('pipeline.reorder_stages') | tojson }};
+let dragCol = null;
+const colOrder = () => [...board.querySelectorAll('.pl-col')].map(c => c.dataset.stage);
+const clearColMarks = () => board.querySelectorAll('.col-drop-before, .col-drop-after')
+  .forEach(c => c.classList.remove('col-drop-before', 'col-drop-after'));
+function syncBulkStages() {
+  const sel = document.getElementById('plBulkStage');
+  if (!sel) return;
+  colOrder().forEach(s => {
+    const o = sel.querySelector('option[value="' + s + '"]');
+    if (o) { o.textContent = 'Mover a: ' + STAGE_NAMES[s]; sel.appendChild(o); }
+  });
+}
+function saveColOrder(prev) {
+  const order = colOrder();
+  if (order.join() === prev.join()) return;
+  syncBulkStages();
+  fetch(STAGE_ORDER_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order }),
+  }).then(r => r.json()).then(d => {
+    if (!d.ok) throw new Error(d.error || 'error');
+    toast('Orden de columnas guardado');
+  }).catch(() => {
+    prev.forEach(s => board.appendChild(board.querySelector('.pl-col[data-stage="' + s + '"]')));
+    syncBulkStages();
+    toast('No se pudo guardar el orden. Intenta de nuevo.', true);
+  });
+}
+function startRename(col) {
+  const name = col.querySelector('.pl-col-name');
+  const head = col.querySelector('.pl-col-head');
+  if (!name || name.isContentEditable) return;
+  const old = name.textContent;
+  let done = false;
+  head.draggable = false;
+  name.contentEditable = 'true';
+  name.classList.add('editing');
+  name.focus();
+  document.getSelection().selectAllChildren(name);
+  const finish = save => {
+    if (done) return;
+    done = true;
+    name.removeEventListener('keydown', onKey);
+    name.contentEditable = 'false';
+    name.classList.remove('editing');
+    head.draggable = true;
+    const label = name.textContent.replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!save || !label || label === old) { name.textContent = old; return; }
+    name.textContent = label;
+    fetch(STAGE_LABEL_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: col.dataset.stage, label }),
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) throw new Error(d.error || 'error');
+      STAGE_NAMES[col.dataset.stage] = d.label || label;
+      name.textContent = d.label || label;
+      const empty = col.querySelector('.pl-empty');
+      if (empty) empty.textContent = 'Arrastra aquí para mover a ' + (d.label || label);
+      syncBulkStages();
+      toast('Columna renombrada');
+    }).catch(() => {
+      name.textContent = old;
+      toast('No se pudo renombrar. Intenta de nuevo.', true);
+    });
+  };
+  const onKey = e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  };
+  name.addEventListener('keydown', onKey);
+  name.addEventListener('blur', () => finish(true), { once: true });
+}
+board.querySelectorAll('.pl-col').forEach(col => {
+  const head = col.querySelector('.pl-col-head');
+  const name = col.querySelector('.pl-col-name');
+  if (name) name.addEventListener('dblclick', e => { e.preventDefault(); startRename(col); });
+  const rn = col.querySelector('[data-rename]');
+  if (rn) rn.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelectorAll('.pl-menu.open').forEach(m => m.classList.remove('open'));
+    startRename(col);
+  });
+  head.addEventListener('dragstart', e => {
+    if (e.target.closest && e.target.closest('.pl-menu, .pl-kebab')) { e.preventDefault(); return; }
+    if (root.classList.contains('selecting') || (name && name.isContentEditable)) { e.preventDefault(); return; }
+    dragCol = col;
+    col.classList.add('col-dragging');
+    col.dataset.prevOrder = colOrder().join(',');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'column:' + col.dataset.stage);
+  });
+  head.addEventListener('dragend', () => {
+    col.classList.remove('col-dragging');
+    clearColMarks();
+    dragCol = null;
+  });
+  col.addEventListener('dragover', e => {
+    if (!dragCol || dragCol === col) return;
+    e.preventDefault();
+    const r = col.getBoundingClientRect();
+    const before = e.clientX < r.left + r.width / 2;
+    if (!col.classList.contains(before ? 'col-drop-before' : 'col-drop-after')) {
+      clearColMarks();
+      col.classList.add(before ? 'col-drop-before' : 'col-drop-after');
+    }
+  });
+  col.addEventListener('drop', e => {
+    if (!dragCol || dragCol === col) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const r = col.getBoundingClientRect();
+    const before = e.clientX < r.left + r.width / 2;
+    const moving = dragCol;
+    const prev = (moving.dataset.prevOrder || '').split(',');
+    board.insertBefore(moving, before ? col : col.nextElementSibling);
+    clearColMarks();
+    saveColOrder(prev);
+  });
+});
 })();
 </script>
 {% endblock %}

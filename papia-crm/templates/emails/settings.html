@@ -22,15 +22,44 @@
 
   <!-- Form -->
   <div class="section-card" style="flex:1;min-width:320px;margin-top:0;">
-    <form method="POST" action="{{ url_for('emails.save_email_settings') }}"
+    <form id="sigForm" enctype="multipart/form-data" method="POST" action="{{ url_for('emails.save_email_settings') }}"
           style="display:flex;flex-direction:column;gap:18px;">
 
       <div>
-        <label class="form-label">URL del logo de la empresa</label>
-        <input type="url" name="company_logo_url" class="form-control"
+        <label class="form-label">Logo de la empresa</label>
+        <input type="text" name="company_logo_url" id="logoUrl" class="form-control"
                value="{{ settings.get('company_logo_url', '') }}"
                placeholder="https://papiatech.com/logo.png" />
-        <div class="form-text">Usa una URL pública de tu logo (PNG o SVG recomendado). Altura ideal: 48px.</div>
+        <div class="form-text">Pega la URL directa de la imagen (PNG, JPG o WEBP — Gmail no muestra SVG) o súbela aquí:</div>
+        <input type="file" name="logo_file" id="logoFile" accept=".png,.jpg,.jpeg,.gif,.webp" class="form-control" style="margin-top:8px;" />
+        <div id="logoCheck" class="form-text" style="margin-top:6px;"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+        <div>
+          <label class="form-label">Ubicación del logo</label>
+          {% set lp = settings.get('logo_position') or 'header' %}
+          <select name="logo_position" class="form-control">
+            <option value="header" {% if lp == 'header' %}selected{% endif %}>Encabezado (arriba)</option>
+            <option value="signature" {% if lp == 'signature' %}selected{% endif %}>En la firma (abajo)</option>
+            <option value="both" {% if lp == 'both' %}selected{% endif %}>Encabezado y firma</option>
+            <option value="none" {% if lp == 'none' %}selected{% endif %}>Sin logo</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Alineación</label>
+          {% set la = settings.get('logo_align') or 'center' %}
+          <select name="logo_align" class="form-control">
+            <option value="left" {% if la == 'left' %}selected{% endif %}>Izquierda</option>
+            <option value="center" {% if la == 'center' %}selected{% endif %}>Centro</option>
+            <option value="right" {% if la == 'right' %}selected{% endif %}>Derecha</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Altura: <span id="logoHVal">{{ settings.get('logo_height') or 80 }}</span> px</label>
+          <input type="range" name="logo_height" id="logoH" min="24" max="200" step="4"
+                 value="{{ settings.get('logo_height') or 80 }}" style="width:100%;" />
+        </div>
       </div>
 
       <hr style="border-color:var(--c-border);margin:0;">
@@ -109,12 +138,60 @@
 
 {% block scripts %}
 <script>
-// Reload preview iframe on form submit
-document.querySelector('form').addEventListener('submit', () => {
-  setTimeout(() => {
-    const frame = document.getElementById('previewFrame');
-    if (frame) frame.src = frame.src;
-  }, 800);
-});
+(function () {
+  const form  = document.getElementById('sigForm');
+  const frame = document.getElementById('previewFrame');
+  const base  = {{ url_for('emails.signature_preview') | tojson }};
+  const urlIn = document.getElementById('logoUrl');
+  const fileIn = document.getElementById('logoFile');
+  const check = document.getElementById('logoCheck');
+  const hIn = document.getElementById('logoH');
+  const hVal = document.getElementById('logoHVal');
+  const orgLogo = {{ (settings.get('_org_logo') or '') | tojson }};
+  let timer = null;
+
+  function refreshPreview() {
+    const p = new URLSearchParams();
+    new FormData(form).forEach((v, k) => { if (typeof v === 'string') p.append(k, v); });
+    p.append('_t', Date.now());
+    if (frame) frame.src = base + '?' + p.toString();
+  }
+  function schedule() { clearTimeout(timer); timer = setTimeout(refreshPreview, 400); }
+
+  function checkLogo() {
+    if (fileIn.files && fileIn.files[0]) {
+      check.style.color = 'var(--c-accent)';
+      check.textContent = 'Archivo listo: ' + fileIn.files[0].name + ' — se subirá al pulsar Guardar.';
+      return;
+    }
+    const url = urlIn.value.trim();
+    if (!url) {
+      check.style.color = 'var(--c-text-3)';
+      check.textContent = orgLogo ? 'Sin URL: se usará el logo de la organización.' : 'Sin logo configurado.';
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const ok = /\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(url) || url.includes('/static/logos/');
+      check.style.color = ok ? '#16a34a' : '#d97706';
+      check.textContent = ok ? '✓ Logo válido (' + img.naturalWidth + '×' + img.naturalHeight + ' px).'
+        : '⚠ La imagen carga, pero la URL no termina en .png/.jpg/.webp; puede fallar en algunos correos.';
+    };
+    img.onerror = () => {
+      check.style.color = '#dc2626';
+      check.textContent = '✕ Esta URL no es una imagen (parece una página web). ' +
+        (orgLogo ? 'Mientras tanto se usa el logo de la organización.' : 'Pega la URL directa del archivo o súbelo.');
+    };
+    img.src = url;
+  }
+
+  form.addEventListener('input', e => {
+    if (e.target === hIn) hVal.textContent = hIn.value;
+    if (e.target === urlIn) checkLogo();
+    schedule();
+  });
+  form.addEventListener('change', e => { if (e.target === fileIn) checkLogo(); schedule(); });
+  checkLogo();
+})();
 </script>
 {% endblock %}

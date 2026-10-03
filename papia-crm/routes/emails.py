@@ -15,46 +15,111 @@ emails_bp = Blueprint('emails', __name__)
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/calendar',   # agenda del bot de WhatsApp
 ]
 
 
 # ── Company settings helpers ──────────────────────────────────────────────────
 
+_LOGO_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.webp')
+
+
 def _get_settings(org_id=1):
     db   = get_db()
     rows = db.execute("SELECT key, value FROM settings WHERE org_id=?", (org_id,)).fetchall()
+    try:
+        org = db.execute("SELECT logo_url FROM organizations WHERE id=?", (org_id,)).fetchone()
+    except Exception:
+        org = None
     db.close()
-    return {r['key']: r['value'] for r in rows}
+    data = {r['key']: r['value'] for r in rows}
+    data['_org_logo'] = (org['logo_url'] or '') if org else ''
+    return data
+
+
+def _abs_url(url):
+    """Convierte rutas relativas (/static/...) en URLs absolutas para que funcionen en Gmail."""
+    url = (url or '').strip()
+    if not url:
+        return ''
+    if url.startswith('//'):
+        return 'https:' + url
+    if url.startswith('/'):
+        base = ''
+        try:
+            from flask import has_request_context
+            if has_request_context():
+                base = request.url_root.rstrip('/')
+        except Exception:
+            base = ''
+        base = base or os.getenv('APP_BASE_URL', 'https://datos.papiatech.com').rstrip('/')
+        return base + url
+    return url
+
+
+def _is_image_url(url):
+    path = (url or '').split('?')[0].split('#')[0].lower()
+    return path.endswith(_LOGO_EXTS) or '/static/logos/' in path
+
+
+def _resolve_logo_url(settings):
+    """Logo configurado si es una imagen válida; si no, el logo de la organización."""
+    url = (settings.get('company_logo_url') or '').strip()
+    if url and _is_image_url(url):
+        return _abs_url(url)
+    org_logo = (settings.get('_org_logo') or '').strip()
+    if org_logo and _is_image_url(org_logo):
+        return _abs_url(org_logo)
+    return ''
 
 
 def _build_html_email(body_text, settings):
-    logo_url   = settings.get('company_logo_url', '')
+    logo_url   = _resolve_logo_url(settings)
+    logo_pos   = settings.get('logo_position') or 'header'
+    if logo_pos not in ('header', 'signature', 'both', 'none'):
+        logo_pos = 'header'
+    logo_align = settings.get('logo_align') or 'center'
+    if logo_align not in ('left', 'center', 'right'):
+        logo_align = 'center'
+    try:
+        logo_h = max(24, min(200, int(settings.get('logo_height') or 80)))
+    except (TypeError, ValueError):
+        logo_h = 80
     sig_name   = settings.get('signature_name', '')
     sig_title  = settings.get('signature_title', '')
     sig_phone  = settings.get('signature_phone', '')
     sig_email  = settings.get('signature_email', '')
     sig_web    = settings.get('signature_website', '')
 
-    logo_html = (
-        f'<div style="text-align:center;padding:28px 0 20px 0;">'
-        f'<img src="{logo_url}" alt="Papia Technology Solutions" '
-        f'style="height:180px;max-width:560px;object-fit:contain;display:inline-block;">'
-        f'</div>'
-        if logo_url else
-        '<div style="text-align:center;font-size:20px;font-weight:700;color:#2A5BFF;padding:28px 0 20px 0;">Papia Technology Solutions</div>'
+    logo_img = (
+        f'<img src="{logo_url}" alt="Logo" height="{logo_h}" '
+        f'style="height:{logo_h}px;max-width:100%;width:auto;display:inline-block;border:0;">'
+    ) if logo_url else ''
+    if logo_pos in ('header', 'both'):
+        logo_html = (
+            f'<div style="text-align:{logo_align};padding:24px 0 20px 0;">{logo_img}</div>'
+            if logo_url else
+            '<div style="text-align:center;font-size:20px;font-weight:700;color:#2A5BFF;padding:28px 0 20px 0;">Papia Technology Solutions</div>'
+        )
+    else:
+        logo_html = ''
+    sig_logo_html = (
+        f'<div style="text-align:{logo_align};margin-bottom:12px;">{logo_img}</div>'
+        if logo_url and logo_pos in ('signature', 'both') else ''
     )
 
-    phone_line   = f'<br><span style="color:#6B7280;">📞 {sig_phone}</span>' if sig_phone else ''
-    email_line   = f'<br><span style="color:#6B7280;">✉️ {sig_email}</span>'  if sig_email else ''
+    phone_line   = f'<tr><td style="color:#6B7280;padding:0;">📞 {sig_phone}</td></tr>' if sig_phone else ''
+    email_line   = f'<tr><td style="color:#6B7280;padding:0;">✉️ {sig_email}</td></tr>'  if sig_email else ''
     website_line = (
-        f'<br><a href="{sig_web}" style="color:#2A5BFF;text-decoration:none;">{sig_web}</a>'
+        f'<tr><td style="padding:0;"><a href="{sig_web}" style="color:#2A5BFF;text-decoration:none;">{sig_web}</a></td></tr>'
         if sig_web else ''
     )
+    title_line   = f'<tr><td style="color:#6B7280;padding:0;">{sig_title}</td></tr>' if sig_title else ''
 
     body_html = body_text.replace('\n', '<br>')
 
     return f"""<!DOCTYPE html>
-<html>
+<html lang="es">
 <head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,Helvetica,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;">
@@ -73,12 +138,13 @@ def _build_html_email(body_text, settings):
         </tr>
         <tr>
           <td style="padding:24px 40px;border-top:1px solid #e5e7eb;background:#f9fafb;">
-            <div style="font-size:13px;line-height:1.6;">
-              <strong style="color:#111827;">{sig_name}</strong>
-              <br><span style="color:#6B7280;">{sig_title}</span>
-              <br><span style="color:#6B7280;">Papia Technology Solutions LLC</span>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="notranslate" translate="no"
+                   style="font-size:13px;line-height:1.6;border-collapse:collapse;">
+              <tr><td style="padding:0;">{sig_logo_html}<strong style="color:#111827;">{sig_name}</strong></td></tr>
+              {title_line}
+              <tr><td style="color:#6B7280;padding:0;">Papia Technology Solutions LLC</td></tr>
               {phone_line}{email_line}{website_line}
-            </div>
+            </table>
           </td>
         </tr>
       </table>
@@ -138,7 +204,7 @@ def _load_creds(org_id=1):
         token_uri='https://oauth2.googleapis.com/token',
         client_id=client_id,
         client_secret=client_secret,
-        scopes=SCOPES,
+        scopes=None,   # refresca con los permisos ya concedidos (Gmail y/o Calendar)
     )
 
     if not creds.valid:
@@ -180,31 +246,41 @@ def _get_org_id():
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 def _conversations_by_dir(direction, org_id=1):
+    """Conversaciones agrupadas por cliente; en 'sent' también incluye emails a direcciones nuevas."""
     db   = get_db()
+    include_unlinked = 1 if direction == 'sent' else 0
     rows = db.execute("""
-        SELECT
-            e.client_id,
-            e.to_email,
-            COALESCE(c.first_name, '') AS first_name,
-            COALESCE(c.last_name, '')  AS last_name,
-            e.subject    AS last_subject,
-            e.created_at AS last_at,
-            COUNT(e.id)  AS total
+        SELECT e.client_id, e.to_email,
+               COALESCE(c.first_name, '') AS first_name,
+               COALESCE(c.last_name, '')  AS last_name,
+               e.subject    AS last_subject,
+               e.created_at AS last_at
         FROM emails e
         LEFT JOIN clients c ON c.id = e.client_id
         WHERE e.direction = ?
           AND e.org_id = ?
-          AND e.client_id IS NOT NULL
-          AND e.id = (
-              SELECT id FROM emails e2
-              WHERE e2.client_id = e.client_id AND e2.direction = ?
-              ORDER BY e2.created_at DESC LIMIT 1
-          )
-        GROUP BY e.client_id
-        ORDER BY e.created_at DESC
-    """, (direction, org_id, direction)).fetchall()
+          AND (e.client_id IS NOT NULL OR ? = 1)
+        ORDER BY e.created_at DESC, e.id DESC
+    """, (direction, org_id, include_unlinked)).fetchall()
     db.close()
-    return rows
+    convos, seen = [], {}
+    for r in rows:
+        key = ('c', r['client_id']) if r['client_id'] else ('e', (r['to_email'] or '').lower())
+        if key in seen:
+            seen[key]['total'] += 1
+            continue
+        name = f"{r['first_name']} {r['last_name']}".strip()
+        conv = {
+            'client_id': r['client_id'], 'to_email': r['to_email'],
+            'first_name': r['first_name'], 'last_name': r['last_name'],
+            'last_subject': r['last_subject'], 'last_at': r['last_at'], 'total': 1,
+            # nombres que usa la plantilla
+            'name': name or (r['to_email'] or ''), 'email': r['to_email'], 'subject': r['last_subject'],
+            'last_time': str(r['last_at'])[:10] if r['last_at'] else '',
+        }
+        seen[key] = conv
+        convos.append(conv)
+    return convos
 
 
 def _thread(client_id, org_id=1):
@@ -359,6 +435,7 @@ def gmail_auth():
         return redirect(url_for('emails.index'))
 
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 
     flow = Flow.from_client_config(_client_config(org_id), scopes=SCOPES)
     flow.redirect_uri = os.getenv('GMAIL_REDIRECT_URI',
@@ -382,6 +459,7 @@ def oauth2callback():
         return redirect(url_for('emails.index'))
 
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
     org_id = _get_org_id()
 
     flow = Flow.from_client_config(_client_config(org_id), scopes=SCOPES,
@@ -438,6 +516,16 @@ def index():
     active_thread = []
     active_client = None
 
+    active_email = (request.args.get('to') or '').strip()
+    if active_email and not active_id:
+        db = get_db()
+        active_thread = db.execute(
+            "SELECT * FROM emails WHERE client_id IS NULL AND org_id=? AND lower(to_email)=? "
+            "ORDER BY created_at ASC",
+            (org_id, active_email.lower()),
+        ).fetchall()
+        db.close()
+
     if active_id:
         active_thread = _thread(active_id, org_id)
         db            = get_db()
@@ -473,6 +561,7 @@ def index():
         templates=templates,
         email_settings=email_settings,
         active_id=active_id,
+        active_email=active_email,
         active_thread=active_thread,
         active_client=active_client,
         all_clients=all_clients,
@@ -494,6 +583,26 @@ def send():
 
     if not to_email or not subject or not body:
         return jsonify({'success': False, 'error': 'to_email, subject y body son requeridos'}), 400
+
+    # Permite cualquier dirección (una o varias separadas por coma), no solo clientes
+    _addrs = [a.strip() for a in re.split(r'[,;]', to_email) if a.strip()]
+    if not _addrs or any(not re.fullmatch(r'[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+', a) for a in _addrs):
+        return jsonify({'success': False, 'error': 'Dirección de correo no válida'}), 400
+    to_email = ', '.join(_addrs)
+
+    # Si el correo pertenece a un cliente, vincularlo para registrar la nota
+    if not client_id:
+        try:
+            _db = get_db()
+            _row = _db.execute(
+                "SELECT id FROM clients WHERE org_id = ? AND lower(email) = ?",
+                (org_id, _addrs[0].lower()),
+            ).fetchone()
+            _db.close()
+            if _row:
+                client_id = _row['id']
+        except Exception:
+            pass
 
     service = _gmail_service(org_id)
     if not service:
@@ -603,10 +712,43 @@ def email_settings():
 def save_email_settings():
     org_id = _get_org_id()
     keys = ['company_logo_url', 'signature_name', 'signature_title',
-            'signature_phone', 'signature_email', 'signature_website']
+            'signature_phone', 'signature_email', 'signature_website',
+            'logo_position', 'logo_align', 'logo_height']
+    choices = {
+        'logo_position': ('header', 'signature', 'both', 'none'),
+        'logo_align': ('left', 'center', 'right'),
+    }
+    uploaded_url = ''
+    f = request.files.get('logo_file')
+    if f and f.filename:
+        ext = os.path.splitext(f.filename)[1].lower()
+        f.stream.seek(0, os.SEEK_END)
+        size = f.stream.tell()
+        f.stream.seek(0)
+        if ext not in _LOGO_EXTS:
+            flash('Formato de logo no soportado. Usa PNG, JPG, GIF o WEBP (Gmail no muestra SVG).', 'error')
+        elif size > 2 * 1024 * 1024:
+            flash('El logo pesa más de 2 MB. Usa una imagen más liviana.', 'error')
+        else:
+            import uuid
+            from flask import current_app
+            folder = os.path.join(current_app.root_path, 'static', 'logos')
+            os.makedirs(folder, exist_ok=True)
+            fname = f'email_org{org_id}_{uuid.uuid4().hex[:8]}{ext}'
+            f.save(os.path.join(folder, fname))
+            uploaded_url = _abs_url(url_for('static', filename='logos/' + fname))
     db = get_db()
     for key in keys:
         value = request.form.get(key, '').strip()
+        if key == 'company_logo_url' and uploaded_url:
+            value = uploaded_url
+        if key in choices and value not in choices[key]:
+            value = choices[key][0] if key == 'logo_position' else 'center'
+        if key == 'logo_height':
+            try:
+                value = str(max(24, min(200, int(value or 80))))
+            except ValueError:
+                value = '80'
         db.execute(
             "INSERT INTO settings (key, value, org_id) VALUES (?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -644,6 +786,12 @@ def template_preview(tid):
 def signature_preview():
     org_id = _get_org_id()
     settings = _get_settings(org_id)
+    # Vista previa en vivo: el formulario manda los valores sin guardar
+    for k in ('company_logo_url', 'logo_position', 'logo_align', 'logo_height',
+              'signature_name', 'signature_title', 'signature_phone',
+              'signature_email', 'signature_website'):
+        if k in request.args:
+            settings[k] = request.args.get(k, '')
     html = _build_html_email(
         'Hola {nombre},\n\nEste es un ejemplo de cómo se verán tus emails con la firma y el logo de la empresa.\n\n¡Saludos!',
         settings,

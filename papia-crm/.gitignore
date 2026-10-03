@@ -3,3 +3,10 @@ __pycache__/
 .env
 papia_crm.db
 chat_uploads/
+client_docs/
+
+# Respaldos y medios locales
+*.bak
+*.bak-*
+*.db.bak*
+wa_media/

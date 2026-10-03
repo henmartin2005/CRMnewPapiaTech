@@ -176,3 +176,99 @@ def create_webhook(url: str, secret: str, name='Papia CRM WhatsApp'):
         'events': ['message.received', 'message.sent', 'message.delivered',
                    'message.read', 'message.failed'],
     })
+
+
+# ── Media (stickers, fotos, audios…) ─────────────────────────────────────────
+
+def download_media(url: str, max_bytes: int = 16 * 1024 * 1024):
+    """
+    Descarga un adjunto. Los de WhatsApp entrantes apuntan a
+    GET /v1/whatsapp/media/{mediaId} y exigen el Bearer; Meta los borra a los
+    ~7 días, así que hay que bajarlos al recibirlos.
+    Devuelve (bytes, content_type). El API key solo se envía a Zernio.
+    """
+    if not url:
+        raise ZernioError('adjunto sin url')
+    from urllib.parse import urlparse
+    if url.startswith('/v1/'):
+        url = base_url() + url
+    elif url.startswith('/'):
+        b = urlparse(base_url())
+        url = f'{b.scheme}://{b.netloc}{url}'
+    host = (urlparse(url).hostname or '').lower()
+    headers = {}
+    if host == 'zernio.com' or host.endswith('.zernio.com') or url.startswith(base_url()):
+        headers['Authorization'] = f'Bearer {api_key()}'
+    resp = requests.get(url, headers=headers, timeout=TIMEOUT, stream=True)
+    if resp.status_code >= 400:
+        raise ZernioError(f'media HTTP {resp.status_code}', status=resp.status_code)
+    chunks, size = [], 0
+    for chunk in resp.iter_content(64 * 1024):
+        size += len(chunk)
+        if size > max_bytes:
+            raise ZernioError('adjunto demasiado grande')
+        chunks.append(chunk)
+    ctype = (resp.headers.get('Content-Type') or 'application/octet-stream').split(';')[0].strip()
+    return b''.join(chunks), ctype
+
+
+# ── Envío de adjuntos (audios, stickers, imágenes, archivos) ────────────────
+
+def upload_media(data: bytes, filename: str, content_type: str) -> str:
+    """Sube un archivo a Zernio (POST /v1/media/upload-direct) y devuelve su URL pública.
+    Los archivos se borran solos a los 7 días; solo sirven para enviarlos."""
+    if not api_key():
+        raise ZernioError('ZERNIO_API_KEY no configurada', status=503)
+    resp = requests.post(
+        f'{base_url()}/v1/media/upload-direct',
+        headers={'Authorization': f'Bearer {api_key()}'},
+        files={'file': (filename, data, content_type)},
+        data={'contentType': content_type},
+        timeout=60,
+    )
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {'raw': resp.text[:500]}
+    if resp.status_code >= 400:
+        msg = body.get('error') or body.get('message') or str(body)
+        if isinstance(msg, dict):
+            msg = msg.get('message') or str(msg)
+        raise ZernioError(f'No se pudo subir el archivo: {msg}', status=resp.status_code)
+    url = body.get('url') or (body.get('data') or {}).get('url')
+    if not url:
+        raise ZernioError('Zernio no devolvió la URL del archivo subido')
+    return url
+
+
+def send_attachment(conversation_id: str, attachment_url: str, attachment_type: str,
+                    voice_note: bool = False, caption: str = '', name: str = None) -> dict:
+    """Envía un adjunto dentro de la ventana de 24h.
+    attachment_type: image | video | audio | file (y 'sticker' si la cuenta lo soporta)."""
+    body = {
+        'accountId': account_id(),
+        'attachmentUrl': attachment_url,
+        'attachmentType': attachment_type,
+    }
+    if voice_note:
+        body['voiceNote'] = True
+    if caption:
+        body['message'] = caption
+    if name:
+        body['attachmentName'] = name
+    data = _request(
+        'POST', f'/v1/inbox/conversations/{conversation_id}/messages',
+        headers=_headers(idempotent=True),
+        json=body,
+    )
+    return data.get('data') or {}
+
+
+def list_messages(conversation_id: str, limit: int = 100, sort_order: str = 'desc') -> list:
+    """Últimos mensajes de una conversación (incluye adjuntos con su url)."""
+    data = _request(
+        'GET', f'/v1/inbox/conversations/{conversation_id}/messages',
+        headers=_headers(),
+        params={'accountId': account_id(), 'limit': limit, 'sortOrder': sort_order},
+    )
+    return data.get('messages') or (data.get('data') or {}).get('messages') or []

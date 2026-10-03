@@ -177,6 +177,8 @@
     .ichat-target-menu { width:min(310px,calc(100vw - 20px)); left:auto; right:-40px; }
   }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_v2.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat_mobile.css') }}?v=3">
 {% endblock %}
 
 {% block content %}
@@ -988,4 +990,6 @@
   setInterval(syncMessages, 6000);
 })();
 </script>
+<script src="{{ url_for('static', filename='js/chat_v2.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/chat_mobile.js') }}?v=1"></script>
 {% endblock %}

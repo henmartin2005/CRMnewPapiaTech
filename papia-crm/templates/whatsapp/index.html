@@ -36,6 +36,13 @@
 .wa *, .wa *::before, .wa *::after { box-sizing: border-box; }
 .wa button { font-family: inherit; }
 
+.wa-bot-toggle { width: auto !important; height: 30px !important; border-radius: 15px !important; padding: 0 11px; gap: 6px; font-size: 12.5px; font-weight: 600; white-space: nowrap; margin-right: 4px; background: #eef0f1 !important; color: #667781 !important; }
+.wa-bot-toggle i { font-size: 15px; }
+.wa-bot-toggle[data-status="on"] { background: #d9fdd3 !important; color: #008069 !important; }
+.wa-bot-toggle[data-status="paused"] { background: #fff3cd !important; color: #9a6b00 !important; }
+.wa-bot-toggle.is-global-off { opacity: .55; }
+.wa-bot-toggle:disabled { cursor: wait; }
+@media (max-width: 640px) { .wa-bot-toggle .wa-bot-lbl { display: none; } .wa-bot-toggle { padding: 0 9px; } }
 .wa-icon-btn {
   width: 40px; height: 40px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
@@ -305,6 +312,43 @@
   .wa-bub { max-width: 85%; }
   .wa-emoji { width: calc(100% - 24px); }
 }
+/* ── Adjuntos: audios, stickers, imágenes ── */
+.wa-audio { display:block; width:270px; max-width:100%; height:40px; margin:2px 0; }
+.wa-img { display:block; max-width:280px; max-height:320px; border-radius:6px; margin:2px 0; }
+.wa-video { display:block; max-width:280px; max-height:320px; border-radius:6px; margin:2px 0; }
+.wa-sticker { display:block; width:150px; height:150px; object-fit:contain; }
+.wa-msg.sticker .wa-bub { background:transparent !important; box-shadow:none !important; padding:0; }
+.wa-msg.sticker .wa-bub::before, .wa-msg.sticker .wa-bub::after { display:none !important; }
+.wa-msg.sticker .wa-meta { background:rgba(11,20,26,.45); color:#fff; border-radius:8px; padding:0 6px; }
+.wa-cap { margin-top:4px; }
+.wa-file-link { color:inherit; text-decoration:underline; }
+.wa-compose:not(.has-text) #sendBtn { display:none; }
+.wa-compose.has-text #micBtn { display:none; }
+.wa-compose.recording > :not(.wa-rec) { display:none !important; }
+.wa-rec { display:none; flex:1; align-items:center; gap:14px; min-height:42px; }
+.wa-compose.recording .wa-rec { display:flex; }
+.wa-rec-dot { width:10px; height:10px; border-radius:50%; background:#ea0038; animation:waRec 1s infinite; }
+.wa-rec-time { font-variant-numeric:tabular-nums; font-size:15px; color:var(--wa-text); flex:1; }
+.wa-rec .wa-rec-send { background:var(--wa-green); color:#fff; }
+.wa-rec .wa-rec-send:hover { background:var(--wa-green); color:#fff; filter:brightness(.95); }
+@keyframes waRec { 50% { opacity:.25; } }
+.wa-stickers { position:absolute; left:12px; bottom:66px; z-index:5; width:336px; max-width:calc(100vw - 24px);
+  max-height:320px; overflow-y:auto; background:var(--wa-surface); border-radius:10px;
+  box-shadow:0 4px 18px rgba(11,20,26,.22); padding:10px; display:none; }
+.wa-stickers.open { display:block; }
+.wa-st-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:13px; font-weight:600; color:var(--wa-text-2); }
+.wa-st-up { border:1px solid var(--wa-line); background:var(--wa-panel); border-radius:16px; padding:4px 10px; font-size:12.5px; cursor:pointer; color:var(--wa-text); }
+.wa-st-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+.wa-st { border:none; background:transparent; padding:4px; border-radius:8px; cursor:pointer; aspect-ratio:1; }
+.wa-st:hover { background:var(--wa-hover); }
+.wa-st img { width:100%; height:100%; object-fit:contain; }
+.wa-st-empty { grid-column:1/-1; font-size:13px; color:var(--wa-text-2); text-align:center; padding:18px 6px; margin:0; }
+@media (max-width: 640px) {
+  .wa-audio { width:220px; }
+  .wa-img, .wa-video { max-width:220px; }
+  .wa-sticker { width:120px; height:120px; }
+  .wa-stickers { left:6px; right:6px; width:auto; }
+}
 </style>
 {% endblock %}
 
@@ -317,6 +361,9 @@
     <div class="wa-side-top">
       <div class="wa-side-title">Chats</div>
       <div class="wa-side-tools">
+        <a href="{{ url_for('whatsapp.bot_settings') }}" class="wa-icon-btn" title="Asistente IA">
+          <i class="bi bi-robot"></i>
+        </a>
         <a href="{{ url_for('whatsapp.new_conversation') }}" class="wa-icon-btn" title="Nuevo chat">
           <i class="bi bi-chat-square-text"></i>
         </a>
@@ -357,6 +404,43 @@
           {% endif %}
         </div>
       </div>
+      {% if bot_state %}
+      <button type="button" class="wa-icon-btn wa-bot-toggle {% if not bot_state.global_enabled %}is-global-off{% endif %}"
+              id="botToggle" data-status="{{ bot_state.status }}" data-global="{{ 1 if bot_state.global_enabled else 0 }}">
+        <i class="bi bi-robot"></i><span class="wa-bot-lbl"></span>
+      </button>
+      <script>
+      (function () {
+        const btn = document.getElementById('botToggle');
+        const URL = {{ url_for('whatsapp.bot_contact_toggle') | tojson }};
+        const PHONE = {{ active_phone | tojson }};
+        const LABELS = { on: 'Bot ON', off: 'Bot OFF', paused: 'Bot en pausa' };
+        const TIPS = {
+          on: 'El asistente IA responde en este chat. Clic para desactivarlo.',
+          off: 'Asistente IA desactivado para este contacto. Clic para activarlo.',
+          paused: 'Pausado porque escribiste tú. Clic para reactivarlo ya.'
+        };
+        function paint(status) {
+          btn.dataset.status = status;
+          btn.querySelector('.wa-bot-lbl').textContent = LABELS[status] || 'Bot';
+          let tip = TIPS[status] || '';
+          if (btn.dataset.global === '0') tip += ' (Ojo: el asistente está apagado en general — actívalo en el panel del bot.)';
+          btn.title = tip;
+        }
+        paint(btn.dataset.status);
+        btn.addEventListener('click', function () {
+          const enable = btn.dataset.status !== 'on';
+          btn.disabled = true;
+          fetch(URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ phone: PHONE, enabled: enable }) })
+            .then(r => r.json())
+            .then(d => { if (d.success && d.state) paint(d.state.status); else alert(d.error || 'No se pudo cambiar el bot'); })
+            .catch(() => alert('No se pudo cambiar el bot'))
+            .finally(() => { btn.disabled = false; });
+        });
+      })();
+      </script>
+      {% endif %}
       <button class="wa-icon-btn" id="findToggle" title="Buscar en el chat"><i class="bi bi-search" style="font-size:17px;"></i></button>
       {% if active_client %}
         <a class="wa-icon-btn" href="{{ url_for('clients.detail', client_id=active_client.id) }}" title="Perfil del cliente"><i class="bi bi-person-vcard"></i></a>
@@ -385,11 +469,25 @@
     <button class="wa-down" id="toBottom" title="Ir al final"><i class="bi bi-chevron-down"></i></button>
 
     <div class="wa-emoji" id="emojiPanel"></div>
+    <div class="wa-stickers" id="stickerPanel">
+      <div class="wa-st-head"><span>Stickers</span><button type="button" class="wa-st-up" id="stickerUpload"><i class="bi bi-upload"></i> Subir sticker</button></div>
+      <div class="wa-st-grid" id="stickerGrid"></div>
+    </div>
+    <input type="file" id="stickerFile" accept="image/webp,image/png,image/jpeg,image/gif" hidden>
+    <input type="file" id="attachFile" accept="audio/*,image/*,video/*,application/pdf" hidden>
 
-    <footer class="wa-compose">
+    <footer class="wa-compose" id="composeBar">
       <button class="wa-icon-btn" id="emojiBtn" title="Emojis"><i class="bi bi-emoji-smile"></i></button>
+      <button class="wa-icon-btn" id="stickerBtn" type="button" title="Stickers"><i class="bi bi-sticky"></i></button>
+      <button class="wa-icon-btn" id="attachBtn" type="button" title="Adjuntar audio, imagen o archivo"><i class="bi bi-paperclip"></i></button>
       <textarea class="wa-input" id="msgInput" rows="1" placeholder="Escribe un mensaje"></textarea>
       <button class="wa-icon-btn wa-send" id="sendBtn" title="Enviar (Enter)"><i class="bi bi-send-fill"></i></button>
+      <button class="wa-icon-btn" id="micBtn" type="button" title="Grabar nota de voz"><i class="bi bi-mic-fill"></i></button>
+      <div class="wa-rec" id="recBar">
+        <button class="wa-icon-btn" id="recCancel" type="button" title="Cancelar"><i class="bi bi-trash3"></i></button>
+        <span class="wa-rec-dot"></span><span class="wa-rec-time" id="recTime">0:00</span>
+        <button class="wa-icon-btn wa-rec-send" id="recSend" type="button" title="Enviar nota de voz"><i class="bi bi-send-fill"></i></button>
+      </div>
     </footer>
 
   {% else %}
@@ -417,6 +515,9 @@
   const LIST_URL   = {{ url_for('whatsapp.conversations_json') | tojson }};
   const SEND_URL   = {{ url_for('whatsapp.send_message') | tojson }};
   const NEW_URL    = {{ url_for('whatsapp.new_conversation') | tojson }};
+  const MEDIA_URL  = {{ url_for('whatsapp.send_media') | tojson }};
+  const STICKERS_URL = {{ url_for('whatsapp.stickers_json') | tojson }};
+  const BACKFILL_URL = {{ url_for('whatsapp.media_backfill') | tojson }};
   const CLIENT_NAME = {{ ((active_client.first_name ~ ' ' ~ (active_client.last_name or '')) | trim if active_client else '') | tojson }};
 
   // ── Utilidades de fecha (SQLite guarda UTC) ─────
@@ -594,8 +695,9 @@
     const row = document.createElement('div');
     row.className = `wa-msg ${dir}${first ? ' first' : ''}${m.status === 'pending' ? ' pending' : ''}`;
     row.dataset.id = m.id;
+    if (m.media_url && m.media_type === 'sticker') row.classList.add('sticker');
     row.dataset.text = String(m.message || '').toLowerCase();
-    row.innerHTML = `<div class="wa-bub"><span class="txt">${formatBody(m.message)}</span><span class="wa-sp"></span><span class="wa-meta"><span>${esc(hhmm(d))}</span>${dir === 'out' ? tickHtml(m.status) : ''}</span></div>`;
+    row.innerHTML = `<div class="wa-bub"><span class="txt">${bodyHtml(m)}</span><span class="wa-sp"></span><span class="wa-meta"><span>${esc(hhmm(d))}</span>${dir === 'out' ? tickHtml(m.status) : ''}</span></div>`;
     thread.appendChild(row);
     lastDir = dir; lastAt = d;
     if (m.id != null) rendered.set(String(m.id), { el: row, status: m.status });
@@ -613,6 +715,20 @@
   }
 
   MSGS.forEach(addMessage);
+
+  // Audios/stickers que llegaron sin archivo guardado: se recuperan de Zernio (hasta 7 días)
+  (function backfillMedia() {
+    const cutoff = Date.now() - 7 * 86400000;
+    const missing = MSGS.some(m => !m.media_url
+      && /^\[(audio|sticker|image|video|archivo|document|file)/i.test(String(m.message || ''))
+      && (toDate(m.created_at) || 0) > cutoff);
+    if (!missing) return;
+    fetch(BACKFILL_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ phone: ACTIVE }) })
+      .then(r => r.json())
+      .then(d => { if (d && d.updated > 0) location.reload(); })
+      .catch(() => {});
+  })();
   if (!MSGS.length) {
     const e = document.createElement('div');
     e.className = 'wa-day'; e.style.position = 'static';
@@ -714,6 +830,169 @@
       alert('Error de conexión al enviar.');
     });
   }
+
+  // ── Adjuntos: audios, stickers, imágenes ──
+  function mediaHtml(m) {
+    const u = esc(m.media_url);
+    switch (m.media_type) {
+      case 'audio':   return `<audio class="wa-audio" controls preload="metadata" src="${u}"></audio>`;
+      case 'sticker': return `<img class="wa-sticker" src="${u}" alt="sticker" loading="lazy">`;
+      case 'image':   return `<a href="${u}" target="_blank" rel="noopener"><img class="wa-img" src="${u}" alt="imagen" loading="lazy"></a>`;
+      case 'video':   return `<video class="wa-video" controls preload="metadata" src="${u}"></video>`;
+      default:        return `<a class="att wa-file-link" href="${u}" target="_blank" rel="noopener"><i class="bi bi-paperclip"></i> Abrir archivo</a>`;
+    }
+  }
+  function bodyHtml(m) {
+    if (!m.media_url) return formatBody(m.message);
+    const t = String(m.message || '');
+    const caption = /^\[[^\]]*\]$/.test(t) ? '' : formatBody(t);
+    return mediaHtml(m) + (caption ? `<div class="wa-cap">${caption}</div>` : '');
+  }
+
+  const composeBar   = document.getElementById('composeBar');
+  const stickerBtn   = document.getElementById('stickerBtn');
+  const stickerPanel = document.getElementById('stickerPanel');
+  const stickerGrid  = document.getElementById('stickerGrid');
+  const stickerFile  = document.getElementById('stickerFile');
+  const attachBtn    = document.getElementById('attachBtn');
+  const attachFile   = document.getElementById('attachFile');
+  const micBtn       = document.getElementById('micBtn');
+  const recTime      = document.getElementById('recTime');
+  const MEDIA_LABEL  = { audio: '[audio]', sticker: '[sticker]', image: '[image]', video: '[video]', file: '[archivo]' };
+
+  function syncCompose() { composeBar.classList.toggle('has-text', input.value.trim() !== ''); }
+  input.addEventListener('input', syncCompose);
+  syncCompose();
+  sendBtn.addEventListener('click', () => setTimeout(syncCompose, 0));
+  input.addEventListener('keydown', () => setTimeout(syncCompose, 0));
+
+  function sendMedia(kind, blob, filename, reuseId, previewUrl) {
+    const tmpId = 'tmp' + (++tmpSeq);
+    addMessage({ id: tmpId, direction: 'outbound', message: MEDIA_LABEL[kind] || '[archivo]',
+                 media_url: previewUrl || (blob ? URL.createObjectURL(blob) : null), media_type: kind,
+                 created_at: new Date(), status: 'pending' });
+    scrollBottom(true);
+    const fd = new FormData();
+    fd.append('phone', ACTIVE);
+    fd.append('kind', kind);
+    if (reuseId) fd.append('reuse_id', reuseId);
+    else fd.append('file', blob, filename || 'archivo');
+    fetch(MEDIA_URL, { method: 'POST', body: fd })
+      .then(r => r.json().catch(() => ({ success: false, error: 'Respuesta inválida del servidor (' + r.status + ')' })))
+      .then(data => {
+        if (!data.success) {
+          setStatus(tmpId, 'failed');
+          if (data.template_required) {
+            if (confirm(data.error + '\n\n¿Abrir el formulario para enviar una plantilla aprobada?')) {
+              window.location = NEW_URL + '?need_template=1&phone=' + encodeURIComponent(ACTIVE);
+            }
+          } else {
+            alert('No se pudo enviar: ' + (data.error || 'error desconocido'));
+          }
+          return;
+        }
+        poll(true);
+        refreshList();
+      })
+      .catch(() => { setStatus(tmpId, 'failed'); alert('Error de conexión al enviar.'); });
+  }
+
+  // Stickers
+  function closeStickers() { stickerPanel.classList.remove('open'); stickerBtn.classList.remove('on'); }
+  function loadStickers() {
+    stickerGrid.innerHTML = '<p class="wa-st-empty">Cargando…</p>';
+    fetch(STICKERS_URL + '?_t=' + Date.now())
+      .then(r => r.json())
+      .then(d => {
+        const list = d.stickers || [];
+        stickerGrid.innerHTML = list.length
+          ? list.map(s => `<button type="button" class="wa-st" data-id="${s.id}" title="Enviar sticker"><img src="${esc(s.url)}" alt="sticker" loading="lazy"></button>`).join('')
+          : '<p class="wa-st-empty">Aún no hay stickers. Sube uno (WEBP, PNG o JPG) o reutiliza los que te envíen tus clientes.</p>';
+      })
+      .catch(() => { stickerGrid.innerHTML = '<p class="wa-st-empty">No se pudieron cargar los stickers.</p>'; });
+  }
+  stickerBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = stickerPanel.classList.toggle('open');
+    stickerBtn.classList.toggle('on', open);
+    if (open) { closeEmoji(); loadStickers(); }
+  });
+  stickerGrid.addEventListener('click', e => {
+    const b = e.target.closest('.wa-st');
+    if (!b) return;
+    closeStickers();
+    sendMedia('sticker', null, null, b.dataset.id, b.querySelector('img').src);
+  });
+  document.getElementById('stickerUpload').addEventListener('click', () => stickerFile.click());
+  stickerFile.addEventListener('change', () => {
+    const f = stickerFile.files[0]; stickerFile.value = '';
+    if (!f) return;
+    closeStickers();
+    sendMedia('sticker', f, f.name);
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#stickerPanel') && !e.target.closest('#stickerBtn')) closeStickers();
+  });
+
+  // Adjuntar audio / imagen / video / PDF
+  attachBtn.addEventListener('click', () => attachFile.click());
+  attachFile.addEventListener('change', () => {
+    const f = attachFile.files[0]; attachFile.value = '';
+    if (!f) return;
+    if (f.size > 16 * 1024 * 1024) { alert('El archivo supera 16 MB.'); return; }
+    const t = f.type || '';
+    const kind = t === 'image/webp' ? 'sticker' : t.startsWith('audio/') ? 'audio'
+               : t.startsWith('image/') ? 'image' : t.startsWith('video/') ? 'video' : 'file';
+    sendMedia(kind, f, f.name);
+  });
+
+  // Notas de voz
+  let rec = null, recStream = null, recChunks = [], recTimer = null, recStart = 0, recCancelled = false;
+  function pickAudioType() {
+    const opts = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+    for (const t of opts) { if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t; }
+    return '';
+  }
+  function tickRec() {
+    const s = Math.floor((Date.now() - recStart) / 1000);
+    recTime.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  function stopRec(cancel) {
+    recCancelled = cancel;
+    if (rec && rec.state !== 'inactive') rec.stop();
+  }
+  micBtn.addEventListener('click', async () => {
+    if (!navigator.mediaDevices || !window.MediaRecorder) { alert('Este navegador no permite grabar audio.'); return; }
+    try {
+      recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      alert('No se pudo usar el micrófono. Revisa el permiso del micrófono en el navegador.');
+      return;
+    }
+    const type = pickAudioType();
+    rec = type ? new MediaRecorder(recStream, { mimeType: type }) : new MediaRecorder(recStream);
+    recChunks = []; recCancelled = false;
+    rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+    rec.onstop = () => {
+      recStream.getTracks().forEach(t => t.stop());
+      clearInterval(recTimer);
+      composeBar.classList.remove('recording');
+      const tooShort = Date.now() - recStart < 800;
+      if (recCancelled || tooShort || !recChunks.length) return;
+      const mime = rec.mimeType || type || 'audio/webm';
+      const blob = new Blob(recChunks, { type: mime });
+      const ext = mime.includes('ogg') ? '.ogg' : mime.includes('mp4') ? '.m4a' : '.webm';
+      sendMedia('audio', blob, 'nota-de-voz' + ext);
+    };
+    rec.start(250);
+    recStart = Date.now();
+    tickRec();
+    recTimer = setInterval(tickRec, 500);
+    composeBar.classList.add('recording');
+    closeEmoji(); closeStickers();
+  });
+  document.getElementById('recCancel').addEventListener('click', () => stopRec(true));
+  document.getElementById('recSend').addEventListener('click', () => stopRec(false));
 
   // ── Emojis ──
   const EMOJIS = '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😎 🤩 🥳 😏 😌 🤔 🤗 🤭 😬 🙄 😴 😢 😭 😤 😡 🤯 😱 🥺 🙏 👍 👎 👌 ✌️ 🤝 👏 🙌 💪 👋 👉 👀 ❤️ 🧡 💛 💚 💙 💜 🖤 💯 ✅ ❌ ⭐ 🔥 🎉 🎁 📅 📌 📞 📱 💻 📧 💰 💳 🚗 🏠 ⏰ ☀️ 🌙 ☕ 🍕'.split(' ');

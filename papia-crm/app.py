@@ -20,6 +20,7 @@ from models.client import (
 )
 from flask_cors import CORS
 from routes.clients import clients_bp
+from routes.payment_schedule import payment_schedule_bp
 from routes.pipeline import pipeline_bp
 from routes.followups import followups_bp
 from routes.whatsapp import whatsapp_bp, get_unread_count
@@ -51,6 +52,7 @@ app.register_blueprint(emails_bp)
 # Init DB on every startup (safe: all statements use CREATE IF NOT EXISTS)
 init_db()
 app.register_blueprint(clients_bp)
+app.register_blueprint(payment_schedule_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
 app.register_blueprint(whatsapp_bp)
@@ -116,9 +118,30 @@ def inject_globals():
     try:
         from database import get_db as _gdb
         _cdb = _gdb()
-        client_count = _cdb.execute(
-            "SELECT COUNT(*) FROM clients WHERE org_id=?", (org_id,)
-        ).fetchone()[0]
+        # Badge: solo clientes creados despues de la ultima visita a Clientes
+        _uid = session.get('user_id') or 0
+        _cdb.execute("""CREATE TABLE IF NOT EXISTS user_seen (
+            user_id INTEGER NOT NULL, org_id INTEGER NOT NULL, section TEXT NOT NULL,
+            seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, org_id, section))""")
+        if request.endpoint == 'clients.list_clients':
+            _cdb.execute(
+                "INSERT OR REPLACE INTO user_seen (user_id, org_id, section, seen_at) "
+                "VALUES (?, ?, 'clients', CURRENT_TIMESTAMP)", (_uid, org_id))
+            _cdb.commit()
+        _seen = _cdb.execute(
+            "SELECT seen_at FROM user_seen WHERE user_id = ? AND org_id = ? AND section = 'clients'",
+            (_uid, org_id)).fetchone()
+        if _seen is None:
+            _cdb.execute(
+                "INSERT OR IGNORE INTO user_seen (user_id, org_id, section) VALUES (?, ?, 'clients')",
+                (_uid, org_id))
+            _cdb.commit()
+            client_count = 0
+        else:
+            client_count = _cdb.execute(
+                "SELECT COUNT(*) FROM clients WHERE org_id = ? AND created_at > ?",
+                (org_id, _seen[0])).fetchone()[0]
         _org_row = _cdb.execute(
             "SELECT name, logo_url FROM organizations WHERE id=?", (org_id,)
         ).fetchone()
@@ -179,10 +202,19 @@ def dashboard():
     org_id = g.org_id if hasattr(g, 'org_id') else 1
     stats = get_dashboard_stats(org_id)
     todays_followups = get_todays_followups(org_id)
+    # Consumo de Claude (Anthropic) del chatbot — misma métrica que el panel del bot
+    ai_usage = None
+    if session.get('user_role') in ('admin', 'superadmin'):
+        try:
+            from services import ai_agent as _ai_agent
+            ai_usage = _ai_agent.usage_summary(org_id)
+        except Exception:
+            ai_usage = None
     return render_template(
         'dashboard.html',
         stats=stats,
         todays_followups=todays_followups,
+        ai_usage=ai_usage,
         method_labels=dict(FOLLOW_UP_METHODS),
     )
 

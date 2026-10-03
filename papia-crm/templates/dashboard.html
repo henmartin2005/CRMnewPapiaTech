@@ -1,6 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 
+{% block head %}
+<style>
+.ai-usage { margin-bottom: 20px; }
+.ai-usage .section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.ai-usage-link { font-size:12.5px; font-weight:600; text-decoration:none; color:var(--c-accent, #2563eb); white-space:nowrap; }
+.ai-usage-body { padding: 14px 18px 16px; }
+.ai-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+.ai-kpi { border:1px solid var(--c-border,#e5e7eb); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:4px; background:var(--c-surface,#fff); }
+.ai-kpi > span { font-size:12px; color:var(--c-text-3,#6b7280); font-weight:600; }
+.ai-kpi strong { font-size:22px; font-variant-numeric:tabular-nums; }
+.ai-kpi em { font-style:normal; font-size:11.5px; color:var(--c-text-3,#6b7280); }
+.ai-kpi.accent { background:#FFFBEB; border-color:#FDE68A; }
+.ai-kpi.accent strong { color:#B45309; }
+.ai-hint { font-size:12px; color:var(--c-text-3,#6b7280); }
+.ai-days { margin-top:14px; }
+.ai-days summary { cursor:pointer; font-size:13px; font-weight:600; }
+.ai-table-wrap { overflow-x:auto; }
+.ai-days table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; font-variant-numeric:tabular-nums; }
+.ai-days th, .ai-days td { padding:6px 4px; border-top:1px solid var(--c-border,#e5e7eb); text-align:right; white-space:nowrap; }
+.ai-days th:first-child, .ai-days td:first-child { text-align:left; }
+.dash-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+@media (max-width:760px) { .ai-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .ai-kpi strong { font-size:19px; } }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <div class="pg-header">
@@ -16,7 +41,12 @@
       </div>
     </div>
   </div>
-  <div class="pg-actions">
+  <div class="pg-actions dash-actions">
+    <button type="button" class="money-switch" data-money-toggle aria-pressed="false" title="Mostrar montos">
+      <span class="ms-track"><span class="ms-thumb"></span></span>
+      <i class="bi bi-lock-fill"></i>
+      <span class="money-toggle-lbl">Montos ocultos</span>
+    </button>
     <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
       <i class="bi bi-plus"></i> Nuevo cliente
     </a>
@@ -104,6 +134,45 @@
   </div>
 
 </div>
+
+<!-- ── CONSUMO CLAUDE (Anthropic) ── -->
+{% if ai_usage %}
+{% macro ai_money(v) %}${{ ('%.3f' if (v or 0) < 1 else '%.2f')|format(v or 0) }}{% endmacro %}
+<div class="section-card ai-usage">
+  <div class="section-head">
+    <span class="section-head-label"><i class="bi bi-cpu" style="color:#D97706;"></i> Consumo de Claude · Anthropic</span>
+    {% if 'whatsapp' in enabled_modules %}
+    <a href="{{ url_for('whatsapp.bot_settings') }}" class="ai-usage-link">Panel del chatbot <i class="bi bi-arrow-right"></i></a>
+    {% endif %}
+  </div>
+  <div class="ai-usage-body">
+    <div class="ai-kpis">
+      <div class="ai-kpi"><span>Hoy</span><strong>{{ ai_money(ai_usage.today) }}</strong></div>
+      <div class="ai-kpi"><span>Ayer</span><strong>{{ ai_money(ai_usage.yesterday) }}</strong></div>
+      <div class="ai-kpi"><span>Mes ({{ ai_usage.month_label }})</span><strong>{{ ai_money(ai_usage.month) }}</strong><em>total histórico {{ ai_money(ai_usage.all_time) }}</em></div>
+      <div class="ai-kpi accent"><span>Estimado del mes</span><strong>{{ ai_money(ai_usage.projection) }}</strong><em>promedio {{ ai_money(ai_usage.daily_avg) }} / día</em></div>
+    </div>
+    {% if ai_usage.days %}
+    <details class="ai-days">
+      <summary>Detalle por día (últimos 14){% if ai_usage.tracking_since %} · registrando desde {{ ai_usage.tracking_since }}{% endif %}</summary>
+      <div class="ai-table-wrap">
+      <table>
+        <tr><th>Día</th><th>Llamadas</th><th>Tokens entrada</th><th>Tokens salida</th><th>Costo</th></tr>
+        {% for d in ai_usage.days %}
+        <tr>
+          <td>{{ d.day }}</td><td>{{ d.calls }}</td><td>{{ '{:,}'.format(d.tokens_in) }}</td><td>{{ '{:,}'.format(d.tokens_out) }}</td>
+          <td>{{ ai_money(d.cost) }}{% if d.test_cost %} <span class="ai-hint">(pruebas {{ ai_money(d.test_cost) }})</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      </div>
+    </details>
+    {% else %}
+    <div class="ai-hint" style="margin-top:10px;">Aún no hay consumo registrado: se empieza a sumar con la próxima respuesta del bot.</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <!-- ── TODAY'S REMINDERS ── -->
 <div class="section-card">

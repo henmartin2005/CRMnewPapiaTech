@@ -2,6 +2,7 @@
 {% block title %}Emails{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <style>
 .main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 .em-shell { display: flex; flex: 1; overflow: hidden; height: 100%; }
@@ -223,8 +224,8 @@
     <div class="em-convos" id="list-sent" style="display:none;">
       {% if sent_convos %}
         {% for c in sent_convos %}
-        <div class="em-item {% if active_id == c.client_id %}active{% endif %}"
-             onclick="loadThread({{ c.client_id }})">
+        <div class="em-item {% if (c.client_id and active_id == c.client_id) or (not c.client_id and active_email and active_email|lower == (c.email or '')|lower) %}active{% endif %}"
+             {% if c.client_id %}onclick="loadThread({{ c.client_id }})"{% else %}onclick="location.href='{{ url_for('emails.index', to=c.email) }}'"{% endif %}>
           <div class="em-item-avatar" style="background:linear-gradient(135deg,#10b981,#059669)">
             {{ (c.name or 'NN')[:2]|upper }}
           </div>
@@ -353,14 +354,15 @@
       <button onclick="closeCompose()" style="background:none;border:none;cursor:pointer;color:var(--c-text-3);font-size:18px;"><i class="ph ph-x"></i></button>
     </div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
-      <select id="composeTo" style="width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;">
-        <option value="">Seleccionar cliente...</option>
-        {% for cl in all_clients %}
-        <option value="{{ cl.email }}" {% if compose_preset and compose_preset.client_email == cl.email %}selected{% endif %}>
-          {{ cl.first_name }} {{ cl.last_name }} — {{ cl.email }}
-        </option>
-        {% endfor %}
-      </select>
+      <input id="composeTo" type="text" list="composeClients" autocomplete="off"
+             placeholder="Para: elige un cliente o escribe cualquier email (varios separados por coma)"
+             value="{{ compose_preset.client_email if compose_preset and compose_preset.client_email else '' }}"
+             style="width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;" />
+      <datalist id="composeClients">
+        {% for cl in all_clients %}{% if cl.email %}
+        <option value="{{ cl.email }}" data-id="{{ cl.id }}">{{ cl.first_name }} {{ cl.last_name }}</option>
+        {% endif %}{% endfor %}
+      </datalist>
       <input id="composeSubject" type="text" placeholder="Asunto"
              value="{{ compose_preset.subject if compose_preset else '' }}"
              style="width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;" />
@@ -477,14 +479,20 @@ function closeCompose() {
   document.getElementById('composeModal').style.display = 'none';
 }
 function sendCompose() {
-  const to = document.getElementById('composeTo').value;
+  const to = document.getElementById('composeTo').value.trim().replace(/[;,\s]+$/, '');
   const subject = document.getElementById('composeSubject').value.trim();
   const body = document.getElementById('composeBody').value.trim();
   if (!to || !subject || !body) { alert('Completa todos los campos'); return; }
+  const addrs = to.split(/[,;]/).map(a => a.trim()).filter(Boolean);
+  const badAddr = addrs.find(a => !/^[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+$/.test(a));
+  if (!addrs.length || badAddr) { alert('Email no válido: ' + (badAddr || to)); return; }
+  const match = [...document.querySelectorAll('#composeClients option')]
+    .find(o => o.value.toLowerCase() === addrs[0].toLowerCase());
+  const clientId = match ? parseInt(match.dataset.id, 10) : null;
   fetch('/emails/send', {
     method: 'POST',
     headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
-    body: JSON.stringify({ to_email: to, subject, body })
+    body: JSON.stringify({ to_email: addrs.join(', '), subject, body, client_id: clientId })
   }).then(r => r.json()).then(d => {
     if (d.success) { closeCompose(); location.reload(); }
     else { alert('Error: ' + (d.error || '')); }

@@ -135,10 +135,43 @@ def update_pipeline_stage(client_id, stage, org_id):
 
 
 def delete_client(client_id, org_id):
+    """Borra un cliente resolviendo antes las referencias que no tienen
+    ON DELETE CASCADE / SET NULL (whatsapp_messages, emails, meta_messages...).
+    El historial se conserva desvinculado (client_id = NULL); si la columna
+    es NOT NULL, esas filas se eliminan."""
     db = get_db()
-    db.execute("DELETE FROM clients WHERE id=? AND org_id=?", (client_id, org_id))
-    db.commit()
-    db.close()
+    try:
+        row = db.execute(
+            "SELECT id FROM clients WHERE id=? AND org_id=?", (client_id, org_id)
+        ).fetchone()
+        if not row:
+            return False
+        tables = [r[0] for r in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()]
+        for table in tables:
+            for fk in db.execute(f'PRAGMA foreign_key_list("{table}")').fetchall():
+                if fk[2] != 'clients':
+                    continue
+                col, on_delete = fk[3], (fk[6] or '').upper()
+                if on_delete in ('CASCADE', 'SET NULL'):
+                    continue
+                notnull = any(
+                    c[1] == col and c[3]
+                    for c in db.execute(f'PRAGMA table_info("{table}")').fetchall()
+                )
+                if notnull:
+                    db.execute(f'DELETE FROM "{table}" WHERE "{col}"=?', (client_id,))
+                else:
+                    db.execute(f'UPDATE "{table}" SET "{col}"=NULL WHERE "{col}"=?', (client_id,))
+        db.execute("DELETE FROM clients WHERE id=? AND org_id=?", (client_id, org_id))
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def get_client_notes(client_id):
@@ -336,3 +369,61 @@ def get_clients_by_stage(org_id):
         if stage in stages:
             stages[stage].append(row)
     return stages
+
+
+# ── Columnas del pipeline personalizables por organización ──────────────
+def _ensure_stage_settings(db):
+    db.execute("""CREATE TABLE IF NOT EXISTS pipeline_stage_settings (
+        org_id INTEGER NOT NULL,
+        stage_key TEXT NOT NULL,
+        label TEXT,
+        position INTEGER,
+        PRIMARY KEY (org_id, stage_key))""")
+
+
+def get_org_pipeline_stages(org_id):
+    """PIPELINE_STAGES con el nombre y el orden que eligió la organización."""
+    db = get_db()
+    try:
+        _ensure_stage_settings(db)
+        rows = db.execute(
+            "SELECT stage_key, label, position FROM pipeline_stage_settings WHERE org_id = ?",
+            (org_id,)).fetchall()
+    finally:
+        db.close()
+    custom = {r[0]: (r[1], r[2]) for r in rows}
+    default_pos = {k: i for i, (k, _) in enumerate(PIPELINE_STAGES)}
+    stages = []
+    for key, name in PIPELINE_STAGES:
+        label, pos = custom.get(key, (None, None))
+        label = (label or '').strip() or name
+        stages.append((key, label, pos if pos is not None else default_pos[key]))
+    stages.sort(key=lambda s: (s[2], default_pos[s[0]]))
+    return [(k, n) for k, n, _ in stages]
+
+
+def set_stage_label(org_id, stage_key, label):
+    db = get_db()
+    try:
+        _ensure_stage_settings(db)
+        db.execute("INSERT OR IGNORE INTO pipeline_stage_settings (org_id, stage_key) VALUES (?, ?)",
+                   (org_id, stage_key))
+        db.execute("UPDATE pipeline_stage_settings SET label = ? WHERE org_id = ? AND stage_key = ?",
+                   (label, org_id, stage_key))
+        db.commit()
+    finally:
+        db.close()
+
+
+def set_stage_order(org_id, order):
+    db = get_db()
+    try:
+        _ensure_stage_settings(db)
+        for i, key in enumerate(order):
+            db.execute("INSERT OR IGNORE INTO pipeline_stage_settings (org_id, stage_key) VALUES (?, ?)",
+                       (org_id, key))
+            db.execute("UPDATE pipeline_stage_settings SET position = ? WHERE org_id = ? AND stage_key = ?",
+                       (i, org_id, key))
+        db.commit()
+    finally:
+        db.close()

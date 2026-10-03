@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Asistente IA — WhatsApp{% endblock %}
+
+{% block head %}
+<style>
+.bot-wrap { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+.bot-card { flex:1; min-width:320px; background:var(--c-surface,#fff); border:1px solid var(--c-border,#e5e7eb); border-radius:12px; padding:20px; }
+.bot-card h2 { font-size:14px; font-weight:700; margin:0 0 14px; text-transform:uppercase; letter-spacing:.05em; color:var(--c-text-3,#6b7280); }
+.bot-row { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+.bot-row label { font-size:13px; font-weight:600; }
+.bot-row textarea { min-height:220px; font-family:inherit; font-size:13px; line-height:1.5; }
+.bot-hint { font-size:12px; color:var(--c-text-3,#6b7280); }
+.bot-switch { display:flex; align-items:center; gap:10px; font-weight:600; }
+.bot-switch input { width:18px; height:18px; }
+.bot-status { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:4px 10px; border-radius:999px; }
+.bot-status.ok { background:#dcfce7; color:#166534; }
+.bot-status.warn { background:#fef3c7; color:#92400e; }
+.bot-chat { border:1px solid var(--c-border,#e5e7eb); border-radius:10px; background:#efeae2; height:300px; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
+.bot-msg { max-width:80%; padding:8px 12px; border-radius:10px; font-size:13px; line-height:1.45; white-space:pre-wrap; }
+.bot-msg.in { align-self:flex-start; background:#fff; }
+.bot-msg.out { align-self:flex-end; background:#d9fdd3; }
+.bot-test-row { display:flex; gap:8px; margin-top:10px; }
+.bot-test-row input { flex:1; }
+.bot-paused { width:100%; border-collapse:collapse; font-size:13px; }
+.bot-paused td { padding:8px 4px; border-top:1px solid var(--c-border,#e5e7eb); }
+.bot-usage { background:var(--c-surface,#fff); border:1px solid var(--c-border,#e5e7eb); border-radius:12px; padding:18px 20px; margin-bottom:18px; }
+.bot-usage-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.bot-usage-head h2 { margin:0; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--c-text-3,#6b7280); }
+.bot-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+.bot-kpi { border:1px solid var(--c-border,#e5e7eb); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+.bot-kpi span { font-size:12px; color:var(--c-text-3,#6b7280); font-weight:600; }
+.bot-kpi strong { font-size:22px; font-variant-numeric:tabular-nums; }
+.bot-kpi em { font-style:normal; font-size:11.5px; color:var(--c-text-3,#6b7280); }
+.bot-kpi.accent { background:#ecfdf5; border-color:#a7f3d0; }
+.bot-kpi.accent strong { color:#047857; }
+.bot-usage details { margin-top:14px; }
+.bot-usage summary { cursor:pointer; font-size:13px; font-weight:600; }
+.bot-usage table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; font-variant-numeric:tabular-nums; }
+.bot-usage th, .bot-usage td { padding:6px 4px; border-top:1px solid var(--c-border,#e5e7eb); text-align:right; }
+.bot-usage th:first-child, .bot-usage td:first-child { text-align:left; }
+.bot-cal { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; padding:10px 14px; border-radius:10px; margin-bottom:18px; }
+.bot-cal.ok { background:#dcfce7; color:#166534; }
+.bot-cal.warn { background:#fef3c7; color:#92400e; }
+.bot-cal a { font-weight:700; color:inherit; text-decoration:underline; }
+@media (max-width:760px) { .bot-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .bot-kpi strong { font-size:19px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1200px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap;">
+    <div>
+      <div class="bot-hint"><a href="{{ url_for('whatsapp.index') }}">WhatsApp</a> / Asistente IA</div>
+      <h1 class="pg-title" style="margin:4px 0 0;">Asistente IA de WhatsApp</h1>
+    </div>
+    {% if not has_key %}
+      <span class="bot-status warn"><i class="bi bi-exclamation-triangle"></i> Falta ANTHROPIC_API_KEY en el .env</span>
+    {% elif settings.enabled %}
+      <span class="bot-status ok"><i class="bi bi-robot"></i> Activo · {{ model }}</span>
+    {% else %}
+      <span class="bot-status warn"><i class="bi bi-pause-circle"></i> Desactivado</span>
+    {% endif %}
+  </div>
+
+  {% macro money(v) %}${{ ('%.3f' if (v or 0) < 1 else '%.2f')|format(v or 0) }}{% endmacro %}
+  <div class="bot-usage">
+    <div class="bot-usage-head">
+      <h2><i class="bi bi-cash-coin"></i> Consumo de Claude · WhatsApp</h2>
+      <span class="bot-hint">Costo calculado con los tokens reales de cada respuesta{% if usage.tracking_since %} · registrando desde {{ usage.tracking_since }}{% endif %}</span>
+    </div>
+    <div class="bot-kpis">
+      <div class="bot-kpi"><span>Hoy</span><strong>{{ money(usage.today) }}</strong></div>
+      <div class="bot-kpi"><span>Ayer</span><strong>{{ money(usage.yesterday) }}</strong></div>
+      <div class="bot-kpi"><span>Mes ({{ usage.month_label }})</span><strong>{{ money(usage.month) }}</strong><em>total histórico {{ money(usage.all_time) }}</em></div>
+      <div class="bot-kpi accent"><span>Estimado del mes</span><strong>{{ money(usage.projection) }}</strong><em>promedio {{ money(usage.daily_avg) }} / día</em></div>
+    </div>
+    {% if usage.days %}
+    <details>
+      <summary>Detalle por día (últimos 14)</summary>
+      <table>
+        <tr><th>Día</th><th>Llamadas a Claude</th><th>Tokens entrada</th><th>Tokens salida</th><th>Costo</th></tr>
+        {% for d in usage.days %}
+        <tr>
+          <td>{{ d.day }}</td><td>{{ d.calls }}</td><td>{{ '{:,}'.format(d.tokens_in) }}</td><td>{{ '{:,}'.format(d.tokens_out) }}</td>
+          <td>{{ money(d.cost) }}{% if d.test_cost %} <span class="bot-hint">(pruebas {{ money(d.test_cost) }})</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </details>
+    {% else %}
+      <div class="bot-hint" style="margin-top:10px;">Aún no hay consumo registrado: se empieza a sumar con la próxima respuesta del bot.</div>
+    {% endif %}
+  </div>
+
+  <div class="bot-cal {{ 'ok' if calendar.ok else 'warn' }}">
+    <i class="bi bi-calendar-check"></i>
+    {% if calendar.ok %}
+      <span><strong>Google Calendar conectado</strong> ({{ calendar.detail }}) · el bot agenda llamadas de {{ calendar.minutes }} min, lunes a sábado {{ calendar.hours }} (Miami), solo en horarios libres.</span>
+    {% else %}
+      <span><strong>Google Calendar sin conectar:</strong> {{ calendar.detail }}</span>
+      <a href="/emails/auth">Reconectar Google</a>
+    {% endif %}
+  </div>
+
+  <div class="bot-wrap">
+    <form class="bot-card" method="POST" action="{{ url_for('whatsapp.bot_settings') }}">
+      <h2>Configuración</h2>
+      <div class="bot-row">
+        <label class="bot-switch"><input type="checkbox" name="enabled" value="1" {% if settings.enabled %}checked{% endif %}> Responder automáticamente los WhatsApp</label>
+        <div class="bot-hint">Capta nombre, email y servicio de interés, responde preguntas básicas y ofrece agendar una llamada contigo. Los datos quedan en la ficha del cliente y las llamadas se agendan en tu Google Calendar (sin choques de horario).</div>
+      </div>
+      <div class="bot-row">
+        <label for="bi">Información del negocio (lo único que el bot puede afirmar)</label>
+        <textarea id="bi" name="business_info" class="form-control">{{ settings.business_info }}</textarea>
+        <div class="bot-hint">Agrega servicios, horarios, precios "desde", preguntas frecuentes… Lo que no esté aquí, el bot dirá que tú le respondes.</div>
+      </div>
+      <div class="bot-row">
+        <label for="ph">Pausa cuando tú escribes en un chat (horas)</label>
+        <input id="ph" type="number" name="pause_hours" min="1" max="168" value="{{ settings.pause_hours }}" class="form-control" style="max-width:140px;">
+        <div class="bot-hint">Si respondes desde el CRM o desde tu celular, el bot se calla en esa conversación durante este tiempo.</div>
+      </div>
+      <button class="btn-md" type="submit" style="background:var(--c-accent,#2563eb);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-weight:600;cursor:pointer;">
+        <i class="bi bi-check-lg"></i> Guardar
+      </button>
+    </form>
+
+    <div class="bot-card">
+      <h2>Probar el asistente</h2>
+      <div class="bot-hint" style="margin-bottom:10px;">Simulación: no envía WhatsApp ni modifica clientes. Usa la información guardada.</div>
+      <div class="bot-chat" id="botChat"></div>
+      <div class="bot-test-row">
+        <input id="botInput" class="form-control" placeholder="Ej: Hola, ¿cuánto cuesta una página web?" autocomplete="off">
+        <button id="botSend" type="button" style="background:#25d366;color:#fff;border:none;padding:0 16px;border-radius:8px;font-weight:600;cursor:pointer;">Enviar</button>
+      </div>
+
+      <h2 style="margin-top:24px;">Chats en pausa</h2>
+      {% if paused %}
+      <table class="bot-paused">
+        {% for p in paused %}
+        <tr>
+          <td>{{ p.phone }}</td>
+          <td class="bot-hint">hasta {{ p.paused_until }} UTC</td>
+          <td style="text-align:right;">
+            <form method="POST" action="{{ url_for('whatsapp.bot_resume') }}" style="margin:0;">
+              <input type="hidden" name="phone" value="{{ p.phone }}">
+              <button type="submit" style="background:none;border:1px solid var(--c-border,#e5e7eb);border-radius:6px;padding:4px 10px;cursor:pointer;">Reactivar bot</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div class="bot-hint">Ninguno. El bot está atendiendo todas las conversaciones.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const chat = document.getElementById('botChat');
+  const input = document.getElementById('botInput');
+  const btn = document.getElementById('botSend');
+  const URL_TEST = {{ url_for('whatsapp.bot_test') | tojson }};
+  function add(text, cls) {
+    const d = document.createElement('div');
+    d.className = 'bot-msg ' + cls;
+    d.textContent = text;
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+    return d;
+  }
+  async function send() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    add(text, 'in');
+    const wait = add('Escribiendo…', 'out');
+    btn.disabled = true;
+    try {
+      const r = await fetch(URL_TEST, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text }) });
+      const d = await r.json();
+      wait.textContent = d.success ? (d.reply || '(sin respuesta)') : ('⚠ ' + (d.error || 'Error'));
+    } catch (e) {
+      wait.textContent = '⚠ No se pudo conectar';
+    }
+    btn.disabled = false;
+    input.focus();
+  }
+  btn.addEventListener('click', send);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+})();
+</script>
+{% endblock %}
