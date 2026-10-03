@@ -151,7 +151,7 @@
 <div class="login-wrap">
 
   <div class="login-logo">
-    {% if brand.logo_white_url %}<img src="{{ brand.logo_white_url }}" alt="{{ brand.short_name }}" />{% else %}<span class="brand-wordmark" style="font-size:26px;">{{ brand.short_name }}</span>{% endif %}
+    {% if brand.logo_white_url %}<img src="{{ brand.logo_white_url }}" alt="{{ brand.short_name }}" />{% elif brand.logo_url %}<span class="brand-logo-card"><img src="{{ brand.logo_url }}" alt="{{ brand.company_name }}" /></span>{% else %}<span class="brand-wordmark" style="font-size:26px;">{{ brand.short_name }}</span>{% endif %}
   </div>
 
   <div class="login-card">

@@ -55,7 +55,7 @@
   <button class="btn btn-ghost btn-icon-xs" id="sbToggle" aria-label="Menu" style="border:none;color:rgba(255,255,255,.6);">
     <i class="bi bi-list" style="font-size:18px;"></i>
   </button>
-  {% if brand.logo_white_url %}<img src="{{ brand.logo_white_url }}" alt="{{ brand.short_name }}" />{% else %}<span class="brand-wordmark">{{ brand.short_name }}</span>{% endif %}
+  {% if brand.logo_white_url %}<img src="{{ brand.logo_white_url }}" alt="{{ brand.short_name }}" />{% elif brand.logo_url %}<span class="brand-logo-chip"><img src="{{ brand.logo_url }}" alt="{{ brand.short_name }}" /></span>{% else %}<span class="brand-wordmark">{{ brand.short_name }}</span>{% endif %}
   <button type="button" class="money-mini" data-money-toggle aria-pressed="false" title="Mostrar montos" aria-label="Mostrar u ocultar montos"><i class="bi bi-lock-fill"></i></button>
 </div>
 
@@ -74,6 +74,10 @@
     {% else %}
       {% if brand.logo_white_url %}
         <img src="{{ brand.logo_white_url }}" alt="{{ brand.company_name }}" />
+      {% elif brand.logo_url %}
+        <div class="sb-org-logo-wrap">
+          <img class="sb-org-logo" src="{{ brand.logo_url }}" alt="{{ brand.company_name }}" />
+        </div>
       {% else %}
         <span class="brand-wordmark">{{ brand.short_name }}</span>
       {% endif %}

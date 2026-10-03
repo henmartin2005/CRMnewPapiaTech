@@ -14,3 +14,6 @@ wa_media/
 # Configuración y datos de cada instancia (cliente) — nunca al repo
 instance/
 *.db
+
+# Logos e imágenes propias de cada instancia
+static/brand/
