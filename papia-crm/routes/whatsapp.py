@@ -1057,7 +1057,18 @@ def bot_settings():
                            has_key=bool(os.getenv('ANTHROPIC_API_KEY')),
                            usage=ai_agent.usage_summary(org_id),
                            calendar=ai_agent.calendar_status(org_id),
-                           model=os.getenv('AI_BOT_MODEL', ai_agent.DEFAULT_MODEL))
+                           model=os.getenv('AI_BOT_MODEL', ai_agent.DEFAULT_MODEL),
+                           learning=_bot_learning(org_id))
+
+
+def _bot_learning(org_id):
+    try:
+        from services import ai_learning
+        return ai_learning.get_learning(org_id)
+    except Exception:
+        log.exception('No se pudo leer el aprendizaje del bot')
+        return {'status': 'error', 'error': 'No se pudo leer el aprendizaje', 'style_guide': '',
+                'examples': [], 'price_notes': '', 'stats': {}, 'learned_at': None}
 
 
 @whatsapp_bp.route('/whatsapp/bot/resume', methods=['POST'])
@@ -1089,3 +1100,32 @@ def bot_test():
         return jsonify({'success': True, 'reply': ai_agent.preview(text[:1000], _get_org_id())})
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)[:300]}), 500
+
+
+@whatsapp_bp.route('/whatsapp/bot/learn', methods=['POST'])
+def bot_learn():
+    """Analiza las conversaciones de WhatsApp para que el bot escriba como Henrry."""
+    from services import ai_learning
+    try:
+        if ai_learning.start_learning(_get_org_id()):
+            flash('Analizando tus conversaciones… tarda un minuto aprox. La página se actualiza sola.', 'success')
+        else:
+            flash('Ya hay un aprendizaje en curso.', 'success')
+    except Exception as exc:
+        flash(f'No se pudo iniciar el aprendizaje: {exc}', 'danger')
+    return redirect(url_for('whatsapp.bot_settings'))
+
+
+@whatsapp_bp.route('/whatsapp/bot/learning', methods=['POST'])
+def bot_learning_save():
+    from services import ai_learning
+    ai_learning.save_style_guide(_get_org_id(), request.form.get('style_guide') or '')
+    flash('Guía de estilo actualizada.', 'success')
+    return redirect(url_for('whatsapp.bot_settings'))
+
+
+@whatsapp_bp.route('/whatsapp/bot/learning.json')
+def bot_learning_status():
+    from services import ai_learning
+    d = ai_learning.get_learning(_get_org_id())
+    return jsonify({'status': d['status'], 'learned_at': d['learned_at'], 'error': d['error']})

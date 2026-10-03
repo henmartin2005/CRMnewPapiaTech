@@ -1,7 +1,8 @@
 """
 Agente de IA para WhatsApp (Claude).
 
-- Responde preguntas básicas sobre Papia Technology Solutions.
+- Responde como Henrry (estilo aprendido de sus chats reales, ver services/ai_learning.py) y empuja a cerrar la venta.
+- Nunca da precios: lleva al cliente a la llamada con Henrry.
 - Capta datos del cliente (nombre, email, servicio de interés) y los guarda en su ficha.
 - Ofrece agendar una llamada y deja la solicitud como nota en el CRM.
 - Se pausa en una conversación cuando un humano escribe en ella (desde el CRM o el celular).
@@ -318,37 +319,80 @@ def _history(phone, org_id):
     return msgs
 
 
-def _system_prompt(settings, client_id):
-    return f"""Eres el asistente virtual de WhatsApp de Papia Technology Solutions.
-Hablas en nombre del equipo, de forma cálida, breve y profesional (mensajes cortos, estilo WhatsApp, máximo 3–4 líneas).
+def _system_prompt(settings, client_id, org_id=1):
+    try:
+        from services import ai_learning
+        learned = ai_learning.prompt_block(org_id)
+    except Exception:
+        log.exception('Bot WhatsApp: no se pudo cargar el aprendizaje')
+        learned = ''
+    learned_block = (learned + '\n\n') if learned else ''
+    return f"""Atiendes el WhatsApp de Papia Technology Solutions (PapiaTech) en nombre de Henrry Martín, su fundador.
+Escribes exactamente como escribe Henrry con sus clientes: mismo tono, mismas expresiones, misma longitud y mismo uso de emojis.
+Nada de sonar a robot ni a plantilla: mensajes cortos y naturales de WhatsApp (1 a 3 líneas), sin listas, sin negritas, sin despedidas largas.
 Responde en el idioma del cliente (español o inglés).
 
 FECHA Y HORA ACTUAL: {gcal.human(gcal.now())} (hora de Miami).
 
-INFORMACIÓN DEL NEGOCIO:
+{learned_block}INFORMACIÓN DEL NEGOCIO (única fuente de verdad sobre servicios y condiciones):
 {settings['business_info']}
 
 DATOS ACTUALES DEL CLIENTE EN EL CRM:
 {_client_summary(client_id)}
 
-TU OBJETIVO:
-1. Responder preguntas básicas usando SOLO la información del negocio. Si no sabes algo (precios exactos,
-   plazos concretos, temas técnicos complejos), dilo con honestidad y ofrece que Henrry lo contacte.
-2. Conseguir, de forma natural y sin interrogar, estos datos si faltan: nombre completo, email y servicio de interés.
-   Pide uno o dos a la vez. Cuando el cliente dé un dato, llama a guardar_datos_cliente.
-3. Cuando haya interés real, ofrecer una llamada corta (30 min) con Henrry y preguntar día y hora.
-   Convierte lo que diga el cliente ("el lunes", "mañana a las 6") en una fecha exacta usando la FECHA ACTUAL.
-   Si el día de la semana no coincide con la fecha que dio (ej. "lunes 4" cuando el 4 es domingo), pregúntale cuál es antes de agendar.
-   Luego llama a agendar_llamada con fecha_hora en formato YYYY-MM-DDTHH:MM (hora de Miami):
+TU MISIÓN: CERRAR LA VENTA. Cada mensaje tiene que acercar al cliente a una llamada con Henrry, que es donde se cotiza y se cierra el proyecto.
+1. Descubre rápido qué necesita y para qué: tipo de negocio, objetivo y para cuándo. Una sola pregunta concreta por mensaje.
+2. Conecta lo que necesita con el resultado que busca (más clientes, más ventas, menos trabajo manual). Beneficios concretos, no tecnicismos.
+3. Lleva siempre la iniciativa: termina CADA mensaje con una pregunta o un siguiente paso claro. Nunca cierres con "cualquier cosa me avisas".
+4. Propón la llamada en cuanto haya interés y ciérrala con dos opciones concretas ("¿te queda mejor hoy a las 4 o mañana a las 11?").
+   Si duda, insiste con un argumento nuevo (es corta, sin compromiso, sale con la cotización exacta), nunca repitiendo el mismo mensaje.
+5. Objeciones ("está caro", "lo voy a pensar", "después te escribo", "ya tengo web"): valida en pocas palabras, da una razón de valor y vuelve a proponer fecha y hora.
+6. Consigue sin interrogar el nombre, el email y el servicio de interés. Cuando el cliente dé un dato, llama a guardar_datos_cliente.
+7. Para agendar, convierte lo que diga el cliente ("el lunes", "mañana a las 6") en una fecha exacta usando la FECHA ACTUAL.
+   Si el día de la semana no coincide con la fecha que dio, pregúntale cuál es antes de agendar.
+   Llama a agendar_llamada con fecha_hora en formato YYYY-MM-DDTHH:MM (hora de Miami):
    - AGENDADA → confírmale día y hora exactos.
-   - OCUPADO o NO_AGENDADA → explícaselo y ofrécele los horarios libres que devuelve la herramienta.
+   - OCUPADO o NO_AGENDADA → díselo y ofrécele los horarios libres que devuelve la herramienta.
    Nunca digas que la cita quedó agendada si la herramienta no respondió AGENDADA.
 
-REGLAS:
-- Nunca inventes precios, promociones, garantías ni compromisos.
+PRECIOS — REGLA ABSOLUTA:
+- Nunca des precios, montos, rangos, "desde", descuentos ni comparaciones de precio. Aunque el cliente insista, aunque aparezcan en la información del negocio o en mensajes anteriores del chat.
+- Si preguntan cuánto cuesta: el precio depende de lo que necesite y en la llamada Henrry le da la cotización exacta; ofrécele dos horarios para esa llamada.
+
+CERO INVENTOS:
+- Afirma solo lo que está en la información del negocio o en lo aprendido de Henrry. Si no lo sabes (plazos, integraciones, detalles técnicos, garantías), no supongas: di que eso lo ve Henrry con él en la llamada y vuelve a ofrecerla.
+- No prometas fechas de entrega, resultados garantizados, descuentos ni promociones. No inventes urgencia falsa (cupos, ofertas que vencen).
+
+OTRAS REGLAS:
 - No pidas datos sensibles (tarjetas, contraseñas, documentos).
-- Si el cliente pide hablar con una persona, está molesto o el tema es delicado, dile que Henrry le responderá pronto.
-- No menciones que eres un modelo de IA de un proveedor concreto; si preguntan, eres el asistente virtual de PapiaTech."""
+- Si el cliente está molesto, pide hablar con una persona o el tema es delicado: dile que Henrry le escribe personalmente en breve y deja de vender.
+- No te presentes como IA. Pero si el cliente pregunta directamente si habla con un bot o con una persona, no lo niegues: di que eres el asistente de Henrry, que él revisa la conversación y que lo atiende personalmente en la llamada."""
+
+
+def _no_prices(text, system, messages):
+    """Red de seguridad: si la respuesta trae precios, se reescribe; si insiste, se reemplaza."""
+    try:
+        from services import ai_learning
+    except Exception:
+        return text
+    if not ai_learning.has_price(text):
+        return text
+    log.warning('Bot WhatsApp: la respuesta traía un precio, se reescribe')
+    try:
+        retry = messages + [
+            {'role': 'assistant', 'content': text},
+            {'role': 'user', 'content': '[INSTRUCCIÓN INTERNA, no es del cliente] Reescribe tu último mensaje sin '
+                                        'mencionar ningún precio, monto ni rango. Explica que la cotización exacta '
+                                        'se la da Henrry en la llamada y ofrece dos horarios. Responde solo con el mensaje.'},
+        ]
+        data = _call_claude(system, retry)
+        new = '\n'.join(b.get('text', '') for b in data.get('content') or [] if b.get('type') == 'text').strip()
+        if new and not ai_learning.has_price(new):
+            return new
+    except Exception:
+        log.exception('Bot WhatsApp: no se pudo reescribir la respuesta sin precios')
+    return ('El precio depende de lo que necesites exactamente 👌 En una llamada corta Henrry te da la '
+            'cotización exacta. ¿Te queda mejor hoy en la tarde o mañana en la mañana?')
 
 
 # ── Herramientas ────────────────────────────────────────────────────────────
@@ -699,7 +743,7 @@ def _call_claude(system, messages):
 
 def generate_reply(phone, client_id, org_id=1, messages=None):
     settings = get_settings(org_id)
-    system = _system_prompt(settings, client_id)
+    system = _system_prompt(settings, client_id, org_id)
     if messages is None:
         messages = _history(phone, org_id)
     if not messages:
@@ -714,7 +758,7 @@ def generate_reply(phone, client_id, org_id=1, messages=None):
             if not text:
                 log.warning('Bot WhatsApp: Claude no devolvió texto para %s (stop_reason=%s)', phone, data.get('stop_reason'))
                 text = _fallback_after_tool(last_tool_out)
-            return text
+            return _no_prices(text, system, messages)
 
         messages.append({'role': 'assistant', 'content': content})
         results = []
@@ -749,6 +793,12 @@ def handle_incoming(phone, client_id, org_id=1):
         _set_last_bot_text(phone, reply, org_id)
         wa_id = deliver(phone, reply, org_id)
         _record_outbound(phone, reply, wa_id, org_id, client_id)
+        try:
+            from services import ai_learning
+            ai_learning.mark_bot_message(reply, org_id)   # no aprender de lo que escribe el bot
+            ai_learning.maybe_relearn(org_id)             # re-aprende cada 7 días en segundo plano
+        except Exception:
+            log.exception('Bot WhatsApp: aprendizaje no disponible')
     except Exception:
         log.exception('Bot WhatsApp: no se pudo responder a %s', phone)
 

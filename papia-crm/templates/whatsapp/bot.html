@@ -42,6 +42,15 @@
 .bot-cal.ok { background:#dcfce7; color:#166534; }
 .bot-cal.warn { background:#fef3c7; color:#92400e; }
 .bot-cal a { font-weight:700; color:inherit; text-decoration:underline; }
+.bot-learn { background:var(--c-surface,#fff); border:1px solid var(--c-border,#e5e7eb); border-radius:12px; padding:18px 20px; margin-bottom:18px; }
+.bot-learn-btn { display:inline-flex; align-items:center; gap:6px; background:var(--c-accent,#2563eb); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:600; font-size:13px; cursor:pointer; }
+.bot-learn-btn:disabled { opacity:.5; cursor:not-allowed; }
+.bot-learn-stats { display:flex; gap:18px; flex-wrap:wrap; font-size:13px; align-items:baseline; }
+.bot-learn-details { margin-top:14px; }
+.bot-learn-details summary { cursor:pointer; font-size:13px; font-weight:600; margin-bottom:8px; }
+.bot-learn-details textarea { font-family:inherit; font-size:13px; line-height:1.5; }
+.bot-learn-examples { display:flex; flex-direction:column; gap:6px; background:#efeae2; border-radius:10px; padding:12px; max-height:420px; overflow-y:auto; }
+.bot-learn-prices { white-space:pre-wrap; font-size:13px; background:var(--c-bg,#f8fafc); border-radius:8px; padding:10px 12px; }
 @media (max-width:760px) { .bot-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .bot-kpi strong { font-size:19px; } }
 </style>
 {% endblock %}
@@ -92,6 +101,73 @@
     {% endif %}
   </div>
 
+  {% set L = learning %}
+  <div class="bot-learn" id="botLearn" data-status="{{ L.status }}">
+    <div class="bot-usage-head">
+      <h2><i class="bi bi-mortarboard"></i> Aprendizaje de tus conversaciones</h2>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        {% if L.status == 'running' %}
+          <span class="bot-status warn"><span class="spinner-border spinner-border-sm"></span> Analizando tus chats…</span>
+        {% elif L.status == 'ready' %}
+          <span class="bot-status ok"><i class="bi bi-check-circle"></i> Aprendido {{ L.learned_at|localdatetime }}</span>
+        {% elif L.status == 'error' %}
+          <span class="bot-status warn"><i class="bi bi-exclamation-triangle"></i> No se pudo completar</span>
+        {% else %}
+          <span class="bot-status warn"><i class="bi bi-hourglass"></i> Aún no ha aprendido</span>
+        {% endif %}
+        <form method="POST" action="{{ url_for('whatsapp.bot_learn') }}" style="margin:0;">
+          <button type="submit" class="bot-learn-btn" {% if L.status == 'running' or not has_key %}disabled{% endif %}>
+            <i class="bi bi-arrow-repeat"></i> Aprender ahora
+          </button>
+        </form>
+      </div>
+    </div>
+    <div class="bot-hint" style="margin-bottom:12px;">
+      Lee tus chats de WhatsApp (solo los mensajes que escribiste tú, desde el CRM o el celular; ignora los del bot) y aprende cómo saludas, cómo explicas, cómo respondes objeciones y cómo cierras.
+      El bot lo usa para escribir como tú. Se vuelve a aprender solo cada 7 días.
+    </div>
+    {% if L.stats %}
+    <div class="bot-learn-stats">
+      <span><strong>{{ L.stats.conversaciones or 0 }}</strong> chats analizados</span>
+      <span><strong>{{ L.stats.mensajes_henrry or 0 }}</strong> mensajes tuyos</span>
+      {% if L.examples %}<span><strong>{{ L.examples|length }}</strong> ejemplos reales</span>{% endif %}
+      {% if L.stats.observaciones %}<span class="bot-hint">{{ L.stats.observaciones }}</span>{% endif %}
+    </div>
+    {% endif %}
+    {% if L.status == 'error' and L.error %}
+      <div class="bot-cal warn" style="margin:10px 0 0;"><i class="bi bi-exclamation-triangle"></i> {{ L.error }}</div>
+    {% endif %}
+    {% if L.style_guide or L.examples %}
+    <details class="bot-learn-details" open>
+      <summary>Lo que aprendió (puedes corregirlo)</summary>
+      <form method="POST" action="{{ url_for('whatsapp.bot_learning_save') }}">
+        <textarea name="style_guide" class="form-control" rows="14">{{ L.style_guide }}</textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
+          <span class="bot-hint">Si corriges algo, se usará tal cual hasta el próximo aprendizaje automático.</span>
+          <button type="submit" class="bot-learn-btn"><i class="bi bi-check-lg"></i> Guardar cambios</button>
+        </div>
+      </form>
+    </details>
+    {% if L.examples %}
+    <details class="bot-learn-details">
+      <summary>Ejemplos reales que imita ({{ L.examples|length }})</summary>
+      <div class="bot-learn-examples">
+        {% for ex in L.examples %}
+        <div class="bot-msg in">{{ ex.cliente }}</div>
+        <div class="bot-msg out">{{ ex.henrry }}</div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    {% if L.price_notes %}
+    <details class="bot-learn-details">
+      <summary>Precios que mencionas en tus chats <span class="bot-hint">(solo referencia interna: el bot nunca los envía)</span></summary>
+      <div class="bot-learn-prices">{{ L.price_notes }}</div>
+    </details>
+    {% endif %}
+    {% endif %}
+  </div>
+
   <div class="bot-cal {{ 'ok' if calendar.ok else 'warn' }}">
     <i class="bi bi-calendar-check"></i>
     {% if calendar.ok %}
@@ -112,7 +188,7 @@
       <div class="bot-row">
         <label for="bi">Información del negocio (lo único que el bot puede afirmar)</label>
         <textarea id="bi" name="business_info" class="form-control">{{ settings.business_info }}</textarea>
-        <div class="bot-hint">Agrega servicios, horarios, precios "desde", preguntas frecuentes… Lo que no esté aquí, el bot dirá que tú le respondes.</div>
+        <div class="bot-hint">Agrega servicios, horarios, formas de pago y preguntas frecuentes. El bot nunca da precios (siempre lleva al cliente a la llamada) y lo que no esté aquí lo deja para la llamada contigo.</div>
       </div>
       <div class="bot-row">
         <label for="ph">Pausa cuando tú escribes en un chat (horas)</label>
@@ -191,6 +267,19 @@
   }
   btn.addEventListener('click', send);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+})();
+</script>
+<script>
+(function () {
+  const box = document.getElementById('botLearn');
+  if (!box || box.dataset.status !== 'running') return;
+  const URL_STATUS = {{ url_for('whatsapp.bot_learning_status') | tojson }};
+  const t = setInterval(async () => {
+    try {
+      const d = await (await fetch(URL_STATUS + '?_t=' + Date.now())).json();
+      if (d.status !== 'running') { clearInterval(t); location.reload(); }
+    } catch (e) {}
+  }, 5000);
 })();
 </script>
 {% endblock %}
