@@ -188,7 +188,7 @@
   background: var(--wa-surface); color: var(--wa-icon);
   font-size: 12.5px; line-height: 21px; padding: 5px 12px 6px;
   border-radius: 7.5px; box-shadow: var(--wa-shadow); text-transform: uppercase;
-  position: sticky; top: 8px; z-index: 1;
+  white-space: nowrap;
 }
 
 .wa-msg { display: flex; margin-bottom: 2px; padding: 0 9px; }
@@ -311,6 +311,23 @@
   .wa-thread { padding: 10px 2% 8px; }
   .wa-bub { max-width: 85%; }
   .wa-emoji { width: calc(100% - 24px); }
+}
+/* ── Fecha flotante: una sola píldora arriba, como en WhatsApp ── */
+.wa-float-day {
+  position: absolute; top: 10px; left: 50%; transform: translate(-50%, -4px); z-index: 4; pointer-events: none;
+  background: var(--wa-surface); color: var(--wa-icon); font-size: 12.5px; line-height: 21px;
+  padding: 4px 12px 5px; border-radius: 7.5px; box-shadow: var(--wa-shadow);
+  text-transform: uppercase; white-space: nowrap; opacity: 0; transition: opacity .2s, transform .2s;
+}
+.wa-float-day.show { opacity: 1; transform: translate(-50%, 0); }
+/* ── Móvil: el campo de escribir nunca queda detrás de la barra del navegador (iPhone) ── */
+@media (max-width: 900px) {
+  .main-content { height: 100vh; height: 100dvh; }
+  .wa-compose { padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); gap: 2px; }
+  .wa-compose .wa-icon-btn { width: 38px; height: 42px; font-size: 21px; }
+  .wa-input { font-size: 16px; border-radius: 21px; padding: 10px 14px; }
+  .wa-down { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); right: 14px; }
+  .wa-emoji, .wa-stickers { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
 }
 /* ── Adjuntos: audios, stickers, imágenes ── */
 .wa-audio { display:block; width:270px; max-width:100%; height:40px; margin:2px 0; }
@@ -455,6 +472,7 @@
       <button class="wa-icon-btn" id="findClose" title="Cerrar"><i class="bi bi-x-lg" style="font-size:16px;"></i></button>
     </div>
 
+    <div class="wa-float-day" id="floatDay" aria-hidden="true"></div>
     <div class="wa-scroll" id="scroller">
       <div class="wa-thread" id="thread">
         {% if not active_client %}
@@ -565,6 +583,7 @@
     }
     // *negrita* _cursiva_ ~tachado~ como en WhatsApp
     return linkify(esc(t))
+      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
       .replace(/(^|[\s(¡¿])\*([^*\n]+)\*(?=[\s.,;:!?)]|$)/g, '$1<b>$2</b>')
       .replace(/(^|[\s(¡¿])_([^_\n]+)_(?=[\s.,;:!?)]|$)/g, '$1<i>$2</i>')
       .replace(/(^|[\s(¡¿])~([^~\n]+)~(?=[\s.,;:!?)]|$)/g, '$1<s>$2</s>');
@@ -736,6 +755,25 @@
     thread.appendChild(e);
   }
   scrollBottom(false);
+
+  // ── Fecha flotante: muestra el día de los mensajes visibles mientras haces scroll ──
+  const floatDay = document.getElementById('floatDay');
+  let floatTimer = null;
+  function updateFloatDay() {
+    if (!floatDay) return;
+    const top = scroller.getBoundingClientRect().top + 8;
+    let label = '';
+    thread.querySelectorAll('.wa-day').forEach(chip => {
+      if (chip.getBoundingClientRect().top <= top) label = chip.textContent;
+    });
+    if (!label) { floatDay.classList.remove('show'); return; }
+    floatDay.textContent = label;
+    floatDay.style.top = (scroller.offsetTop + 10) + 'px';   // justo debajo de la cabecera
+    floatDay.classList.add('show');
+    clearTimeout(floatTimer);
+    floatTimer = setTimeout(() => floatDay.classList.remove('show'), 1200);
+  }
+  scroller.addEventListener('scroll', updateFloatDay, { passive: true });
 
   // ── Botón "ir al final" ──
   scroller.addEventListener('scroll', () => {
