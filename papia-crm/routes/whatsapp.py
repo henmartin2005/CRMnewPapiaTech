@@ -877,6 +877,13 @@ def zernio_webhook():
 
     if event == 'webhook.test':
         return jsonify({'ok': True})
+    # Varias instancias pueden compartir la misma cuenta de Zernio: cada CRM solo
+    # procesa los eventos de su propio número (ZERNIO_WA_ACCOUNT_ID).
+    acc_ids = {str(x) for x in (account.get('id'), account.get('_id'), account.get('accountId'),
+                                msg.get('accountId'), conv.get('accountId')) if x}
+    mine = zernio.account_id()
+    if mine and acc_ids and mine not in acc_ids:
+        return jsonify({'ignored': 'other account'})
     if platform and platform != 'whatsapp':
         return jsonify({'ignored': platform})   # IG/Messenger siguen por Meta directo
 
