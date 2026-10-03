@@ -55,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -70,6 +71,7 @@ import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -163,6 +165,16 @@ data class WhatsAppSummary(
     val conversations: List<WhatsAppConversation>,
 )
 
+data class WhatsAppMessage(
+    val id: Int,
+    val direction: String,
+    val message: String,
+    val status: String,
+    val createdAt: String,
+) {
+    val inbound: Boolean get() = direction == "inbound"
+}
+
 class PapiaApi(private val context: Context) {
     private val prefs = context.getSharedPreferences("papia_crm", Context.MODE_PRIVATE)
     var token: String?
@@ -237,6 +249,22 @@ class PapiaApi(private val context: Context) {
                 )
             },
         )
+    }
+
+    suspend fun whatsappMessages(phone: String, markRead: Boolean = true): List<WhatsAppMessage> = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(phone, "UTF-8")
+        val mark = if (markRead) "1" else "0"
+        request("GET", "/whatsapp/messages?phone=$encoded&mark_read=$mark")
+            .getJSONArray("messages")
+            .mapObjects { item ->
+                WhatsAppMessage(
+                    id = item.optInt("id"),
+                    direction = item.optString("direction"),
+                    message = item.optString("message"),
+                    status = item.optString("status"),
+                    createdAt = item.optString("created_at"),
+                )
+            }
     }
 
     private fun request(
@@ -374,12 +402,19 @@ enum class Tab(val label: String) {
 @Composable
 fun MainScreen(api: PapiaApi, onSignOut: () -> Unit) {
     var selected by remember { mutableStateOf(Tab.Dashboard) }
-    WhatsAppNotificationMonitor(api = api)
+    var whatsappSummary by remember { mutableStateOf<WhatsAppSummary?>(null) }
+    WhatsAppNotificationMonitor(
+        api = api,
+        onSummary = { whatsappSummary = it },
+    )
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Papia CRM", fontWeight = FontWeight.SemiBold) },
-                actions = { TextButton(onClick = onSignOut) { Text("Salir") } },
+                actions = {
+                    NotificationPill(count = whatsappSummary?.unread ?: 0)
+                    TextButton(onClick = onSignOut) { Text("Salir") }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = PapiaColors.Background),
             )
         },
@@ -399,10 +434,14 @@ fun MainScreen(api: PapiaApi, onSignOut: () -> Unit) {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (selected) {
-                Tab.Dashboard -> DashboardScreen(api)
+                Tab.Dashboard -> DashboardScreen(api, whatsappSummary)
                 Tab.Clients -> ClientsScreen(api)
                 Tab.Pipeline -> PipelineScreen(api)
-                Tab.WhatsApp -> WhatsAppScreen(api)
+                Tab.WhatsApp -> WhatsAppScreen(
+                    api = api,
+                    initialSummary = whatsappSummary,
+                    onSummary = { whatsappSummary = it },
+                )
                 Tab.Tasks -> TasksScreen(api)
             }
         }
@@ -410,16 +449,19 @@ fun MainScreen(api: PapiaApi, onSignOut: () -> Unit) {
 }
 
 @Composable
-fun WhatsAppNotificationMonitor(api: PapiaApi) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+fun WhatsAppNotificationMonitor(api: PapiaApi, onSummary: (WhatsAppSummary) -> Unit) {
+    val context = LocalContext.current
     LaunchedEffect(api) {
         var lastUnread: Int? = null
         while (true) {
-            runCatching { api.whatsapp().unread }
-                .onSuccess { unread ->
+            runCatching { api.whatsapp() }
+                .onSuccess { summary ->
+                    onSummary(summary)
+                    val unread = summary.unread
                     val previous = lastUnread
                     if (previous != null && unread > previous) {
-                        showWhatsAppNotification(context, unread - previous, unread)
+                        val latestUnread = summary.conversations.firstOrNull { it.unread > 0 }
+                        showWhatsAppNotification(context, latestUnread, unread - previous, unread)
                     }
                     lastUnread = unread
                 }
@@ -429,7 +471,7 @@ fun WhatsAppNotificationMonitor(api: PapiaApi) {
 }
 
 @Composable
-fun DashboardScreen(api: PapiaApi) {
+fun DashboardScreen(api: PapiaApi, whatsappSummary: WhatsAppSummary?) {
     var stats by remember { mutableStateOf<DashboardStats?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -451,6 +493,14 @@ fun DashboardScreen(api: PapiaApi) {
         Spacer(Modifier.height(12.dp))
         InfoCard("Facturado", money(data.totalBilled))
         InfoCard("Cobrado", money(data.totalCollected), PapiaColors.Success)
+        Spacer(Modifier.height(10.dp))
+        SectionTitle("Últimos WhatsApp")
+        val chats = whatsappSummary?.conversations.orEmpty().take(3)
+        if (chats.isEmpty()) {
+            EmptyState("No hay conversaciones recientes.")
+        } else {
+            chats.forEach { WhatsAppRow(it) }
+        }
     }
 }
 
@@ -527,20 +577,83 @@ fun TasksScreen(api: PapiaApi) {
 }
 
 @Composable
-fun WhatsAppScreen(api: PapiaApi) {
-    var summary by remember { mutableStateOf<WhatsAppSummary?>(null) }
+fun WhatsAppScreen(
+    api: PapiaApi,
+    initialSummary: WhatsAppSummary?,
+    onSummary: (WhatsAppSummary) -> Unit,
+) {
+    var summary by remember { mutableStateOf(initialSummary) }
     var error by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf<WhatsAppConversation?>(null) }
+    var messages by remember { mutableStateOf<List<WhatsAppMessage>?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun refresh() {
+        scope.launch {
+            runCatching { api.whatsapp() }
+                .onSuccess {
+                    summary = it
+                    onSummary(it)
+                }
+                .onFailure { error = it.message }
+        }
+    }
+
     LaunchedEffect(Unit) {
         runCatching { api.whatsapp() }
-            .onSuccess { summary = it }
+            .onSuccess {
+                summary = it
+                onSummary(it)
+            }
             .onFailure { error = it.message }
     }
+
+    LaunchedEffect(selected?.phone) {
+        val conversation = selected ?: return@LaunchedEffect
+        messages = null
+        runCatching { api.whatsappMessages(conversation.phone, markRead = true) }
+            .onSuccess {
+                messages = it
+                refresh()
+            }
+            .onFailure { error = it.message }
+    }
+
     ContentFrame(title = "WhatsApp", error = error, loading = summary == null && error == null) {
         val data = summary ?: return@ContentFrame
+        selected?.let { conversation ->
+            ChatDetail(
+                conversation = conversation,
+                messages = messages,
+                onClose = {
+                    selected = null
+                    messages = null
+                },
+            )
+            return@ContentFrame
+        }
         InfoCard("Mensajes sin leer", data.unread.toString(), if (data.unread > 0) PapiaColors.Success else PapiaColors.Text)
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("Buscar conversación") },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+        )
         Spacer(Modifier.height(8.dp))
-        data.conversations.forEach { conversation ->
-            WhatsAppRow(conversation)
+        val filtered = data.conversations.filter {
+            val text = "${it.clientName} ${it.phone} ${it.lastMessage}".lowercase()
+            text.contains(query.trim().lowercase())
+        }
+        if (filtered.isEmpty()) {
+            EmptyState("No hay conversaciones para mostrar.")
+        } else {
+            filtered.forEach { conversation ->
+                WhatsAppRow(conversation = conversation, onClick = { selected = conversation })
+            }
         }
     }
 }
@@ -626,11 +739,12 @@ fun ClientRow(client: Client, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-fun WhatsAppRow(conversation: WhatsAppConversation) {
+fun WhatsAppRow(conversation: WhatsAppConversation, onClick: (() -> Unit)? = null) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 8.dp)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
     ) {
@@ -659,9 +773,122 @@ fun WhatsAppRow(conversation: WhatsAppConversation) {
                     }
                 }
                 Text(conversation.lastMessage.ifBlank { "Sin mensaje" }, color = PapiaColors.Text, maxLines = 2)
-                Text(conversation.lastAt, color = PapiaColors.Muted, style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(conversation.lastAt, color = PapiaColors.Muted, style = MaterialTheme.typography.bodySmall)
+                    if (conversation.lastDirection == "inbound") {
+                        Text("  ·  recibido", color = PapiaColors.Success, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+fun ChatDetail(
+    conversation: WhatsAppConversation,
+    messages: List<WhatsAppMessage>?,
+    onClose: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        conversation.clientName.ifBlank { conversation.phone },
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(conversation.phone, color = PapiaColors.Muted, style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = onClose) { Text("Cerrar") }
+            }
+            Spacer(Modifier.height(10.dp))
+            if (messages == null) {
+                Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                }
+            } else if (messages.isEmpty()) {
+                EmptyState("Esta conversación no tiene mensajes.")
+            } else {
+                messages.takeLast(20).forEach { message ->
+                    MessageBubble(message)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(PapiaColors.Background)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Responder desde el panel web por ahora", color = PapiaColors.Muted, modifier = Modifier.weight(1f))
+                Text("→", color = PapiaColors.Blue, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun MessageBubble(message: WhatsAppMessage) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = if (message.inbound) Arrangement.Start else Arrangement.End,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (message.inbound) PapiaColors.Background else PapiaColors.Blue)
+                .padding(10.dp),
+        ) {
+            Text(message.message.ifBlank { "[mensaje]" }, color = if (message.inbound) PapiaColors.Text else Color.White)
+            Text(
+                message.createdAt,
+                color = if (message.inbound) PapiaColors.Muted else PapiaColors.LightMuted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+fun NotificationPill(count: Int) {
+    if (count <= 0) return
+    Row(
+        modifier = Modifier
+            .padding(end = 4.dp)
+            .clip(RoundedCornerShape(99.dp))
+            .background(PapiaColors.Success)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("WA", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.width(6.dp))
+        Text(count.toString(), color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+fun EmptyState(message: String) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Text(message, color = PapiaColors.Muted, modifier = Modifier.padding(16.dp))
     }
 }
 
@@ -752,7 +979,12 @@ fun money(value: Double): String = NumberFormat.getCurrencyInstance(Locale.US).f
 
 private const val WHATSAPP_CHANNEL_ID = "papia_whatsapp"
 
-fun showWhatsAppNotification(context: Context, newCount: Int, totalUnread: Int) {
+fun showWhatsAppNotification(
+    context: Context,
+    conversation: WhatsAppConversation?,
+    newCount: Int,
+    totalUnread: Int,
+) {
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -772,8 +1004,8 @@ fun showWhatsAppNotification(context: Context, newCount: Int, totalUnread: Int) 
         android.app.Notification.Builder(context)
     }
         .setSmallIcon(android.R.drawable.sym_action_chat)
-        .setContentTitle("Nuevo WhatsApp en Papia CRM")
-        .setContentText("$newCount nuevo(s), $totalUnread sin leer")
+        .setContentTitle("WhatsApp de ${conversation?.clientName?.ifBlank { conversation.phone } ?: "Papia CRM"}")
+        .setContentText(conversation?.lastMessage?.ifBlank { "$newCount nuevo(s), $totalUnread sin leer" } ?: "$newCount nuevo(s), $totalUnread sin leer")
         .setContentIntent(pendingIntent)
         .setAutoCancel(true)
         .build()
