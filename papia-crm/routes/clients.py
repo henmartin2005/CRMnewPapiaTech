@@ -111,6 +111,16 @@ def detail(client_id):
     except Exception:
         contracts = []
     schedule = list_installments(client_id, org_id, today=datetime.now(SCHED_TZ).strftime('%Y-%m-%d'))
+    try:
+        from database import get_db as _wa_db
+        _wdb = _wa_db()
+        wa_messages = _wdb.execute(
+            "SELECT direction, message, created_at, status, phone FROM whatsapp_messages "
+            "WHERE client_id = ? AND org_id = ? ORDER BY id ASC", (client_id, org_id)
+        ).fetchall()
+        _wdb.close()
+    except Exception:
+        wa_messages = []
 
     return render_template(
         'clients/detail.html',
@@ -120,6 +130,7 @@ def detail(client_id):
         documents=documents,
         contracts=contracts,
         schedule=schedule,
+        wa_messages=wa_messages,
         profile_layout=get_layout(client_id, org_id),
         docs_accept=ACCEPT_ATTR,
         docs_max_mb=MAX_FILE_BYTES // (1024 * 1024),

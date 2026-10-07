@@ -25,6 +25,7 @@ from routes.pipeline import pipeline_bp
 from routes.followups import followups_bp
 from routes.whatsapp import whatsapp_bp, get_unread_count
 from routes.vault import vault_bp
+from routes.boards import boards_bp
 from routes.auth import auth_bp
 from routes.leads import leads_bp
 from routes.emails import emails_bp
@@ -65,6 +66,7 @@ app.register_blueprint(payments_bp)
 app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
 app.register_blueprint(vault_bp)
+app.register_blueprint(boards_bp)
 app.register_blueprint(mobile_api_bp)
 app.register_blueprint(contracts_bp)
 app.register_blueprint(contracts_public_bp)
