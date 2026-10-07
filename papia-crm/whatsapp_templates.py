@@ -70,6 +70,21 @@ TEMPLATES = {
         'en': ("Hi {{1}}, I wanted to follow up on your inquiry about {{2}}. Are you still interested? We're here to help.",
                ['Ana', 'the booking app'], ["Yes, I'm interested", 'No, thanks']),
     }),
+    # Contratos (firma electrónica)
+    'firma_contrato': ('UTILITY', {
+        'es': ("Hola {{1}}, {{2}} te envió el documento *{{3}}* para firmar electrónicamente. "
+               "Revísalo y fírmalo aquí: {{4}}",
+               ['Ana', OWNER or BRAND, 'Acuerdo de servicios', f'{EXAMPLE_BASE}/firmar/abc123'], []),
+        'en': ("Hi {{1}}, {{2}} sent you the document *{{3}}* to sign electronically. "
+               "Review and sign it here: {{4}}",
+               ['Ana', OWNER or BRAND, 'Service agreement', f'{EXAMPLE_BASE}/firmar/abc123'], []),
+    }),
+    'codigo_firma': ('UTILITY', {
+        'es': ("Tu código para abrir y firmar *{{1}}* es {{2}}. Vence en 10 minutos. No lo compartas con nadie.",
+               ['Acuerdo de servicios', '482913'], []),
+        'en': ("Your code to open and sign *{{1}}* is {{2}}. It expires in 10 minutes. Do not share it.",
+               ['Service agreement', '482913'], []),
+    }),
 }
 
 

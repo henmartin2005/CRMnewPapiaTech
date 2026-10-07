@@ -3,6 +3,7 @@
   "legal_name": "Papia Technology Solutions LLC",
   "short_name": "PapiaTech",
   "crm_name": "Papia CRM",
+  "esign_name": "Papia Sign",
   "tagline": "Professional technology proposals and CRM solutions.",
   "services_pitch": "nuestros servicios de desarrollo web y CRM",
   "owner_name": "Henrry Martín",
@@ -25,6 +26,9 @@
     "https://papiatech.com"
   ],
   "colors": {
-    "pdf": "#2563EB"
+    "pdf": "#2563EB",
+    "esign_dark": "#0A2540",
+    "esign_cta": "#FF6B4A",
+    "esign_link": "#007F8A"
   }
 }

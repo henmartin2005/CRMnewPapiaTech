@@ -35,6 +35,7 @@ from routes.super import super_bp
 from routes.payments import payments_bp
 from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
+from routes.contracts import contracts_bp, contracts_public_bp
 
 app = Flask(__name__)
 _secret = os.environ.get('SECRET_KEY', '').strip()
@@ -69,6 +70,8 @@ app.register_blueprint(payments_bp)
 app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
 app.register_blueprint(vault_bp)
+app.register_blueprint(contracts_bp)
+app.register_blueprint(contracts_public_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────
@@ -89,6 +92,9 @@ def require_login():
                       'meta_webhook.verify', 'meta_webhook.receive'}
     if request.endpoint in open_endpoints:
         return
+    # Papia Sign: páginas públicas del firmante y de verificación
+    if request.endpoint and request.endpoint.startswith('contracts_public.'):
+        return
     if request.path.startswith('/api/'):
         return
     if not session.get('logged_in'):
@@ -98,7 +104,7 @@ def require_login():
         return redirect(url_for('dashboard'))
 
 
-_ALL_MODULES = {'whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat'}
+_ALL_MODULES = {'whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'contracts', 'tasks', 'chat'}
 
 
 # ── Context processor: unread badge + enabled modules ──────────────────────

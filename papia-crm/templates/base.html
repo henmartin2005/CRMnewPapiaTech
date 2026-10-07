@@ -176,6 +176,16 @@
     </li>
     {% endif %}
 
+    {% if 'contracts' in enabled_modules %}
+    <li>
+      <a href="{{ url_for('contracts.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('contracts.') %}active{% endif %}">
+        <i class="bi bi-pen"></i>
+        <span class="sb-label">Contratos</span>
+      </a>
+    </li>
+    {% endif %}
+
     {% if 'whatsapp' in enabled_modules %}
     <li>
       <a href="{{ url_for('whatsapp.index') }}"

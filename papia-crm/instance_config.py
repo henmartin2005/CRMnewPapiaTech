@@ -179,3 +179,43 @@ def render(template, **extra):
 
 def render_text(name, **extra):
     return render(text(name), **extra)
+
+
+# ── Firma electrónica (módulo Contratos) ────────────────────────────────────
+
+def _luminance(hex_color):
+    h = (hex_color or '').lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    try:
+        rgb = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    except (ValueError, IndexError):
+        return 0.0
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def _contrast(a, b):
+    la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def esign():
+    """Marca del módulo de firma: nombre y colores de las páginas del firmante,
+    los emails y el PDF. Se configura en brand.json → esign_name y colors.esign_*."""
+    b = brand()
+    c = b.get('colors') or {}
+    dark = c.get('esign_dark') or c.get('sidebar_bg') or '#0B0E14'
+    cta = c.get('esign_cta') or c.get('accent') or '#2A5BFF'
+    link = c.get('esign_link') or (cta if _contrast(cta, '#FFFFFF') >= 4.5 else dark)
+    return {
+        'name': b.get('esign_name') or f"{b.get('short_name') or b.get('company_name')} Sign",
+        'dark': dark,
+        'cta': cta,
+        'on_cta': '#FFFFFF' if _contrast(cta, '#FFFFFF') >= _contrast(cta, dark) else dark,
+        'link': link,
+        'logo': b.get('logo_white_url') or '',
+        'logo_light': b.get('logo_url') or '',
+        'company': b.get('company_name') or '',
+        'legal_name': b.get('legal_name') or b.get('company_name') or '',
+    }

@@ -420,8 +420,9 @@ def init_db():
         conn.commit()
 
     # ── Seed org_modules: activos los de business.json → modules ─────────────
-    _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat']
-    _enabled = set(_cfg.modules())
+    _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'contracts', 'tasks', 'chat']
+    # Contratos nace activo también en instancias cuyo business.json es anterior al módulo
+    _enabled = set(_cfg.modules()) | {'contracts'}
     for org_row in conn.execute("SELECT id FROM organizations").fetchall():
         for mod in _ORG_MODULES:
             conn.execute(
@@ -509,7 +510,7 @@ def init_db():
         conn.commit()
 
     # ── Seed users ───────────────────────────────────────────────────────────
-    ALL_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat']
+    ALL_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'contracts', 'tasks', 'chat']
 
     # Chat is enabled by default for existing users because it is an
     # organization-wide communication channel.

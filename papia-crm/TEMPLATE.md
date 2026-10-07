@@ -112,6 +112,19 @@ reales, usa **Aprender ahora** en el panel del bot para que copie su estilo.
 Llaves en `.env` (o por organización en Configuración → Pagos). Webhook:
 `<APP_BASE_URL>/webhook/stripe`, evento `checkout.session.completed`.
 
+### Contratos (firma electrónica)
+- Viene activo. Sin configuración extra: usa el Gmail y el WhatsApp de la instancia.
+- **Marca:** en `instance/brand.json` → `esign_name` (ej. "Maybis Sign"; vacío = "<short_name> Sign") y,
+  opcional, `colors.esign_dark` (encabezado), `colors.esign_cta` (botones) y `colors.esign_link`.
+  Si no los pones se usan `sidebar_bg` y `accent`. El logo del encabezado es `logo_white_url` (o `logo_url`).
+- `python whatsapp_templates.py` crea también `firma_contrato` y `codigo_firma`.
+- **Tarea diaria** (pestaña Tasks): `cd <ruta>/papia-crm && ../.venv/bin/python contracts_cron.py`
+  (recordatorios y vencimientos).
+- **Sello del PDF:** cada instancia genera su propio certificado en `contract_files/_keys/`
+  (no va al repo; inclúyelo en tus backups). Para la marca verde de Adobe: `SIGN_CERT_FILE` /
+  `SIGN_KEY_FILE` en `.env` con un certificado AATL de ese cliente.
+- Los PDF y la base de cada instancia quedan en su propia carpeta: nada se comparte entre clientes.
+
 ### Meta (Messenger / Instagram), opcional
 Webhook `<APP_BASE_URL>/webhook/meta` con el `META_VERIFY_TOKEN` del `.env`.
 
