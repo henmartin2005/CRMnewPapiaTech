@@ -1,5 +1,5 @@
 """
-Papia Sign — módulo Contratos.
+Firma electrónica — módulo Contratos.
 
   contracts_bp         /contratos/...   (requiere sesión del CRM)
   contracts_public_bp  /firmar/<token>  (firmante, sin cuenta)
@@ -365,7 +365,9 @@ MESSAGES = {
 def _public(template, env=None, rc=None, **ctx):
     if 'kind' in ctx:
         ctx['m'] = MESSAGES.get(ctx['kind'], MESSAGES['invalid'])
-    org = N.org_name(env['org_id']) if env else 'Papia Technology Solutions'
+    import instance_config as cfg
+    org = N.org_name(env['org_id']) if env else cfg.esign()['company']
+    ctx.setdefault('esign', cfg.esign())
     resp = render_template(f'contracts/public/{template}', env=env, rc=rc, org_name=org, **ctx)
     return resp, 200, {'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow',
                        'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY'}

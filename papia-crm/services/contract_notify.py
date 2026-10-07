@@ -1,5 +1,5 @@
 """
-Papia Sign — notificaciones (Gmail del CRM + WhatsApp vía Zernio).
+Firma electrónica (Contratos) — notificaciones (Gmail del CRM + WhatsApp vía Zernio).
 
 Todo es "best effort": si un canal falla se registra un evento `notify_failed`
 en el historial del sobre y el resto del flujo continúa.
@@ -12,12 +12,12 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import instance_config as cfg
 from database import get_db
 from models.contract import log_event
 
 log = logging.getLogger(__name__)
 
-NAVY, CORAL = '#0A2540', '#FF6B4A'
 
 
 def _base_url(org_id):
@@ -29,7 +29,7 @@ def _base_url(org_id):
             return row['app_base_url'].rstrip('/')
     except Exception:
         pass
-    return (os.getenv('APP_BASE_URL') or 'https://datos.papiatech.com').rstrip('/')
+    return (cfg.base_url() or os.getenv('APP_BASE_URL') or '').rstrip('/')
 
 
 def org_name(org_id):
@@ -37,9 +37,9 @@ def org_name(org_id):
         db = get_db()
         row = db.execute("SELECT name FROM organizations WHERE id=?", (org_id,)).fetchone()
         db.close()
-        return row['name'] if row else 'Papia Technology Solutions'
+        return row['name'] if row and row['name'] else cfg.esign()['company']
     except Exception:
-        return 'Papia Technology Solutions'
+        return cfg.esign()['company']
 
 
 def sign_url(org_id, token):
@@ -49,7 +49,8 @@ def sign_url(org_id, token):
 # ── email ────────────────────────────────────────────────────────────────────
 
 def _button(url, label):
-    return (f'<a href="{html.escape(url)}" style="display:inline-block;background:{CORAL};color:{NAVY};'
+    b = cfg.esign()
+    return (f'<a href="{html.escape(url)}" style="display:inline-block;background:{b["cta"]};color:{b["on_cta"]};'
             f'font-weight:700;text-decoration:none;padding:13px 26px;border-radius:10px;font-size:15px;">'
             f'{html.escape(label)}</a>')
 
@@ -64,7 +65,7 @@ def send_email(org_id, to_email, subject, paragraphs, button=None, attachments=N
     if button:
         parts.append(f'<p style="margin:22px 0;">{_button(*button)}</p>')
         parts.append('<p style="margin:0;color:#6B7280;font-size:12px;">Este enlace es personal; no lo reenvíes. '
-                     'Firma electrónica con Papia Sign.</p>')
+                     f'Firma electrónica con {cfg.esign()["name"]}.</p>')
     body_html = _build_html_email(''.join(parts), _get_settings(org_id))
     plain = '\n\n'.join(p for p in paragraphs if p)
     if button:
@@ -109,7 +110,7 @@ def send_whatsapp(org_id, phone, text, template=None, client_id=None):
     try:
         _record_outbound(phone, text, wa_id, org_id, client_id=client_id)
     except Exception:
-        log.exception('Papia Sign: no se pudo registrar el WhatsApp saliente')
+        log.exception('Contratos: no se pudo registrar el WhatsApp saliente')
     return wa_id
 
 
@@ -120,7 +121,7 @@ def _safe(env, rc, channel, fn):
         fn()
         return True
     except Exception as exc:
-        log.exception('Papia Sign: fallo de notificación')
+        log.exception('Contratos: fallo de notificación')
         log_event(env['id'], env['org_id'], 'notify_failed', rc['id'] if rc else None, actor='Sistema',
                   detail=f'{channel}: {exc}'[:500])
         return False

@@ -1,4 +1,4 @@
-"""Papia Sign — orquestación: invitar, cerrar el sobre, archivar y avisar."""
+"""Firma electrónica (Contratos) — orquestación: invitar, cerrar el sobre, archivar y avisar."""
 import logging
 import os
 import re
@@ -25,7 +25,7 @@ def client_note(client_id, text):
         db.commit()
         db.close()
     except Exception:
-        log.exception('Papia Sign: no se pudo guardar la nota del cliente')
+        log.exception('Contratos: no se pudo guardar la nota del cliente')
 
 
 def dispatch_invites(env, pairs, sender_name):
@@ -69,7 +69,7 @@ def finalize(env_id):
                               'application/pdf', len(data))
             C.log_event(env['id'], env['org_id'], 'archived', actor='Sistema')
         except Exception:
-            log.exception('Papia Sign: no se pudo archivar en documentos del cliente')
+            log.exception('Contratos: no se pudo archivar en documentos del cliente')
         client_note(env['client_id'], f'Contrato firmado por todas las partes: {env["title"]} (sobre {env["uid"]})')
 
     env = C.get_envelope(env['id'], env['org_id'])
@@ -88,7 +88,7 @@ def after_signature(env, rc, outcome, pairs):
         try:
             finalize(env['id'])
         except Exception:
-            log.exception('Papia Sign: error al finalizar el sobre %s', env['id'])
+            log.exception('Contratos: error al finalizar el sobre %s', env['id'])
             C.log_event(env['id'], env['org_id'], 'notify_failed', actor='Sistema',
                         detail='Error al generar el PDF final; reintenta desde el detalle del sobre.')
     else:

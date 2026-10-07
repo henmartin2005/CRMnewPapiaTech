@@ -1,4 +1,4 @@
-/* Papia Sign — experiencia del firmante. Requiere pdf.js 3.x (window.pdfjsLib). */
+/* Contratos — experiencia del firmante. Requiere pdf.js 3.x (window.pdfjsLib). */
 (function () {
   'use strict';
   var S = window.PSIGN;

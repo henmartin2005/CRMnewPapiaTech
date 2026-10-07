@@ -1,5 +1,5 @@
 """
-Papia Sign — generación del PDF final.
+Firma electrónica (Contratos) — generación del PDF final.
 
   1. Estampa en el PDF original las firmas, iniciales y valores de cada campo.
   2. Añade el Certificado de finalización (audit trail) como páginas finales.
@@ -23,13 +23,29 @@ import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import instance_config as cfg
 from models.contract import FILES_ROOT, describe_user_agent, EVENT_LABELS
 
 log = logging.getLogger(__name__)
-TZ = ZoneInfo('America/New_York')
 
-NAVY = (10 / 255, 37 / 255, 64 / 255)
-AQUA_TEXT = (0, 127 / 255, 138 / 255)
+
+def _rgb(hex_color, fallback=(0.04, 0.05, 0.08)):
+    h = (hex_color or '').lstrip('#')
+    try:
+        return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return fallback
+
+
+def _tz():
+    try:
+        return ZoneInfo(cfg.timezone_name())
+    except Exception:
+        return ZoneInfo('America/New_York')
+
+
+NAVY = _rgb(cfg.esign()['dark'])
+AQUA_TEXT = _rgb(cfg.esign()['link'])
 MUTED = (71 / 255, 85 / 255, 105 / 255)
 
 
@@ -38,7 +54,8 @@ def fmt_local(ts, fmt='%m/%d/%Y %I:%M:%S %p'):
         return ''
     try:
         dt = datetime.strptime(str(ts)[:19], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
-        return dt.astimezone(TZ).strftime(fmt) + (' ET' if '%H' in fmt or '%I' in fmt else '')
+        local = dt.astimezone(_tz())
+        return local.strftime(fmt) + (f' {local.strftime("%Z")}' if '%H' in fmt or '%I' in fmt else '')
     except ValueError:
         return str(ts)
 
@@ -71,6 +88,7 @@ def _stamp_pages(original_bytes, env):
     writer = PdfWriter()
     rcpts = {r['id']: r for r in env['recipients']}
     short_id = env['uid'].split('-')[0]
+    sign_name = cfg.esign()['name']
 
     for idx, page in enumerate(reader.pages, start=1):
         try:
@@ -86,7 +104,7 @@ def _stamp_pages(original_bytes, env):
         # Encabezado discreto en cada página (como el "Envelope ID" de DocuSign)
         c.setFont('Helvetica', 6.5)
         c.setFillColorRGB(*MUTED)
-        c.drawString(14, ph - 12, f'Papia Sign · ID del sobre: {env["uid"]}')
+        c.drawString(14, ph - 12, f'{sign_name} · ID del sobre: {env["uid"]}')
 
         for f in env['fields']:
             if f['page'] != idx or f.get('value') in (None, ''):
@@ -110,7 +128,7 @@ def _stamp_pages(original_bytes, env):
                     c.line(x, y, x, y + h)            # ribete lateral tipo "firmado por"
                     c.setFont('Helvetica', 4.8)
                     c.setFillColorRGB(*AQUA_TEXT)
-                    c.drawString(x + 2.5, y + h - 4.8, f'Firmado con Papia Sign · {short_id}')
+                    c.drawString(x + 2.5, y + h - 4.8, f'Firmado con {sign_name} · {short_id}')
             elif t == 'checkbox':
                 c.setStrokeColorRGB(*NAVY)
                 c.setLineWidth(0.8)
@@ -134,7 +152,7 @@ def _stamp_pages(original_bytes, env):
         page.merge_transformed_page(overlay, Transformation().translate(llx, lly))
         writer.add_page(page)
 
-    writer.add_metadata({'/Title': env['title'], '/Producer': 'Papia Sign — Papia Technology Solutions',
+    writer.add_metadata({'/Title': env['title'], '/Producer': f'{sign_name} — {cfg.esign()["legal_name"]}',
                          '/Subject': f'Sobre {env["uid"]}'})
     return writer
 
@@ -168,7 +186,8 @@ def _certificate_pdf(env, org_name):
     doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.75 * inch, rightMargin=0.75 * inch,
                             topMargin=0.7 * inch, bottomMargin=0.7 * inch,
                             title=f'Certificado de finalización — {env["title"]}')
-    story = [Paragraph('PAPIA SIGN', eyebrow), Paragraph('Certificado de finalización', h1), Spacer(1, 8)]
+    sign_name = cfg.esign()['name']
+    story = [Paragraph(esc(sign_name.upper()), eyebrow), Paragraph('Certificado de finalización', h1), Spacer(1, 8)]
 
     signers = [r for r in env['recipients'] if r['role'] == 'signer']
     ccs = [r for r in env['recipients'] if r['role'] == 'cc']
@@ -241,7 +260,7 @@ def _certificate_pdf(env, org_name):
                             ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
     story += [et, Spacer(1, 14), Paragraph(
         'Este documento fue firmado electrónicamente conforme a la ley federal ESIGN (15 U.S.C. § 7001 y ss.) '
-        'y la Ley Uniforme de Transacciones Electrónicas (UETA) adoptada en Florida (Fla. Stat. § 668.50). '
+        'y la Ley Uniforme de Transacciones Electrónicas (UETA) adoptada por el estado. '
         'Cada firmante aceptó realizar la transacción por medios electrónicos antes de firmar. '
         'El archivo está sellado digitalmente: cualquier modificación posterior invalida el sello. '
         'Verifica su integridad en la página /verificar del CRM con el ID del sobre o subiendo el PDF.', small)]
@@ -249,7 +268,7 @@ def _certificate_pdf(env, org_name):
     def _footer(canvas, _doc):
         canvas.setFont('Helvetica', 6.5)
         canvas.setFillColor(muted)
-        canvas.drawString(0.75 * inch, 0.45 * inch, f'Papia Sign · Certificado de finalización · {env["uid"]}')
+        canvas.drawString(0.75 * inch, 0.45 * inch, f'{sign_name} · Certificado de finalización · {env["uid"]}')
         canvas.drawRightString(letter[0] - 0.75 * inch, 0.45 * inch, f'Página {_doc.page}')
 
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
@@ -277,7 +296,7 @@ def _org_keypair(org_id, org_name):
 
     os.makedirs(folder, exist_ok=True)
     key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f'{org_name} — Papia Sign'),
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f'{org_name} — {cfg.esign()["name"]}'),
                       x509.NameAttribute(NameOID.ORGANIZATION_NAME, org_name),
                       x509.NameAttribute(NameOID.COUNTRY_NAME, 'US')])
     now = datetime.now(timezone.utc)
@@ -307,10 +326,10 @@ def _seal(pdf_bytes, env, org_name):
     cert_path, key_path, pw = _org_keypair(env['org_id'], org_name)
     signer = signers.SimpleSigner.load(key_path, cert_path, key_passphrase=pw)
     meta = signers.PdfSignatureMetadata(
-        field_name='PapiaSignSeal', md_algorithm='sha256',
+        field_name='ESignSeal', md_algorithm='sha256',
         subfilter=sig_fields.SigSeedSubFilter.PADES,
-        reason=f'Sellado de sobre completado {env["uid"]}', location='Papia Sign — datos.papiatech.com',
-        name=f'{org_name} (Papia Sign)')
+        reason=f'Sellado de sobre completado {env["uid"]}', location=f'{cfg.esign()["name"]} — {cfg.base_url() or org_name}',
+        name=f'{org_name} ({cfg.esign()["name"]})')
     tsa_url = os.getenv('SIGN_TSA_URL')
     timestamper = HTTPTimeStamper(tsa_url) if tsa_url else None
     out = io.BytesIO()
@@ -319,9 +338,12 @@ def _seal(pdf_bytes, env, org_name):
     return out.getvalue()
 
 
-def build_final_pdf(env, original_bytes, org_name='Papia Technology Solutions'):
+def build_final_pdf(env, original_bytes, org_name=None):
     """Devuelve (pdf_bytes, sealed: bool)."""
     from pypdf import PdfReader
+    global NAVY, AQUA_TEXT
+    NAVY, AQUA_TEXT = _rgb(cfg.esign()['dark']), _rgb(cfg.esign()['link'])   # marca vigente
+    org_name = org_name or cfg.esign()['legal_name']
     writer = _stamp_pages(original_bytes, env)
     for page in PdfReader(io.BytesIO(_certificate_pdf(env, org_name))).pages:
         writer.add_page(page)
@@ -331,5 +353,5 @@ def build_final_pdf(env, original_bytes, org_name='Papia Technology Solutions'):
     try:
         return _seal(data, env, org_name), True
     except Exception:
-        log.exception('Papia Sign: no se pudo aplicar el sello PAdES; se guarda el PDF sin sello')
+        log.exception('Contratos: no se pudo aplicar el sello PAdES; se guarda el PDF sin sello')
         return data, False

@@ -1,8 +1,8 @@
 """
-Papia Sign — tarea diaria: vence sobres pasados de fecha y envía recordatorios.
+Contratos (firma electrónica) — tarea diaria: vence sobres pasados de fecha y envía recordatorios.
 
 PythonAnywhere → Tasks → Scheduled tasks (diaria, p. ej. 13:00 UTC):
-    cd /home/henmartin2005/CRMnewPapiaTech/papia-crm && /home/henmartin2005/CRMnewPapiaTech/.venv/bin/python contracts_cron.py
+    cd /home/<usuario>/<carpeta-del-repo>/papia-crm && ../.venv/bin/python contracts_cron.py
 """
 import os
 
@@ -35,7 +35,7 @@ def main():
         if N.invite(env, rc, token, env.get('created_by_name') or N.org_name(env['org_id']), reminder=True):
             reminded += 1
         C.touch_reminder(rc['id'])
-    print(f'Papia Sign: {len(expired)} vencido(s), {reminded} recordatorio(s) enviados')
+    print(f'Contratos: {len(expired)} vencido(s), {reminded} recordatorio(s) enviados')
 
 
 if __name__ == '__main__':

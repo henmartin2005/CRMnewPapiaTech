@@ -1,5 +1,5 @@
 """
-Papia Sign — contratos con firma electrónica dentro del CRM.
+Contratos con firma electrónica dentro del CRM.
 
 Conceptos (mismo modelo que DocuSign):
   - Sobre (envelope): un PDF + destinatarios + campos. Estados:

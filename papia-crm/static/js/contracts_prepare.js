@@ -1,4 +1,4 @@
-/* Papia Sign — editor de campos (remitente). Requiere pdf.js 3.x (window.pdfjsLib). */
+/* Contratos — editor de campos (remitente). Requiere pdf.js 3.x (window.pdfjsLib). */
 (function () {
   'use strict';
   var P = window.PSIGN_PREPARE;

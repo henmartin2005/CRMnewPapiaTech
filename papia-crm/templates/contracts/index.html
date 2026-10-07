@@ -6,7 +6,7 @@
 <div class="pg-header">
   <div>
     <h1 class="pg-title">Contratos</h1>
-    <p class="pg-sub">Envía, firma y archiva acuerdos sin salir del CRM · Papia Sign</p>
+    <p class="pg-sub">Envía, firma y archiva acuerdos sin salir del CRM · {{ brand.esign_name or ((brand.short_name or brand.company_name) ~ ' Sign') }}</p>
   </div>
   <div class="pg-actions">
     <a href="{{ url_for('contracts_public.verify_public') }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">

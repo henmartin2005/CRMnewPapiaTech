@@ -1,8 +1,8 @@
 /* Papia Sign — páginas públicas del firmante (sistema de diseño PapiaTech) */
 :root {
   --navy:#0A2540; --ink:#0A2540; --muted:#475569; --surface:#FFFFFF; --surface-alt:#F4F7FA; --canvas:#E9EEF3;
-  --border:#DCE3EB; --aqua:#00C2D1; --aqua-text:#007F8A; --aqua-soft:#E0F8FA; --coral:#FF6B4A; --coral-soft:#FFE8E2;
-  --coral-text:#9A2E14; --success:#15803D; --danger:#DC2626; --focus:#007F8A;
+  --border:#DCE3EB; --aqua:#00C2D1; --aqua-text:#007F8A; --aqua-soft:color-mix(in srgb, var(--aqua-text) 12%, #fff); --coral:#FF6B4A; --coral-soft:color-mix(in srgb, var(--coral) 14%, #fff);
+  --coral-text:color-mix(in srgb, var(--coral) 45%, #000); --on-cta:var(--navy); --success:#15803D; --danger:#DC2626; --focus:#007F8A;
   --r-sm:8px; --r-md:12px; --r-lg:20px;
   --shadow-card:0 1px 2px rgba(10,37,64,.06), 0 8px 24px rgba(10,37,64,.08);
   --shadow-lift:0 12px 40px rgba(10,37,64,.16);
@@ -18,20 +18,23 @@ h1, h2, h3 { font-family:"Space Grotesk", system-ui, sans-serif; letter-spacing:
 .ps-top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;
           padding:12px 20px; background:var(--navy); color:#F1F5F9; }
 .ps-brand { display:flex; align-items:center; gap:10px; }
-.ps-logo { width:32px; height:32px; border-radius:10px; background:var(--aqua); color:var(--navy); display:grid;
+.ps-logo-img { max-height:34px; max-width:160px; display:block; }
+.ps-logo-chip { display:inline-flex; background:#fff; border-radius:8px; padding:3px 8px; }
+.ps-logo-chip img { max-height:26px; display:block; }
+.ps-logo { width:32px; height:32px; border-radius:10px; background:var(--coral); color:var(--on-cta); display:grid;
            place-items:center; font-family:"Space Grotesk", sans-serif; font-weight:600; }
 .ps-org { font-family:"Space Grotesk", sans-serif; font-weight:600; font-size:15px; }
 .ps-sub { font-size:12px; color:#9FB0C3; }
 .ps-secure { font-size:12.5px; color:#9FB0C3; display:flex; gap:6px; align-items:center; }
-.ps-secure i { color:var(--aqua); }
+.ps-secure i { color:#fff; opacity:.8; }
 @media (max-width:560px) { .ps-secure { display:none; } }
 
 .ps-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 20px;
           border-radius:var(--r-md); border:1px solid var(--border); background:var(--surface); color:var(--ink);
           font:600 15px "DM Sans", sans-serif; cursor:pointer; text-decoration:none; transition:background .2s, box-shadow .2s; }
 .ps-btn:hover { background:var(--surface-alt); }
-.ps-btn.primary { background:var(--coral); border-color:var(--coral); color:var(--navy); }
-.ps-btn.primary:hover { box-shadow:0 6px 18px rgba(255,107,74,.35); background:var(--coral); }
+.ps-btn.primary { background:var(--coral); border-color:var(--coral); color:var(--on-cta); }
+.ps-btn.primary:hover { box-shadow:0 6px 18px color-mix(in srgb, var(--coral) 35%, transparent); background:var(--coral); }
 .ps-btn:disabled { background:var(--border); border-color:var(--border); color:var(--muted); cursor:not-allowed; box-shadow:none; }
 .ps-btn.ghost { background:transparent; border-color:transparent; }
 .ps-btn.link { min-height:auto; padding:6px 4px; border:0; background:none; color:var(--aqua-text); }
@@ -47,7 +50,7 @@ h1, h2, h3 { font-family:"Space Grotesk", system-ui, sans-serif; letter-spacing:
 .ps-icon-badge.bad { background:#FEE2E2; color:var(--danger); }
 .ps-input { width:100%; min-height:48px; border-radius:var(--r-sm); border:1px solid var(--border); padding:0 14px;
             font:500 16px "DM Sans", sans-serif; color:var(--ink); background:var(--surface); }
-.ps-input:focus { border-color:var(--focus); outline:none; box-shadow:0 0 0 3px rgba(0,127,138,.18); }
+.ps-input:focus { border-color:var(--focus); outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent); }
 .ps-otp { letter-spacing:.5em; text-align:center; font-family:"Space Grotesk", sans-serif; font-size:24px; }
 .ps-error { color:var(--danger); font-size:14px; min-height:20px; }
 
@@ -68,8 +71,8 @@ h1, h2, h3 { font-family:"Space Grotesk", system-ui, sans-serif; letter-spacing:
         font:700 12px "DM Sans", sans-serif; color:var(--navy); overflow:hidden; white-space:nowrap; }
 .ps-f.mine { border:2px solid var(--coral); background:var(--coral-soft); cursor:pointer; }
 .ps-f.mine.req::after { content:'*'; position:absolute; top:-2px; right:3px; color:var(--coral-text); font-size:13px; }
-.ps-f.mine.current { box-shadow:0 0 0 4px rgba(255,107,74,.32); animation:psPulse 1.6s ease-in-out infinite; }
-.ps-f.mine.filled { border:1.5px dashed var(--aqua-text); background:rgba(0,194,209,.07); }
+.ps-f.mine.current { box-shadow:0 0 0 4px color-mix(in srgb, var(--coral) 32%, transparent); animation:psPulse 1.6s ease-in-out infinite; }
+.ps-f.mine.filled { border:1.5px dashed var(--aqua-text); background:color-mix(in srgb, var(--aqua-text) 7%, transparent); }
 .ps-f.mine.filled.req::after { content:''; }
 .ps-f img { max-width:100%; max-height:100%; object-fit:contain; pointer-events:none; }
 .ps-f.other { border:0; background:transparent; justify-content:flex-start; font-weight:500; }
@@ -77,11 +80,11 @@ h1, h2, h3 { font-family:"Space Grotesk", system-ui, sans-serif; letter-spacing:
                          color:var(--navy); padding:0 6px; outline:none; }
 .ps-f .ps-check { width:100%; height:100%; display:grid; place-items:center; font-size:15px; }
 .ps-auto { font-weight:500; justify-content:flex-start; padding:0 6px; }
-@keyframes psPulse { 50% { box-shadow:0 0 0 7px rgba(255,107,74,.12); } }
+@keyframes psPulse { 50% { box-shadow:0 0 0 7px color-mix(in srgb, var(--coral) 12%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .ps-f.mine.current { animation:none; } }
 
 .ps-start { position:absolute; left:-86px; display:flex; align-items:center; height:38px; padding:0 18px 0 12px;
-            background:var(--coral); color:var(--navy); font:700 13px "DM Sans", sans-serif; border:0; cursor:pointer;
+            background:var(--coral); color:var(--on-cta); font:700 13px "DM Sans", sans-serif; border:0; cursor:pointer;
             clip-path:polygon(0 0, 82% 0, 100% 50%, 82% 100%, 0 100%); width:84px; z-index:4; }
 @media (max-width:900px) { .ps-start { display:none; } }
 
