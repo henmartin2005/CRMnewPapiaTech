@@ -106,6 +106,11 @@ def detail(client_id):
     notes = get_client_notes(client_id)
     followups = get_client_followups(client_id)
     documents = list_documents(client_id, org_id)
+    try:
+        from models.contract import list_envelopes
+        contracts = list_envelopes(org_id, client_id=client_id, limit=20)
+    except Exception:
+        contracts = []
     schedule = list_installments(client_id, org_id, today=datetime.now(SCHED_TZ).strftime('%Y-%m-%d'))
 
     return render_template(
@@ -114,6 +119,7 @@ def detail(client_id):
         notes=notes,
         followups=followups,
         documents=documents,
+        contracts=contracts,
         schedule=schedule,
         profile_layout=get_layout(client_id, org_id),
         docs_accept=ACCEPT_ATTR,

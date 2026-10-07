@@ -17,3 +17,4 @@ instance/
 
 # Logos e imágenes propias de cada instancia
 static/brand/
+contract_files/

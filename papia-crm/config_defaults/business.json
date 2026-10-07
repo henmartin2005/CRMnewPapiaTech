@@ -16,7 +16,7 @@
     {"key": "other",        "label": "Otro",         "keywords": []}
   ],
   "default_project_type": "other",
-  "modules": ["whatsapp", "messenger", "instagram", "emails", "calendar", "proposals", "tasks", "chat"],
+  "modules": ["whatsapp", "messenger", "instagram", "emails", "calendar", "proposals", "contracts", "tasks", "chat"],
   "calendar": {
     "call_minutes": 30,
     "work_start": 9,

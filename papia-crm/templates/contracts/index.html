@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Contratos{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='css/contracts.css') }}?v=1" rel="stylesheet" />{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Contratos</h1>
+    <p class="pg-sub">Envía, firma y archiva acuerdos sin salir del CRM · Papia Sign</p>
+  </div>
+  <div class="pg-actions">
+    <a href="{{ url_for('contracts_public.verify_public') }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
+      <i class="bi bi-shield-check"></i> Verificar un PDF
+    </a>
+    <a href="{{ url_for('contracts.new') }}" class="btn btn-accent btn-sm">
+      <i class="bi bi-plus-lg"></i> Nuevo sobre
+    </a>
+  </div>
+</div>
+
+<div class="kpi-strip" style="margin-bottom:16px;">
+  <div class="kpi-item">
+    <div class="kpi-label">Esperando firmas</div>
+    <div class="kpi-value">{{ stats.waiting }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:#00A3B0;"></span>sobres enviados</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-label">Completados (30 días)</div>
+    <div class="kpi-value">{{ stats.completed_30 }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:#16A34A;"></span>firmados por todos</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-label">Por vencer (≤ 3 días)</div>
+    <div class="kpi-value" {% if stats.expiring %}style="color:var(--c-danger);"{% endif %}>{{ stats.expiring }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:#DC2626;"></span>reenvía un recordatorio</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-label">Borradores</div>
+    <div class="kpi-value">{{ stats.drafts }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:#94A3B8;"></span>sin enviar</div>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <form method="GET" action="{{ url_for('contracts.index') }}">
+        <input type="hidden" name="tab" value="{{ tab }}" />
+        <div class="search-wrap">
+          <i class="bi bi-search"></i>
+          <input type="text" name="q" class="search-input" placeholder="Buscar contrato, cliente o ID…"
+                 value="{{ q }}" autocomplete="off" aria-label="Buscar contratos" />
+        </div>
+      </form>
+      <div class="filter-chips ct-tabs">
+        {% for key, label in tabs %}
+          <a href="{{ url_for('contracts.index', tab=key, q=q or None) }}" class="chip {% if tab == key %}active{% endif %}">{{ label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if envelopes %}
+  <div style="overflow-x:auto;">
+    <table class="crm-table">
+      <thead>
+        <tr>
+          <th style="padding-left:16px;">Documento</th>
+          <th>Firmantes</th>
+          <th>Estado</th>
+          <th>Última actividad</th>
+          <th style="text-align:right;padding-right:16px;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in envelopes %}
+        <tr data-href="{{ url_for('contracts.prepare' if e.status == 'draft' else 'contracts.detail', env_id=e.id) }}">
+          <td style="padding-left:16px;">
+            <div style="font-weight:650;font-size:13px;">{{ e.title }}</div>
+            <div style="font-size:11.5px;color:var(--c-text-3);">
+              {% if e.client_name and e.client_name.strip() %}{{ e.client_name }}{% if e.client_company %} · {{ e.client_company }}{% endif %} · {% endif %}{{ e.uid.split('-')[0] }}
+            </div>
+          </td>
+          <td>
+            {% if e.recipients %}
+              {% for r in e.recipients[:3] %}
+                <div class="ct-rcpt-line {% if r.status == 'completed' %}done{% elif r.status == 'declined' %}declined{% endif %}">
+                  <span class="ct-dot" style="background:{% if r.status == 'completed' %}#16A34A{% elif r.status == 'declined' %}#DC2626{% elif r.status in ('sent','viewed') %}#00A3B0{% else %}#CBD5E1{% endif %};"></span>
+                  {{ r.name }} · {{ r.status_label|lower }}
+                </div>
+              {% endfor %}
+              {% if e.recipients|length > 3 %}<div class="ct-rcpt-line">+{{ e.recipients|length - 3 }} más</div>{% endif %}
+            {% else %}
+              <span style="font-size:12px;color:var(--c-text-3);">Sin destinatarios</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="ct-badge ct-{{ e.status }}">
+              {% if e.status == 'sent' %}Esperando {{ e.signer_total - e.signer_done }} de {{ e.signer_total }}{% else %}{{ e.status_label }}{% endif %}
+            </span>
+          </td>
+          <td style="font-size:12px;color:var(--c-text-2);">{{ (e.last_activity or e.created_at) | localdatetime }}</td>
+          <td style="text-align:right;padding-right:16px;">
+            {% if e.status == 'draft' %}
+              <a class="btn btn-ghost btn-xs" href="{{ url_for('contracts.prepare', env_id=e.id) }}">Continuar</a>
+            {% elif e.status == 'completed' %}
+              <a class="btn btn-ghost btn-xs" href="{{ url_for('contracts.final', env_id=e.id, dl=1) }}"><i class="bi bi-download"></i> PDF</a>
+            {% else %}
+              <a class="btn btn-ghost btn-xs" href="{{ url_for('contracts.detail', env_id=e.id) }}">Ver</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">
+      <i class="bi bi-pen"></i>
+      <p>{% if q or tab != 'all' %}No hay sobres con ese filtro.{% else %}Todavía no has enviado contratos. Sube un PDF y colócale campos de firma.{% endif %}</p>
+      {% if not q and tab == 'all' %}<a href="{{ url_for('contracts.new') }}" class="btn btn-accent btn-sm" style="margin-top:6px;"><i class="bi bi-plus-lg"></i> Nuevo sobre</a>{% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
