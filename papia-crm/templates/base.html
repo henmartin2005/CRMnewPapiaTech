@@ -154,6 +154,10 @@
         {% if task_due_count > 0 %}
           <span class="sb-task-badge">{{ task_due_count }}</span>
         {% endif %}
+      </a>
+    </li>
+    {% endif %}
+
     <li>
       <a href="{{ url_for('boards.index') }}"
          class="sb-link {% if request.endpoint and request.endpoint.startswith('boards.') %}active{% endif %}">
@@ -161,9 +165,6 @@
         <span class="sb-label">Pizarra</span>
       </a>
     </li>
-      </a>
-    </li>
-    {% endif %}
 
     {% if 'proposals' in enabled_modules %}
     <li>
