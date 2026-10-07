@@ -410,7 +410,7 @@ def init_db():
         conn.commit()
 
     # ── Seed org_modules for every org that doesn't have them yet ────────────
-    _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat']
+    _ORG_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'contracts', 'tasks', 'chat']
     for org_row in conn.execute("SELECT id FROM organizations").fetchall():
         for mod in _ORG_MODULES:
             conn.execute(
@@ -497,7 +497,7 @@ def init_db():
         conn.commit()
 
     # ── Seed users ───────────────────────────────────────────────────────────
-    ALL_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'tasks', 'chat']
+    ALL_MODULES = ['whatsapp', 'messenger', 'instagram', 'emails', 'calendar', 'proposals', 'contracts', 'tasks', 'chat']
 
     # Chat is enabled by default for existing users because it is an
     # organization-wide communication channel.

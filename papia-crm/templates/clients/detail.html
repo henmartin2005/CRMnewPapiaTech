@@ -467,6 +467,39 @@
       {% endif %}
     </div>
 
+    {% if 'contracts' in enabled_modules %}
+    <!-- Contratos (Papia Sign) -->
+    <div class="section-card" id="contratos">
+      <div class="section-head">
+        <span class="section-head-label">
+          <i class="bi bi-pen" style="margin-right:5px;"></i>Contratos
+        </span>
+        <a href="{{ url_for('contracts.new', client_id=client.id) }}" class="btn btn-ghost btn-xs"><i class="bi bi-plus"></i> Nuevo</a>
+      </div>
+      {% if contracts %}
+        <div class="docs-list">
+          {% for e in contracts %}
+          <div class="docs-row">
+            <i class="bi bi-file-earmark-check docs-icon"></i>
+            <div class="docs-main">
+              <a class="docs-title" href="{{ url_for('contracts.prepare' if e.status == 'draft' else 'contracts.detail', env_id=e.id) }}">{{ e.title }}</a>
+              <div class="docs-meta">{{ e.status_label }}{% if e.status == 'sent' %} · {{ e.signer_done }}/{{ e.signer_total }} firmas{% endif %} · {{ e.created_at[:10] }}</div>
+            </div>
+            {% if e.status == 'completed' %}
+            <a class="btn btn-ghost btn-icon-xs" title="Descargar PDF firmado" href="{{ url_for('contracts.final', env_id=e.id, dl=1) }}"><i class="bi bi-download"></i></a>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty" style="padding:20px;">
+          <i class="bi bi-pen"></i>
+          <p>Sin contratos. Envía uno para firma electrónica.</p>
+        </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Documents & links -->
     <div class="section-card" id="documentos">
       <div class="section-head">
