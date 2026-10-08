@@ -83,7 +83,18 @@ def send_email(org_id, to_email, subject, paragraphs, button=None, attachments=N
         part.add_header('Content-Disposition', 'attachment', filename=name)
         msg.attach(part)
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    return service.users().messages().send(userId='me', body={'raw': raw}).execute().get('id')
+    gmail_id = service.users().messages().send(userId='me', body={'raw': raw}).execute().get('id')
+
+    # Todo correo del sistema queda en Emails → Enviados (vinculado al cliente por su email)
+    try:
+        from services.mailer import save_sent_copy
+        copy = plain
+        if attachments:
+            copy += '\n\n' + '\n'.join(f'[Adjunto: {name}]' for name, _ in attachments)
+        save_sent_copy(org_id, to_email, subject, copy, gmail_id=gmail_id)
+    except Exception:
+        pass  # el correo ya salió; no romper el flujo de firma por la copia
+    return gmail_id
 
 
 def sender_address(org_id):
