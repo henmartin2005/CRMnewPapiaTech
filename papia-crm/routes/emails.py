@@ -609,30 +609,16 @@ def send():
         return jsonify({'success': False, 'error': 'Gmail no conectado. Ve a Emails → Conectar Gmail.'}), 503
 
     try:
-        settings   = _get_settings(org_id)
-        html_body  = _build_html_email(body, settings)
-
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['To']      = to_email
-        msg.attach(MIMEText(body, 'plain'))
-        msg.attach(MIMEText(html_body, 'html'))
-
-        raw  = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-        sent = service.users().messages().send(userId='me', body={'raw': raw}).execute()
-
-        _save_sent(client_id, to_email, subject, body, sent.get('id'), org_id)
-
-        if client_id:
-            db = get_db()
-            db.execute(
-                "INSERT INTO notes (client_id, note_type, content) VALUES (?, 'email', ?)",
-                (int(client_id), f"Email enviado: {subject}"),
-            )
-            db.commit()
-            db.close()
-
-        return jsonify({'success': True, 'id': sent.get('id')})
+        from services.mailer import send_email
+        settings  = _get_settings(org_id)
+        html_body = _build_html_email(body, settings)
+        # send_email guarda siempre la copia en Enviados y la nota en el cliente
+        gmail_id, _ = send_email(
+            org_id, to_email, subject, html_body, text=body,
+            client_id=int(client_id) if client_id else None,
+            note=f"Email enviado: {subject}",
+        )
+        return jsonify({'success': True, 'id': gmail_id})
 
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500

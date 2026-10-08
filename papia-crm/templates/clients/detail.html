@@ -164,10 +164,25 @@
             <div class="sched-meta">
               {{ p.due_date }}
               {% if p.state == 'paid' %}· Pagado{% elif p.state == 'overdue' %}· Vencido{% elif p.state == 'today' %}· Vence hoy{% endif %}
-              {% if p.reminder_sent_at %}<i class="bi bi-envelope-check" title="Recordatorio enviado {{ p.reminder_sent_at }}"></i>{% endif %}
+              {% if p.reminder_sent_at and p.status != 'paid' %}· Recordatorio enviado{% endif %}
             </div>
           </div>
           <div class="sched-amount num">{{ p.amount | currency }}</div>
+          {% if p.reminder_sent_at %}
+          {% if p.status == 'paid' %}
+          <span class="btn btn-ghost btn-icon-xs sched-mail sent" title="Recordatorio enviado {{ p.reminder_sent_at }}"><i class="bi bi-envelope-check-fill"></i></span>
+          {% else %}
+          <form method="POST" style="margin:0;" onsubmit="return confirm('Recordatorio enviado el {{ p.reminder_sent_at }}.\n¿Reenviarlo ahora a {{ client.email or 'el cliente' }}?');"
+                action="{{ url_for('payment_schedule.remind', client_id=client.id, inst_id=p.id) }}">
+            <button class="btn btn-ghost btn-icon-xs sched-mail sent" title="Recordatorio enviado {{ p.reminder_sent_at }} · clic para reenviar"><i class="bi bi-envelope-check-fill"></i></button>
+          </form>
+          {% endif %}
+          {% elif p.status != 'paid' and client.email %}
+          <form method="POST" style="margin:0;" onsubmit="return confirm('¿Enviar ahora el recordatorio de pago a {{ client.email }}?');"
+                action="{{ url_for('payment_schedule.remind', client_id=client.id, inst_id=p.id) }}">
+            <button class="btn btn-ghost btn-icon-xs sched-mail" title="Recordatorio pendiente (se envía solo 1 día antes) · clic para enviar ahora"><i class="bi bi-envelope"></i></button>
+          </form>
+          {% endif %}
           {% if p.status == 'paid' %}
           <form method="POST" style="margin:0;" onsubmit="return confirm('¿Volver a pendiente esta cuota?');"
                 action="{{ url_for('payment_schedule.unpaid', client_id=client.id, inst_id=p.id) }}">
@@ -221,6 +236,9 @@
       .sched-overdue .sched-meta { color:var(--c-danger); }
       .sched-amount { font-size:13px; font-weight:600; }
       .sched-paid .sched-amount { color:var(--c-success); }
+      .sched-mail i { color:var(--c-text-3); }
+      .sched-mail.sent i { color:var(--c-accent); }
+      span.sched-mail { cursor:default; display:inline-flex; align-items:center; justify-content:center; }
       .sched-add { padding:10px 16px; }
       .sched-add summary { font-size:12px; color:var(--c-accent); cursor:pointer; list-style:none; }
       .sched-add summary::-webkit-details-marker { display:none; }
