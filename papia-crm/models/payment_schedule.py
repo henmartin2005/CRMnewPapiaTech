@@ -188,6 +188,21 @@ def due_for_reminder(target_date, include_sent=False):
         db.close()
 
 
+def installment_with_client(inst_id, client_id, org_id):
+    """Una cuota con los datos del cliente necesarios para el recordatorio."""
+    db = _db()
+    try:
+        r = db.execute(
+            "SELECT p.*, c.first_name, c.last_name, c.email, c.company, c.total_cost, c.amount_paid "
+            "FROM payment_schedule p JOIN clients c ON c.id = p.client_id "
+            "WHERE p.id=? AND p.client_id=? AND p.org_id=?",
+            (inst_id, client_id, org_id),
+        ).fetchone()
+        return dict(r) if r else None
+    finally:
+        db.close()
+
+
 def mark_reminder_sent(inst_id):
     db = _db()
     try:
@@ -198,7 +213,7 @@ def mark_reminder_sent(inst_id):
         db.execute(
             "INSERT INTO notes (client_id, note_type, content) VALUES (?, 'email', ?)",
             (r['client_id'],
-             f"Recordatorio automático enviado por email: {r['label']} — ${r['amount']:,.2f} "
+             f"Recordatorio de pago enviado por email: {r['label']} — ${r['amount']:,.2f} "
              f"vence {r['due_date']}"),
         )
         db.commit()
