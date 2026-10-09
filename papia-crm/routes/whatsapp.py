@@ -835,6 +835,25 @@ def conversations_json():
     return jsonify({'conversations': conversations_to_dicts(get_conversations(org_id), org_id)})
 
 
+def _push_inbound(org_id, phone, client_id, fallback_name, text):
+    """Aviso push a la app móvil. Nunca rompe el webhook."""
+    try:
+        from services import push
+        if not push.is_configured():
+            return
+        name = ''
+        if client_id:
+            db = get_db()
+            row = db.execute("SELECT first_name, last_name FROM clients WHERE id=?", (client_id,)).fetchone()
+            db.close()
+            if row:
+                name = f"{row['first_name'] or ''} {row['last_name'] or ''}".strip()
+        push.notify_whatsapp(org_id, phone, name or fallback_name or phone, text,
+                             client_id=client_id, unread=get_unread_count(org_id))
+    except Exception:
+        log.exception('Push: no se pudo avisar del WhatsApp entrante')
+
+
 @whatsapp_bp.route('/webhook/whatsapp', methods=['POST'])
 def webhook():
     """Legacy: mensajes entrantes desde Twilio."""
@@ -852,6 +871,7 @@ def webhook():
     client_id = _resolve_client_id(phone, profile, body, org_id)
     save_message(phone=phone, direction='inbound', message=body or '[mensaje sin texto]',
                  wa_message_id=wa_id, client_id=client_id, org_id=org_id)
+    _push_inbound(org_id, phone, client_id, profile, body)
     ai_agent.handle_incoming(phone, client_id, org_id, text=body)
     return '<Response></Response>', 200, {'Content-Type': 'text/xml'}
 
@@ -905,6 +925,7 @@ def zernio_webhook():
                          media_path=m_path, media_type=m_type, media_mime=m_mime,
                          wa_message_id=wa_id, client_id=client_id,
                          org_id=org_id)
+            _push_inbound(org_id, phone, client_id, name, text)
             # Asistente IA: responde si está activo y la conversación no está pausada
             ai_agent.handle_incoming(phone, client_id, org_id, text=(msg.get('text') or ''))
 
