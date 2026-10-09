@@ -158,12 +158,30 @@
     </li>
     {% endif %}
 
+    <li>
+      <a href="{{ url_for('boards.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('boards.') %}active{% endif %}">
+        <i class="bi bi-easel2"></i>
+        <span class="sb-label">Pizarra</span>
+      </a>
+    </li>
+
     {% if 'proposals' in enabled_modules %}
     <li>
       <a href="{{ url_for('proposals.index') }}"
          class="sb-link {% if request.endpoint and request.endpoint.startswith('proposals.') %}active{% endif %}">
         <i class="bi bi-file-earmark-text"></i>
         <span class="sb-label">Propuestas</span>
+      </a>
+    </li>
+    {% endif %}
+
+    {% if 'contracts' in enabled_modules %}
+    <li>
+      <a href="{{ url_for('contracts.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('contracts.') %}active{% endif %}">
+        <i class="bi bi-pen"></i>
+        <span class="sb-label">Contratos</span>
       </a>
     </li>
     {% endif %}

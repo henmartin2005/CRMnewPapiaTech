@@ -237,7 +237,7 @@
       .sched-amount { font-size:13px; font-weight:600; }
       .sched-paid .sched-amount { color:var(--c-success); }
       .sched-mail i { color:var(--c-text-3); }
-      .sched-mail.sent i { color:var(--c-accent); }
+      .sched-mail.sent i { color:var(--c-success); }
       span.sched-mail { cursor:default; display:inline-flex; align-items:center; justify-content:center; }
       .sched-add { padding:10px 16px; }
       .sched-add summary { font-size:12px; color:var(--c-accent); cursor:pointer; list-style:none; }
@@ -358,6 +358,114 @@
           </div>
         </form>
       </div>
+    </div>
+
+    <!-- Etapas del proyecto (desde la Pizarra) -->
+    <div class="section-card" id="projStages" data-client="{{ client.id }}">
+      <div class="section-head">
+        <span class="section-head-label">
+          <i class="bi bi-diagram-3" style="margin-right:5px;"></i>Etapas del proyecto
+        </span>
+        <span class="section-count" id="psCount"></span>
+      </div>
+      <div id="psBody" style="font-size:12.5px;color:var(--c-text-3);">Cargando…</div>
+    </div>
+    <style>
+      #projStages .ps-proj + .ps-proj { margin-top:12px; padding-top:12px; border-top:1px solid var(--c-border); }
+      #projStages .ps-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+      #projStages .ps-name { font-weight:600; font-size:12.5px; color:var(--c-text); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      #projStages .ps-name:hover { text-decoration:underline; }
+      #projStages .ps-pct { font-size:11.5px; color:var(--c-text-3); white-space:nowrap; font-variant-numeric:tabular-nums; }
+      #projStages .ps-flow { display:flex; align-items:stretch; overflow-x:auto; padding:2px 2px 6px; scroll-snap-type:x proximity; scrollbar-width:thin; }
+      #projStages .ps-step { flex:0 0 104px; scroll-snap-align:start; display:flex; flex-direction:column; align-items:center; gap:6px; padding:9px 6px 8px;
+        border:1px solid var(--c-border); border-radius:10px; background:var(--c-surface,transparent); cursor:pointer; font:inherit; color:var(--c-text);
+        transition:border-color .15s, background .15s; }
+      #projStages .ps-step:hover { border-color:var(--c-text-3); }
+      #projStages .ps-step:disabled { opacity:.6; cursor:wait; }
+      #projStages .ps-dot { width:22px; height:22px; border-radius:50%; border:1.5px solid var(--c-border); display:flex; align-items:center; justify-content:center;
+        font-size:10.5px; font-weight:700; color:var(--c-text-3); background:var(--c-surface,transparent); }
+      #projStages .ps-label { font-size:11.5px; line-height:1.3; text-align:center; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+      #projStages .ps-step.done { border-color:rgba(22,163,74,.45); background:rgba(22,163,74,.06); }
+      #projStages .ps-step.done .ps-dot { background:#16a34a; border-color:#16a34a; color:#fff; font-size:13px; }
+      #projStages .ps-step.done .ps-label { color:var(--c-text-3); }
+      #projStages .ps-step.doing { border-color:rgba(245,158,11,.6); }
+      #projStages .ps-step.doing .ps-dot { border-color:#f59e0b; color:#b45309; }
+      #projStages .ps-link { flex:0 0 18px; align-self:center; height:1.5px; background:var(--c-border); position:relative; }
+      #projStages .ps-link::after { content:''; position:absolute; right:0; top:-3px; border-left:5px solid var(--c-border); border-top:3.5px solid transparent; border-bottom:3.5px solid transparent; }
+      #projStages .ps-link.done { background:#16a34a; } #projStages .ps-link.done::after { border-left-color:#16a34a; }
+    </style>
+    <script>
+    (function () {
+      var card = document.getElementById('projStages'); if (!card) return;
+      var body = document.getElementById('psBody'), count = document.getElementById('psCount');
+      var cid = card.dataset.client;
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+      function clean(name) { return String(name).replace(/^\s*\d+\s*[.)-]\s*/, ''); }
+      function render(projects) {
+        if (!projects.length) {
+          count.textContent = '';
+          body.innerHTML = 'Sin proyecto vinculado. En la <a href="/pizarra/" style="color:inherit;text-decoration:underline;">Pizarra</a>, elige este cliente en el selector 👤 del tablero.';
+          return;
+        }
+        var h = '', done = 0, total = 0;
+        projects.forEach(function (p) {
+          done += p.done; total += p.total;
+          var pct = p.total ? Math.round(p.done * 100 / p.total) : 0;
+          h += '<div class="ps-proj" data-board="' + p.id + '"><div class="ps-top"><a class="ps-name" href="/pizarra/?id=' + p.id + '" title="Abrir en la Pizarra">' + esc(p.name) + '</a>' +
+               '<span class="ps-pct">' + p.done + '/' + p.total + ' · ' + pct + '%</span></div>';
+          if (!p.stages.length) { h += '<div>El tablero aún no tiene etapas (figuras con nombre).</div></div>'; return; }
+          h += '<div class="ps-flow">';
+          p.stages.forEach(function (s, i) {
+            if (i) h += '<span class="ps-link' + (p.stages[i - 1].done ? ' done' : '') + '"></span>';
+            var cls = s.done ? ' done' : (s.status === 'doing' ? ' doing' : '');
+            h += '<button type="button" class="ps-step' + cls + '" data-node="' + esc(s.id) + '" data-done="' + (s.done ? 1 : 0) + '" title="' + esc(s.name) + (s.done ? ' — concluida (clic para desmarcar)' : ' — clic para marcar como concluida') + '">' +
+                 '<span class="ps-dot">' + (s.done ? '<i class="bi bi-check-lg"></i>' : (i + 1)) + '</span><span class="ps-label">' + esc(clean(s.name)) + '</span></button>';
+          });
+          h += '</div></div>';
+        });
+        count.textContent = done + '/' + total;
+        body.innerHTML = h;
+      }
+      function load() {
+        fetch('/pizarra/api/client/' + cid + '/stages', { cache: 'no-store' }).then(function (r) { return r.json(); })
+          .then(function (d) { render(d.projects || []); }).catch(function () { body.textContent = 'No se pudieron cargar las etapas.'; });
+      }
+      body.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-node]'); if (!b) return;
+        var board = b.closest('[data-board]').dataset.board, done = b.dataset.done !== '1';
+        b.disabled = true;
+        fetch('/pizarra/api/boards/' + board + '/stage/' + encodeURIComponent(b.dataset.node), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: done })
+        }).then(function (r) { return r.json(); }).then(function (d) { if (!d.ok) alert(d.error || 'No se pudo actualizar'); load(); })
+          .catch(function () { b.disabled = false; alert('Sin conexión'); });
+      });
+      window.addEventListener('focus', load);
+      load();
+    })();
+    </script>
+
+    <!-- WhatsApp: acceso directo a la conversación -->
+    <div class="section-card" id="waConversation">
+      <div class="section-head">
+        <span class="section-head-label">
+          <i class="bi bi-whatsapp" style="margin-right:5px;color:#25D366;"></i>WhatsApp
+        </span>
+        <span class="section-count">{{ wa_messages | length }}</span>
+      </div>
+      {% set wa_phone = (wa_messages[-1].phone if wa_messages else client.phone) %}
+      {% if wa_phone %}
+        <a href="{{ url_for('whatsapp.index', phone=wa_phone) }}"
+           style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--c-border);border-radius:10px;text-decoration:none;color:var(--c-text);">
+          <span style="flex:0 0 32px;width:32px;height:32px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;"><i class="bi bi-whatsapp"></i></span>
+          <span style="flex:1;min-width:0;">
+            <span style="display:block;font-size:13px;font-weight:600;">Abrir conversación</span>
+            <span style="display:block;font-size:11.5px;color:var(--c-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ wa_phone }} · {{ wa_messages | length }} mensajes{% if wa_messages %} · último {{ (wa_messages[-1].created_at|string)[:10] }}{% endif %}</span>
+          </span>
+          <i class="bi bi-chevron-right" style="color:var(--c-text-3);"></i>
+        </a>
+      {% else %}
+        <p style="font-size:13px;color:var(--c-text-3);padding:4px 0;margin:0;">Sin teléfono registrado.</p>
+      {% endif %}
     </div>
 
     <!-- Activity feed -->
@@ -484,6 +592,39 @@
         </div>
       {% endif %}
     </div>
+
+    {% if 'contracts' in enabled_modules %}
+    <!-- Contratos (Papia Sign) -->
+    <div class="section-card" id="contratos">
+      <div class="section-head">
+        <span class="section-head-label">
+          <i class="bi bi-pen" style="margin-right:5px;"></i>Contratos
+        </span>
+        <a href="{{ url_for('contracts.new', client_id=client.id) }}" class="btn btn-ghost btn-xs"><i class="bi bi-plus"></i> Nuevo</a>
+      </div>
+      {% if contracts %}
+        <div class="docs-list">
+          {% for e in contracts %}
+          <div class="docs-row">
+            <i class="bi bi-file-earmark-check docs-icon"></i>
+            <div class="docs-main">
+              <a class="docs-title" href="{{ url_for('contracts.prepare' if e.status == 'draft' else 'contracts.detail', env_id=e.id) }}">{{ e.title }}</a>
+              <div class="docs-meta">{{ e.status_label }}{% if e.status == 'sent' %} · {{ e.signer_done }}/{{ e.signer_total }} firmas{% endif %} · {{ e.created_at[:10] }}</div>
+            </div>
+            {% if e.status == 'completed' %}
+            <a class="btn btn-ghost btn-icon-xs" title="Descargar PDF firmado" href="{{ url_for('contracts.final', env_id=e.id, dl=1) }}"><i class="bi bi-download"></i></a>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty" style="padding:20px;">
+          <i class="bi bi-pen"></i>
+          <p>Sin contratos. Envía uno para firma electrónica.</p>
+        </div>
+      {% endif %}
+    </div>
+    {% endif %}
 
     <!-- Documents & links -->
     <div class="section-card" id="documentos">
