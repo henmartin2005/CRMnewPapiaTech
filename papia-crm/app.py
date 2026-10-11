@@ -37,6 +37,7 @@ from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
 from routes.contracts import contracts_bp, contracts_public_bp
+from routes.portal import portal_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -70,6 +71,7 @@ app.register_blueprint(boards_bp)
 app.register_blueprint(mobile_api_bp)
 app.register_blueprint(contracts_bp)
 app.register_blueprint(contracts_public_bp)
+app.register_blueprint(portal_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────
@@ -85,13 +87,16 @@ def set_org_context():
 # ── Auth guard: protect every route except login, logout, static, and webhook ──
 @app.before_request
 def require_login():
-    open_endpoints = {'auth.login', 'auth.logout', 'static', 'whatsapp.webhook', 'whatsapp.zernio_webhook',
+    open_endpoints = {'auth.login', 'auth.logout', 'auth.google_login', 'auth.google_callback', 'static', 'whatsapp.webhook', 'whatsapp.zernio_webhook',
                       'payments.stripe_webhook', 'payments.success',
                       'meta_webhook.verify', 'meta_webhook.receive'}
     if request.endpoint in open_endpoints:
         return
     # Papia Sign: páginas públicas del firmante y de verificación
     if request.endpoint and request.endpoint.startswith('contracts_public.'):
+        return
+    # Portal del cliente: páginas públicas (el cliente entra con Google)
+    if request.endpoint in ('portal.login', 'portal.google_start', 'portal.logout', 'portal.home', 'portal.open_doc', 'portal.open_contract'):
         return
     if request.path.startswith('/api/'):
         return

@@ -612,6 +612,11 @@
               <div class="docs-meta">{{ e.status_label }}{% if e.status == 'sent' %} · {{ e.signer_done }}/{{ e.signer_total }} firmas{% endif %} · {{ e.created_at[:10] }}</div>
             </div>
             {% if e.status == 'completed' %}
+            <form method="POST" style="margin:0;" action="{{ url_for('portal.admin_toggle_contract', env_id=e.id) }}">
+              <button type="submit" class="btn btn-ghost btn-icon-xs" title="{{ 'Visible en el portal del cliente (clic para ocultar)' if e.portal_visible else 'Mostrar en el portal del cliente' }}">
+                <i class="bi {{ 'bi-eye-fill' if e.portal_visible else 'bi-eye-slash' }}" style="{{ 'color:#22c55e;' if e.portal_visible else 'opacity:.55;' }}"></i>
+              </button>
+            </form>
             <a class="btn btn-ghost btn-icon-xs" title="Descargar PDF firmado" href="{{ url_for('contracts.final', env_id=e.id, dl=1) }}"><i class="bi bi-download"></i></a>
             {% endif %}
           </div>
@@ -627,6 +632,76 @@
     {% endif %}
 
     <!-- Documents & links -->
+    <div class="section-card" id="portalCliente">
+      <div class="section-head">
+        <span class="section-head-label"><i class="bi bi-person-badge" style="margin-right:5px;"></i>Portal del cliente</span>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;opacity:.8;line-height:1.45;">El cliente entra con Google usando <b>{{ client.email }}</b> y ve el avance de su pizarra, el costo total y los contratos firmados y documentos que marques con <i class="bi bi-eye-fill" style="color:#22c55e;"></i>.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a class="btn btn-ghost" target="_blank" href="{{ url_for('portal.admin_preview', client_id=client.id) }}"><i class="bi bi-eye"></i> Vista previa</a>
+          <button type="button" class="btn btn-ghost" data-url="https://{{ request.host }}{{ url_for('portal.login') }}" onclick="navigator.clipboard.writeText(this.dataset.url);this.textContent='Enlace copiado ✓';"><i class="bi bi-link-45deg"></i> Copiar enlace del portal</button>
+          <button type="button" class="btn btn-ghost" id="portalInviteBtn" data-client-id="{{ client.id }}" data-email="{{ client.email }}" data-name="{{ client.first_name }}" data-url="https://{{ request.host }}{{ url_for('portal.login') }}"><i class="bi bi-send"></i> Enviar acceso por email</button>
+        </div>
+        <script>
+        (function(){
+          var b = document.getElementById('portalInviteBtn'); if (!b) return;
+          b.addEventListener('click', function(){
+            var em = b.dataset.email, url = b.dataset.url, nm = b.dataset.name || '';
+            if (!em) { alert('Este cliente no tiene email.'); return; }
+            if (!confirm('¿Enviar el acceso al Portal del cliente a ' + em + '?')) return;
+            var esc = function(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+            var waText = 'Hola, soy ' + (nm || 'cliente') + ' y tengo una pregunta sobre mi Portal del cliente.';
+            var wa = 'https://wa.me/13054024632?text=' + encodeURIComponent(waText);
+            var H = [
+              '<div style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:15px;line-height:1.6;">',
+              '<p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#2A5BFF;font-weight:700;">Portal del cliente</p>',
+              '<h1 style="margin:0 0 14px 0;font-size:24px;line-height:1.25;color:#0f172a;">Hola ' + esc(nm) + ', tu proyecto ya está a un clic</h1>',
+              '<p style="margin:0 0 16px 0;">Creamos tu <b>Portal del cliente</b> para que sigas tu proyecto con total transparencia, desde cualquier dispositivo y sin tener que pedirnos actualizaciones.</p>',
+              '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0;"><tr><td style="border-radius:10px;background:#2A5BFF;">',
+              '<a href="' + esc(url) + '" style="display:inline-block;padding:14px 28px;color:#ffffff;font-weight:700;font-size:16px;text-decoration:none;border-radius:10px;">Entrar a mi portal &rarr;</a>',
+              '</td></tr></table>',
+              '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6ff;border:1px solid #dbe4ff;border-radius:12px;margin:0 0 20px 0;"><tr><td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;">',
+              '<p style="margin:0 0 10px 0;font-weight:700;color:#0f172a;">Qué vas a encontrar</p>',
+              '<p style="margin:0 0 8px 0;">&#128202; <b>Avance en tiempo real</b>: cada etapa de tu proyecto, cuál está en progreso y cuáles ya completamos.</p>',
+              '<p style="margin:0 0 8px 0;">&#128176; <b>Tu inversión</b>: costo total, lo pagado, lo pendiente y tu plan de pagos.</p>',
+              '<p style="margin:0;">&#128196; <b>Contrato y documentos</b>: tu contrato firmado y los archivos del proyecto, listos para ver o descargar.</p>',
+              '</td></tr></table>',
+              '<p style="margin:0 0 10px 0;font-weight:700;color:#0f172a;">Cómo entrar</p>',
+              '<p style="margin:0 0 6px 0;"><b style="color:#2A5BFF;">1.</b> Toca el botón <b>Entrar a mi portal</b>.</p>',
+              '<p style="margin:0 0 6px 0;"><b style="color:#2A5BFF;">2.</b> Elige <b>Continuar con Google</b>.</p>',
+              '<p style="margin:0 0 16px 0;"><b style="color:#2A5BFF;">3.</b> Usa este mismo correo: <b>' + esc(em) + '</b>. No necesitas contraseña nueva.</p>',
+              '<p style="margin:0 0 20px 0;font-size:13px;color:#6b7280;">Si el botón no funciona, copia este enlace en tu navegador: <a href="' + esc(url) + '" style="color:#2A5BFF;">' + esc(url) + '</a></p>',
+              '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;margin:0 0 4px 0;"><tr><td style="padding:18px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;">',
+              '<p style="margin:0 0 12px 0;">¿Tienes alguna pregunta? Escríbenos por WhatsApp y te respondemos rápido.</p>',
+              '<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:10px;background:#25D366;">',
+              '<a href="' + wa + '" style="display:inline-block;padding:12px 22px;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;border-radius:10px;">Escríbenos por WhatsApp &middot; +1 (305) 402-4632</a>',
+              '</td></tr></table>',
+              '<p style="margin:16px 0 0 0;">Gracias por confiar en nosotros.</p>',
+              '</td></tr></table>',
+              '</div>'
+            ];
+            var body = H.join('');
+            var text = 'Hola ' + nm + ',\n\n' +
+              'Creamos tu Portal del cliente para que sigas tu proyecto con total transparencia.\n\n' +
+              'Entra aquí: ' + url + '\n\n' +
+              'Qué vas a encontrar:\n- Avance en tiempo real de cada etapa\n- Tu inversión: total, pagado, pendiente y plan de pagos\n- Tu contrato firmado y documentos del proyecto\n\n' +
+              'Cómo entrar: toca el enlace, elige "Continuar con Google" y usa este mismo correo (' + em + ').\n\n' +
+              '¿Preguntas? WhatsApp: +1 (305) 402-4632 - ' + wa + '\n\nGracias por confiar en nosotros.';
+            b.disabled = true; b.textContent = 'Enviando…';
+            fetch('/emails/send', {method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({client_id: b.dataset.clientId, to_email: em, text: text, subject: (nm ? nm + ', tu ' : 'Tu ') + 'Portal del cliente ya está listo', body: body})})
+              .then(function(r){ return r.json().catch(function(){ return {}; }); })
+              .then(function(j){ if (j.success) { b.textContent = 'Acceso enviado ✓'; } else { b.disabled = false; b.textContent = 'Reintentar envío'; alert('No se pudo enviar: ' + (j.error || 'revisa la conexión de Gmail')); } })
+              .catch(function(){ b.disabled = false; b.textContent = 'Reintentar envío'; alert('No se pudo enviar el correo.'); });
+          });
+        })();
+        </script>
+        <div style="display:none;">
+        </div>
+      </div>
+    </div>
+
     <div class="section-card" id="documentos">
       <div class="section-head">
         <span class="section-head-label">
@@ -669,6 +744,11 @@
               <i class="bi bi-download"></i>
             </a>
             {% endif %}
+            <form method="POST" style="margin:0;" action="{{ url_for('portal.admin_toggle_doc', doc_id=d.id) }}">
+              <button type="submit" class="btn btn-ghost btn-icon-xs" title="{{ 'Visible en el portal del cliente (clic para ocultar)' if d.portal_visible else 'Mostrar en el portal del cliente' }}">
+                <i class="bi {{ 'bi-eye-fill' if d.portal_visible else 'bi-eye-slash' }}" style="{{ 'color:#22c55e;' if d.portal_visible else 'opacity:.55;' }}"></i>
+              </button>
+            </form>
             <form method="POST" style="margin:0;" onsubmit="return confirm('¿Eliminar este documento?');"
                   action="{{ url_for('clients.remove_document', client_id=client.id, doc_id=d.id) }}">
               <button type="submit" class="btn btn-ghost btn-icon-xs" title="Eliminar">
