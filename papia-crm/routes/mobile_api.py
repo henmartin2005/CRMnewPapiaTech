@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 import hashlib
+import logging
 
 import jwt
 from flask import Blueprint, current_app, g, jsonify, request
@@ -25,13 +26,19 @@ from models.client import (
     update_client,
     update_pipeline_stage,
 )
+from models import payment_schedule
 from routes.whatsapp import (
+    _record_outbound,
+    deliver,
     get_conversation,
     get_conversations,
     get_unread_count as get_whatsapp_unread_count,
     mark_read as mark_whatsapp_read,
     messages_to_dicts,
 )
+from services import ai_agent, push, zernio
+
+log = logging.getLogger(__name__)
 
 mobile_api_bp = Blueprint("mobile_api", __name__, url_prefix="/api/mobile")
 
@@ -209,6 +216,7 @@ def client_detail(client_id):
         "client": _client_payload(client),
         "notes": [_row_dict(row) for row in get_client_notes(client_id)],
         "followups": [_task_payload(row) for row in get_client_followups(client_id)],
+        "installments": payment_schedule.list_installments(client_id, g.org_id),
     })
 
 
@@ -305,6 +313,12 @@ def whatsapp_messages():
     if not phone:
         return _json_error("phone is required")
     rows = get_conversation(phone, g.org_id)
+    if not rows:
+        # La app puede mandar el teléfono con otro formato: se prueba en E.164
+        e164 = zernio.to_e164(phone)
+        if e164 and e164 != phone:
+            phone = e164
+            rows = get_conversation(phone, g.org_id)
     if request.args.get("mark_read") == "1":
         mark_whatsapp_read(phone, g.org_id)
     return jsonify({
@@ -339,6 +353,132 @@ def complete_task(followup_id):
     if not row:
         return _json_error("Task not found", 404)
     complete_followup(followup_id)
+    return jsonify({"ok": True})
+
+
+# ── WhatsApp: enviar y bot por contacto ──────────────────────────────────────
+
+@mobile_api_bp.route("/whatsapp/send", methods=["POST"])
+@mobile_login_required
+def whatsapp_send():
+    """Igual que /whatsapp/send de la web: envía, registra y pausa el bot (intervención humana)."""
+    data = request.get_json(silent=True) or {}
+    phone = (data.get("phone") or "").strip()
+    message = (data.get("message") or "").strip()
+    client_id = data.get("client_id")
+    if not phone or not message:
+        return _json_error("phone and message are required")
+    try:
+        wa_id = deliver(phone, message, g.org_id)
+        _record_outbound(phone, message, wa_id, g.org_id, client_id)
+        try:
+            ai_agent.pause(zernio.to_e164(phone), g.org_id)
+        except Exception:
+            log.exception("No se pudo pausar el bot")
+        return jsonify({"ok": True, "id": wa_id})
+    except zernio.TemplateRequired as exc:
+        return jsonify({"ok": False, "template_required": True, "error": str(exc)}), 409
+    except Exception as exc:
+        log.exception("Error enviando WhatsApp desde la app")
+        return _json_error(str(exc), 500)
+
+
+@mobile_api_bp.route("/whatsapp/bot", methods=["GET"])
+@mobile_login_required
+def whatsapp_bot_state():
+    phone = (request.args.get("phone") or "").strip()
+    if not phone:
+        return _json_error("phone is required")
+    state = ai_agent.contact_bot_state(zernio.to_e164(phone) or phone, g.org_id)
+    return jsonify({"ok": True, "state": state})
+
+
+@mobile_api_bp.route("/whatsapp/bot", methods=["POST"])
+@mobile_login_required
+def whatsapp_bot_toggle():
+    data = request.get_json(silent=True) or {}
+    raw = (data.get("phone") or "").strip()
+    if not raw:
+        return _json_error("phone is required")
+    phone = zernio.to_e164(raw) or raw
+    ai_agent.set_contact_enabled(phone, bool(data.get("enabled")), g.org_id)
+    return jsonify({"ok": True, "state": ai_agent.contact_bot_state(phone, g.org_id)})
+
+
+# ── Pagos (cronograma de cuotas) ─────────────────────────────────────────────
+
+def _installment_state(row, today):
+    if row["status"] == "paid":
+        return "paid"
+    if row["due_date"] < today:
+        return "overdue"
+    if row["due_date"] == today:
+        return "today"
+    return "pending"
+
+
+@mobile_api_bp.route("/payments")
+@mobile_login_required
+def payments():
+    today = datetime.now().strftime("%Y-%m-%d")
+    db = payment_schedule._db()
+    try:
+        rows = db.execute("""
+            SELECT s.*, c.first_name, c.last_name, c.company, c.phone
+            FROM payment_schedule s
+            JOIN clients c ON c.id = s.client_id
+            WHERE s.org_id = ? AND c.org_id = ?
+            ORDER BY s.due_date, s.id
+        """, (g.org_id, g.org_id)).fetchall()
+    finally:
+        db.close()
+    items = []
+    for r in rows:
+        d = dict(r)
+        d["state"] = _installment_state(r, today)
+        d["client_name"] = f"{d.get('first_name') or ''} {d.get('last_name') or ''}".strip()
+        items.append(d)
+    return jsonify({"ok": True, "payments": items})
+
+
+@mobile_api_bp.route("/payments/<int:inst_id>/paid", methods=["POST"])
+@mobile_login_required
+def payment_mark_paid(inst_id):
+    db = payment_schedule._db()
+    try:
+        row = db.execute("SELECT client_id FROM payment_schedule WHERE id = ? AND org_id = ?",
+                         (inst_id, g.org_id)).fetchone()
+    finally:
+        db.close()
+    if not row:
+        return _json_error("Payment not found", 404)
+    # Suma el monto a amount_paid del cliente, completa el recordatorio y deja nota (igual que la web)
+    inst = payment_schedule.mark_paid(inst_id, row["client_id"], g.org_id)
+    if inst is None:
+        return _json_error("Payment already paid", 409)
+    return jsonify({"ok": True, "client": _client_payload(get_client(row["client_id"], g.org_id))})
+
+
+# ── Notificaciones push ──────────────────────────────────────────────────────
+
+@mobile_api_bp.route("/push-token", methods=["POST"])
+@mobile_login_required
+def push_token_register():
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    if not push.is_valid_token(token):
+        return _json_error("Invalid Expo push token")
+    push.register(token, g.mobile_user["id"], g.org_id, (data.get("platform") or "").strip())
+    return jsonify({"ok": True})
+
+
+@mobile_api_bp.route("/push-token", methods=["DELETE"])
+@mobile_login_required
+def push_token_unregister():
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    if token:
+        push.unregister(token)
     return jsonify({"ok": True})
 
 

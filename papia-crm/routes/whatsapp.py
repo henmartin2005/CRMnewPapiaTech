@@ -11,6 +11,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from database import get_db
 from services import zernio
 from services import ai_agent
+from services import push
 
 log = logging.getLogger(__name__)
 
@@ -193,6 +194,17 @@ def mark_read(phone: str, org_id=1):
     )
     db.commit()
     db.close()
+
+
+def _push_inbound(phone, client_id, name, text, org_id):
+    """Avisa a la app móvil. Usa el nombre del cliente del CRM si existe."""
+    try:
+        client = find_client_by_phone(phone, org_id)
+        if client:
+            name = f"{client['first_name'] or ''} {client['last_name'] or ''}".strip() or name
+        push.notify_whatsapp(org_id, phone, client_id, name, text, badge=get_unread_count(org_id))
+    except Exception:
+        log.exception('Push: no se pudo avisar del mensaje entrante')
 
 
 def get_unread_count(org_id=None) -> int:
@@ -852,6 +864,7 @@ def webhook():
     client_id = _resolve_client_id(phone, profile, body, org_id)
     save_message(phone=phone, direction='inbound', message=body or '[mensaje sin texto]',
                  wa_message_id=wa_id, client_id=client_id, org_id=org_id)
+    _push_inbound(phone, client_id, profile, body, org_id)
     ai_agent.handle_incoming(phone, client_id, org_id, text=body)
     return '<Response></Response>', 200, {'Content-Type': 'text/xml'}
 
@@ -905,6 +918,8 @@ def zernio_webhook():
                          media_path=m_path, media_type=m_type, media_mime=m_mime,
                          wa_message_id=wa_id, client_id=client_id,
                          org_id=org_id)
+            # Aviso push a la app móvil (antes del bot, para que llegue al instante)
+            _push_inbound(phone, client_id, name, text or '[mensaje]', org_id)
             # Asistente IA: responde si está activo y la conversación no está pausada
             ai_agent.handle_incoming(phone, client_id, org_id, text=(msg.get('text') or ''))
 
