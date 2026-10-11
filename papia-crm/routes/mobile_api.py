@@ -7,12 +7,16 @@ import secrets
 import urllib.parse
 
 import jwt
-from flask import Blueprint, current_app, g, jsonify, redirect, request, session
+import os
+
+from flask import Blueprint, abort, current_app, g, jsonify, redirect, request, send_file, session
 from werkzeug.security import check_password_hash
 
 from database import get_db
 from models.client import (
+    NOTE_TYPES,
     FOLLOW_UP_METHODS,
+    add_note,
     PIPELINE_STAGES,
     PROJECT_TYPES,
     add_followup,
@@ -31,8 +35,17 @@ from models.client import (
 )
 from models import payment_schedule
 from routes.whatsapp import (
+    MAX_MEDIA_BYTES,
+    MEDIA_DIR,
+    _clean_mime,
+    _ensure_media_columns,
+    _media_kind,
+    _media_label,
+    _prepare_audio,
     _record_outbound,
+    _store_media,
     deliver,
+    deliver_media,
     get_conversation,
     get_conversations,
     get_unread_count as get_whatsapp_unread_count,
@@ -295,6 +308,7 @@ def metadata():
         "default_pipeline_stages": [{"key": key, "label": label} for key, label in PIPELINE_STAGES],
         "project_types": [{"key": key, "label": label} for key, label in PROJECT_TYPES],
         "follow_up_methods": [{"key": key, "label": label} for key, label in FOLLOW_UP_METHODS],
+        "note_types": [{"key": key, "label": label} for key, label in NOTE_TYPES],
     })
 
 
@@ -521,6 +535,86 @@ def whatsapp_bot_toggle():
     phone = zernio.to_e164(raw) or raw
     ai_agent.set_contact_enabled(phone, bool(data.get("enabled")), g.org_id)
     return jsonify({"ok": True, "state": ai_agent.contact_bot_state(phone, g.org_id)})
+
+
+# ── WhatsApp: adjuntos (fotos, audios, archivos) ─────────────────────────────
+
+@mobile_api_bp.route("/whatsapp/media/<int:msg_id>")
+@mobile_login_required
+def whatsapp_media(msg_id):
+    """Igual que /whatsapp/media/<id> de la web, pero con el token de la app."""
+    _ensure_media_columns()
+    db = get_db()
+    row = db.execute("SELECT media_path, media_mime FROM whatsapp_messages WHERE id = ? AND org_id = ?",
+                     (msg_id, g.org_id)).fetchone()
+    db.close()
+    if not row or not row["media_path"]:
+        abort(404)
+    path = os.path.join(MEDIA_DIR, os.path.basename(row["media_path"]))
+    if not os.path.exists(path):
+        abort(404)
+    return send_file(path, mimetype=row["media_mime"] or None, conditional=True, max_age=86400)
+
+
+@mobile_api_bp.route("/whatsapp/send-media", methods=["POST"])
+@mobile_login_required
+def whatsapp_send_media():
+    """Envía una foto, audio o archivo (multipart: phone, file, kind opcional, client_id opcional)."""
+    _ensure_media_columns()
+    phone = (request.form.get("phone") or "").strip()
+    client_id = request.form.get("client_id") or None
+    kind = (request.form.get("kind") or "").strip().lower()
+    f = request.files.get("file")
+    if not phone or not f:
+        return _json_error("phone and file are required")
+    data = f.read()
+    mime = _clean_mime(f.mimetype)
+    filename = os.path.basename(f.filename or "archivo")
+    if not kind:
+        kind = _media_kind("", mime)
+    if kind not in ("image", "audio", "video", "file"):
+        return _json_error("Invalid kind")
+    if not data:
+        return _json_error("Empty file")
+    if len(data) > MAX_MEDIA_BYTES:
+        return _json_error("File too large (max 16 MB)", 413)
+
+    voice = False
+    try:
+        if kind == "audio":
+            data, mime, voice = _prepare_audio(data, mime)
+        wa_id = deliver_media(phone, data, mime, kind, filename, voice, g.org_id)
+    except zernio.TemplateRequired as exc:
+        return jsonify({"ok": False, "template_required": True, "error": str(exc)}), 409
+    except Exception as exc:
+        log.exception("Error enviando adjunto desde la app")
+        return _json_error(str(exc), 500)
+
+    media_path = _store_media(data, mime)
+    _record_outbound(phone, _media_label(kind), wa_id, g.org_id, client_id, media=(media_path, kind, mime))
+    try:
+        ai_agent.pause(zernio.to_e164(phone), g.org_id)
+    except Exception:
+        log.exception("No se pudo pausar el bot")
+    return jsonify({"ok": True, "id": wa_id})
+
+
+# ── Notas del cliente ────────────────────────────────────────────────────────
+
+@mobile_api_bp.route("/clients/<int:client_id>/notes", methods=["POST"])
+@mobile_login_required
+def create_mobile_note(client_id):
+    if not get_client(client_id, g.org_id):
+        return _json_error("Client not found", 404)
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+    note_type = (data.get("note_type") or "note").strip()
+    if not content:
+        return _json_error("content is required")
+    if note_type not in [key for key, _ in NOTE_TYPES]:
+        return _json_error("Invalid note_type")
+    add_note(client_id, note_type, content)
+    return jsonify({"ok": True, "notes": [_row_dict(row) for row in get_client_notes(client_id)]}), 201
 
 
 # ── Pagos (cronograma de cuotas) ─────────────────────────────────────────────
