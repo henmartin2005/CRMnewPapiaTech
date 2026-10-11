@@ -132,13 +132,23 @@ def google_login():
 @auth_bp.route('/login/google/callback')
 def google_callback():
     state = session.pop('google_oauth_state', None)
-    portal_mode = session.pop('google_oauth_mode', None) == 'portal'
+    mode = session.pop('google_oauth_mode', None)
+    portal_mode = mode == 'portal'
+    mobile_mode = mode == 'mobile'
     next_url = session.pop('google_oauth_next', '') or url_for('dashboard')
+
+    def fail(msg):
+        # Login desde la app móvil: el error vuelve a la app, no a la página web
+        if mobile_mode:
+            from routes.mobile_api import mobile_google_fail
+            return mobile_google_fail(msg)
+        return redirect(url_for('auth.login', gerr=msg))
+
     if not state or request.args.get('state') != state:
-        return redirect(url_for('auth.login', gerr='Sesión de Google inválida, intenta de nuevo.'))
+        return fail('Sesión de Google inválida, intenta de nuevo.')
     code = request.args.get('code')
     if not code:
-        return redirect(url_for('auth.login', gerr='Inicio de sesión con Google cancelado.'))
+        return fail('Inicio de sesión con Google cancelado.')
 
     client_id, client_secret = _google_creds()
     try:
@@ -156,16 +166,21 @@ def google_callback():
         with urllib.request.urlopen(req, timeout=15) as r:
             info = json.loads(r.read().decode())
     except Exception:
-        return redirect(url_for('auth.login', gerr='No se pudo verificar la cuenta de Google.'))
+        return fail('No se pudo verificar la cuenta de Google.')
 
     email = (info.get('email') or '').strip().lower()
     if not email or not info.get('email_verified'):
-        return redirect(url_for('auth.login', gerr='Correo de Google no verificado.'))
+        return fail('Correo de Google no verificado.')
 
     # Login del portal del cliente (mismo callback de Google)
     if portal_mode:
         from routes.portal import portal_finish_login
         return portal_finish_login(email)
+
+    # Login de la app móvil (mismo usuario vinculado por google_email)
+    if mobile_mode:
+        from routes.mobile_api import mobile_google_finish
+        return mobile_google_finish(email)
 
     db = get_db()
     _ensure_google_column(db)

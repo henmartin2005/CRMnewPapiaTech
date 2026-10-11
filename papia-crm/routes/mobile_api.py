@@ -2,9 +2,12 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 import hashlib
 import logging
+import re
+import secrets
+import urllib.parse
 
 import jwt
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, redirect, request, session
 from werkzeug.security import check_password_hash
 
 from database import get_db
@@ -139,6 +142,10 @@ def login():
     if not user or not check_password_hash(user["password_hash"], password):
         return _json_error("Invalid credentials", 401)
 
+    return _login_response(user)
+
+
+def _login_response(user):
     return jsonify({
         "ok": True,
         "token": _issue_token(user),
@@ -150,6 +157,117 @@ def login():
             "org_id": user["org_id"] if "org_id" in user.keys() else 1,
         },
     })
+
+
+# ── Login con Google desde la app ────────────────────────────────────────────
+# La app abre /api/mobile/login/google en el navegador del sistema. Se reutiliza
+# el login con Google de la web (mismo cliente OAuth y misma URL de retorno);
+# al terminar, el callback de auth.py llama a mobile_google_finish(), que vuelve
+# a la app con un código de un solo uso que la app cambia por el token.
+
+# Solo se vuelve al esquema de la app o al de Expo Go (desarrollo)
+_APP_REDIRECT_RE = re.compile(r"^(papiacrmmobile|papiacrm|exp|exps)://", re.IGNORECASE)
+_CODE_TTL_SECONDS = 120
+
+
+def _with_params(url, params):
+    return url + ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
+
+
+def _ensure_login_codes(db):
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS mobile_login_codes (
+            code       TEXT PRIMARY KEY,
+            user_id    INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL
+        )
+    """)
+
+
+@mobile_api_bp.route("/login/google")
+def google_login_start():
+    from routes import auth
+    redirect_to = (request.args.get("redirect_uri") or "").strip()
+    if not _APP_REDIRECT_RE.match(redirect_to):
+        return _json_error("Invalid redirect_uri")
+    client_id, _ = auth._google_creds()
+    if not client_id:
+        return redirect(_with_params(redirect_to, {"error": "Login con Google no está configurado."}))
+    state = secrets.token_urlsafe(24)
+    session["google_oauth_state"] = state
+    session["google_oauth_next"] = ""
+    session["google_oauth_mode"] = "mobile"
+    session["google_oauth_mobile_redirect"] = redirect_to
+    params = {
+        "client_id": client_id,
+        "redirect_uri": auth._google_redirect_uri(),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    }
+    return redirect(auth.GOOGLE_AUTH_URL + "?" + urllib.parse.urlencode(params))
+
+
+def mobile_google_fail(message):
+    redirect_to = session.pop("google_oauth_mobile_redirect", "")
+    if not _APP_REDIRECT_RE.match(redirect_to or ""):
+        return _json_error(message)
+    return redirect(_with_params(redirect_to, {"error": message}))
+
+
+def mobile_google_finish(email):
+    from routes import auth
+    redirect_to = session.get("google_oauth_mobile_redirect", "")
+    db = get_db()
+    try:
+        auth._ensure_google_column(db)
+        user = db.execute(
+            "SELECT id FROM users WHERE lower(google_email) = ? AND is_active = 1", (email,)
+        ).fetchone()
+        if not user:
+            db.close()
+            return mobile_google_fail("Esta cuenta de Google no tiene acceso al CRM.")
+        code = secrets.token_urlsafe(32)
+        now = int(datetime.now(timezone.utc).timestamp())
+        _ensure_login_codes(db)
+        db.execute("DELETE FROM mobile_login_codes WHERE expires_at < ?", (now,))
+        db.execute("INSERT INTO mobile_login_codes (code, user_id, expires_at) VALUES (?, ?, ?)",
+                   (code, user["id"], now + _CODE_TTL_SECONDS))
+        db.commit()
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+    session.pop("google_oauth_mobile_redirect", None)
+    return redirect(_with_params(redirect_to, {"code": code}))
+
+
+@mobile_api_bp.route("/login/google/exchange", methods=["POST"])
+def google_login_exchange():
+    code = ((request.get_json(silent=True) or {}).get("code") or "").strip()
+    if not code:
+        return _json_error("code is required")
+    now = int(datetime.now(timezone.utc).timestamp())
+    db = get_db()
+    try:
+        _ensure_login_codes(db)
+        row = db.execute("SELECT user_id, expires_at FROM mobile_login_codes WHERE code = ?", (code,)).fetchone()
+        # Un solo uso: se borra aunque esté vencido
+        db.execute("DELETE FROM mobile_login_codes WHERE code = ?", (code,))
+        db.commit()
+        if not row or row["expires_at"] < now:
+            return _json_error("Invalid or expired code", 401)
+        user = db.execute(
+            "SELECT id, username, display_name, role, is_active, org_id FROM users WHERE id = ? AND is_active = 1",
+            (row["user_id"],),
+        ).fetchone()
+    finally:
+        db.close()
+    if not user:
+        return _json_error("Inactive user", 401)
+    return _login_response(user)
 
 
 @mobile_api_bp.route("/me")
