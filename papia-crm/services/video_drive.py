@@ -21,17 +21,46 @@ def token_info(token):
                                 params={'access_token': token}, timeout=20)
     except requests.RequestException:
         raise DriveError('Google no responde. Inténtalo de nuevo.')
-    if response.status_code != 200:
+    if response.status_code in (400, 401):
         raise DriveError('Reconecta Google Drive', 401, True)
+    if response.status_code != 200:
+        raise DriveError('No se pudo validar la conexión con Google. Inténtalo de nuevo.')
     return response.json()
 
 
-def credentials():
-    # Exactly the same storage and refresh mechanism as Gmail / Calendar.
-    creds = _load_creds(g.org_id)
+def verified_credentials(org_id):
+    # Gmail's stored tokens have no expiry. google-auth therefore considers an
+    # expired access token "valid" until Google actually rejects it. Reuse its
+    # loader, then refresh once on rejection without changing Gmail's OAuth.
+    creds = _load_creds(org_id)
     if not creds:
         raise DriveError('Reconecta Google Drive', 401, True)
+    try:
+        return creds, token_info(creds.token)
+    except DriveError as exc:
+        if not exc.reconnect:
+            raise
+    from google.auth.transport.requests import Request
+    from google.auth.exceptions import RefreshError, TransportError
+    try:
+        creds.refresh(Request())
+    except RefreshError:
+        raise DriveError('La autorización de Google caducó o fue revocada. Reconecta Google Drive.', 401, True)
+    except (TransportError, requests.RequestException):
+        raise DriveError('Google no responde al renovar la conexión. Inténtalo de nuevo.')
     info = token_info(creds.token)
+    db = get_db()
+    try:
+        db.execute('UPDATE gmail_tokens SET access_token=?,updated_at=CURRENT_TIMESTAMP WHERE org_id=?',
+                   (creds.token, org_id))
+        db.commit()
+    finally:
+        db.close()
+    return creds, info
+
+
+def credentials():
+    creds, info = verified_credentials(g.org_id)
     if DRIVE_SCOPE not in info.get('scope', '').split():
         raise DriveError('Reconecta Google Drive', 401, True)
     return creds, info
