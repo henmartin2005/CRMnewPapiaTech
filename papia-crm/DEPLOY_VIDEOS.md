@@ -51,6 +51,14 @@ El navegador debe poder acceder a `cdn.jsdelivr.net`, `www.googleapis.com` y `oa
 - El render a 1080p puede ser lento en móviles. Hay avisos sobre 500 MB por archivo y por conjunto; los clips, archivos temporales y resultado viven en la memoria del navegador. Cerrar la pestaña pierde una edición o subida pendiente; no hay persistencia de proyectos en esta fase.
 - Una subida cancelada puede dejar una sesión pendiente en Drive. Si se completó pero el usuario cierra antes de registrar, el archivo seguirá en la carpeta de Drive. Se evita borrarlo automáticamente.
 
+## Archivos de iPhone y Fotos
+
+La zona de importación acepta MOV/MP4 y fotos JPEG, PNG o WebP. Las fotos se añaden como clips de cinco segundos con una vista previa MP4 generada en el navegador. Para renderizar una foto se aplica su orientación y se prepara una copia de hasta 3840 px, conservando el archivo original para Drive. Se aceptan HEIC/HEIF si el navegador puede decodificarlos; de lo contrario se pide exportar la foto como JPEG.
+
+Para videos MOV/HEVC que el navegador no pueda decodificar, el core single-thread crea una vista previa H.264/AAC de hasta 960 px. La exportación final y el guardado del original usan el archivo de origen, no esa vista previa reducida. Esta adaptación puede tardar en archivos largos o grandes y se puede cancelar. No se garantiza equivalencia de color HDR/Dolby Vision; debe comprobarse con material real antes de usarlo en trabajos donde el color sea crítico.
+
+Si al arrastrar desde Fotos se recibe un JPEG, solo se dispone de esa imagen: no se puede recuperar el movimiento del video ni de una Live Photo a partir de ella. En Fotos de Mac, usa Archivo → Exportar → Exportar original sin modificar e importa el MOV resultante. No se intenta acceder a la fototeca ni a iCloud desde Flask.
+
 ## Checklist manual en la instalación real
 
 - [ ] Iniciar sesión como admin, abrir Videos y conceder `drive.file` con la misma cuenta que Emails. Comprobar Gmail y Calendar después de conectar.
@@ -58,6 +66,7 @@ El navegador debe poder acceder a `cdn.jsdelivr.net`, `www.googleapis.com` y `oa
 - [ ] Desconectar/revocar Google y confirmar que aparece **Reconecta Google Drive** y el botón para conectar.
 - [ ] Subir un original sin cliente: comprobar `PapiaTech Videos/Sin cliente` y que se creó una sola raíz.
 - [ ] Subir un original con cliente: comprobar su carpeta, filtro, búsqueda y sección Videos en el perfil. Repetir con otro cliente del mismo nombre.
+- [ ] Arrastrar una foto JPEG y un MOV/HEVC de iPhone: comprobar clips de foto de cinco segundos, orientación, vista previa y exportación combinada. Comprobar también un navegador sin soporte HEVC nativo y el mensaje para HEIC no decodificable.
 - [ ] Cargar clips locales y desde Drive. Ordenar con arrastre y flechas, recortar inicio/fin, previsualizar, probar 0.5x/1x/1.5x/2x, y combinar un clip sin audio con uno con audio.
 - [ ] Elegir 9:16, texto en español con acentos y signos, intervalo, música y volúmenes. Exportar; verificar H.264/AAC, 1080×1920, recortes, texto, música y fade final. Repetir 1:1 y 16:9 en ambos modos crop/pad.
 - [ ] Confirmar progreso de procesamiento y subida, descarga local opcional y nueva versión en Drive/biblioteca con cliente y padre correctos.

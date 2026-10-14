@@ -228,8 +228,9 @@ def upload_session():
         size = int(data.get('size', 0))
     except (ValueError, TypeError):
         raise ValueError('Tamaño inválido.')
-    if not name or not re.fullmatch(r'video/[a-zA-Z0-9.+_-]+', mime) or not 0 < size <= 10 * 1024**3:
-        raise ValueError('Selecciona un video válido de hasta 10 GB.')
+    media_type = re.fullmatch(r'video/[a-zA-Z0-9.+_-]+', mime) or mime in {'image/jpeg','image/png','image/webp','image/heic','image/heif'}
+    if not name or not media_type or not 0 < size <= 10 * 1024**3:
+        raise ValueError('Selecciona un video o una foto válida de hasta 10 GB.')
     customer = client(data.get('cliente_id'))
     creds, _ = drive.credentials()
     folder = drive.ensure_folder(creds, customer)
