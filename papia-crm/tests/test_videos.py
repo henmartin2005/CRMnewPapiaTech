@@ -156,11 +156,72 @@ class VideosTests(unittest.TestCase):
         for subject, expected in [('different','old'),('same','new')]:
             with self.browser.session_transaction() as state:
                 state['videos_oauth']={'state':'ok','org':1,'started':time.time(),'verifier':'v'}
-            infos=[{'sub':subject,'scope':drive.DRIVE_SCOPE+' gmail.send'},{'sub':'same','scope':'gmail.send'}]
-            with patch('google_auth_oauthlib.flow.Flow.from_client_config',return_value=flow), patch('services.video_drive.token_info',side_effect=infos),patch('routes.videos._load_creds',return_value=SimpleNamespace(token='old')):
+            info={'sub':subject,'scope':drive.DRIVE_SCOPE+' gmail.send'}
+            with patch('google_auth_oauthlib.flow.Flow.from_client_config',return_value=flow), patch('services.video_drive.token_info',return_value=info),patch('services.video_drive.verified_credentials',return_value=(SimpleNamespace(token='old'),{'sub':'same','scope':'gmail.send'})):
                 self.assertEqual(self.browser.get('/videos/oauth2callback?state=ok&code=code').status_code,302)
             db=database.get_db();row=db.execute('SELECT * FROM gmail_tokens WHERE org_id=1').fetchone();db.close()
             self.assertEqual(row['access_token'],expected);self.assertEqual(row['refresh_token'],'keep-refresh')
+
+    def test_expired_access_token_is_refreshed_once_and_persisted(self):
+        from flask import g
+        from unittest.mock import Mock
+        db=database.get_db()
+        db.execute("INSERT INTO gmail_tokens(access_token,refresh_token,org_id) VALUES('expired','keep-refresh',1)")
+        db.commit();db.close()
+        creds=SimpleNamespace(token='expired')
+        def renew(_): creds.token='renewed'
+        creds.refresh=Mock(side_effect=renew)
+        info={'sub':'same','scope':drive.DRIVE_SCOPE+' gmail.send'}
+        with app.test_request_context('/videos'):
+            g.org_id=1
+            with patch('services.video_drive._load_creds',return_value=creds), patch('services.video_drive.token_info',side_effect=[drive.DriveError('Reconecta Google Drive',401,True),info]) as inspect:
+                result, actual=drive.credentials()
+                self.assertIs(result,creds);self.assertEqual(actual,info)
+                self.assertEqual([c.args[0] for c in inspect.call_args_list],['expired','renewed'])
+                creds.refresh.assert_called_once()
+        db=database.get_db();row=db.execute('SELECT * FROM gmail_tokens WHERE org_id=1').fetchone();db.close()
+        self.assertEqual(row['access_token'],'renewed');self.assertEqual(row['refresh_token'],'keep-refresh')
+
+    def test_revoked_refresh_does_not_overwrite_tokens(self):
+        from google.auth.exceptions import RefreshError
+        from unittest.mock import Mock
+        db=database.get_db()
+        db.execute("INSERT INTO gmail_tokens(access_token,refresh_token,org_id) VALUES('expired','keep-refresh',1)")
+        db.commit();db.close()
+        creds=SimpleNamespace(token='expired',refresh=Mock(side_effect=RefreshError('revoked')))
+        with patch('services.video_drive._load_creds',return_value=creds), patch('services.video_drive.token_info',side_effect=drive.DriveError('Reconecta Google Drive',401,True)):
+            with self.assertRaises(drive.DriveError) as caught: drive.verified_credentials(1)
+        self.assertTrue(caught.exception.reconnect)
+        creds.refresh.assert_called_once()
+        db=database.get_db();row=db.execute('SELECT * FROM gmail_tokens WHERE org_id=1').fetchone();db.close()
+        self.assertEqual(row['access_token'],'expired');self.assertEqual(row['refresh_token'],'keep-refresh')
+
+    def test_oauth_reconnects_after_existing_access_token_expires(self):
+        from unittest.mock import Mock
+        db=database.get_db()
+        db.execute("INSERT INTO gmail_tokens(access_token,refresh_token,org_id) VALUES('expired','keep-refresh',1)")
+        db.commit();db.close()
+        with self.browser.session_transaction() as state:
+            state['videos_oauth']={'state':'ok','org':1,'started':time.time(),'verifier':'v'}
+        flow=SimpleNamespace(credentials=SimpleNamespace(token='new-drive',refresh_token=None),fetch_token=lambda **kw:None)
+        previous=SimpleNamespace(token='expired')
+        def renew(_): previous.token='renewed-gmail'
+        previous.refresh=Mock(side_effect=renew)
+        def inspect(token):
+            if token=='expired':raise drive.DriveError('Reconecta Google Drive',401,True)
+            return {'sub':'same','scope':'gmail.send'+(' '+drive.DRIVE_SCOPE if token=='new-drive' else '')}
+        with patch('google_auth_oauthlib.flow.Flow.from_client_config',return_value=flow), patch('services.video_drive._load_creds',return_value=previous),patch('services.video_drive.token_info',side_effect=inspect):
+            response=self.browser.get('/videos/oauth2callback?state=ok&code=code')
+        self.assertEqual(response.status_code,302);previous.refresh.assert_called_once()
+        db=database.get_db();row=db.execute('SELECT * FROM gmail_tokens WHERE org_id=1').fetchone();db.close()
+        self.assertEqual(row['access_token'],'new-drive');self.assertEqual(row['refresh_token'],'keep-refresh')
+
+    def test_transient_token_check_failure_does_not_refresh(self):
+        from unittest.mock import Mock
+        creds=SimpleNamespace(token='still-valid',refresh=Mock())
+        with patch('services.video_drive._load_creds',return_value=creds), patch('services.video_drive.token_info',side_effect=drive.DriveError('Google no responde.')):
+            with self.assertRaises(drive.DriveError) as caught: drive.verified_credentials(1)
+        self.assertFalse(caught.exception.reconnect);creds.refresh.assert_not_called()
 
     @patch('services.video_drive.credentials',side_effect=drive.DriveError('Reconecta Google Drive',401,True))
     def test_existing_views_still_render(self, _):

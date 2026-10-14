@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 import requests
 from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from database import get_db
-from routes.emails import _client_config, _load_creds
+from routes.emails import _client_config
 from services import video_drive as drive
 
 videos_bp = Blueprint('videos', __name__, url_prefix='/videos')
@@ -178,11 +178,13 @@ def callback():
         if drive.DRIVE_SCOPE not in new_info.get('scope', '').split():
             raise ValueError('Falta el permiso de Drive.')
         old_row = query('SELECT * FROM gmail_tokens WHERE org_id=?', (g.org_id,), True)
-        old = _load_creds(g.org_id) if old_row else None
-        if old_row and not old:
-            raise ValueError('Reconecta primero la cuenta de Google existente desde Emails y vuelve a conectar Drive.')
-        if old:
-            old_info = drive.token_info(old.token)
+        if old_row:
+            try:
+                old, old_info = drive.verified_credentials(g.org_id)
+            except drive.DriveError as exc:
+                if exc.reconnect:
+                    raise ValueError('Reconecta primero la cuenta de Google existente desde Emails y vuelve a conectar Drive.')
+                raise
             old_user = old_info.get('sub') or old_info.get('user_id')
             new_user = new_info.get('sub') or new_info.get('user_id')
             if not old_user or old_user != new_user:
