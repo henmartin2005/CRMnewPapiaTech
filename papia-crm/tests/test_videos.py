@@ -126,6 +126,17 @@ class VideosTests(unittest.TestCase):
         self.assertEqual(self.browser.get(f'/videos/editor/{ident}').status_code,404)
         db=database.get_db();self.assertIsNotNone(db.execute('SELECT deleted_at FROM videos WHERE id=?',(ident,)).fetchone()[0]);db.close()
 
+    @patch('services.video_drive.credentials',return_value=(SimpleNamespace(token='token'),{}))
+    @patch('services.video_drive.ensure_folder',return_value='folder')
+    @patch('routes.videos.requests.post')
+    def test_photo_uploads_use_direct_drive_sessions_and_reject_markup(self, post, folders, creds):
+        post.return_value=SimpleNamespace(ok=True,status_code=200,headers={'Location':'https://www.googleapis.com/upload/drive/v3/files?upload_id=photo'})
+        for mime in ['image/jpeg','image/png','image/webp','image/heic','image/heif']:
+            response=self.post('upload-session',{'nombre':'Foto','size':10,'mime_type':mime})
+            self.assertEqual(response.status_code,200,mime)
+            self.assertEqual(post.call_args.kwargs['headers']['X-Upload-Content-Type'],mime)
+        self.assertEqual(self.post('upload-session',{'nombre':'Markup','size':10,'mime_type':'image/svg+xml'}).status_code,400)
+
     def test_folder_creation_and_recovery(self):
         with app.test_request_context('/videos'):
             from flask import g

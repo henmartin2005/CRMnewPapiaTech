@@ -1,7 +1,7 @@
 // node --test tests/test_videos_import.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {videoFile, droppedFiles, isFileDrag} from '../static/js/videos-import.js';
+import {videoFile, mediaFile, droppedFiles, isFileDrag} from '../static/js/videos-import.js';
 
 test('desktop MOV drops with no MIME type preserve bytes and filename', async () => {
   const original = new File(['clip bytes'], 'Mi clip.MOV', {lastModified: 123});
@@ -36,4 +36,18 @@ test('drops retain multiple files and recover files from transfer items', () => 
     {kind:'file',getAsFile:()=>null}, {kind:'file',getAsFile:()=>b},
   ]}), [a,b]);
   assert.equal(isFileDrag({types:['Files']}), true);
+});
+
+test('JPEG images from Photos are recognized as photos, never mislabelled as video', () => {
+  const photo = new File(['photo'], 'IMG_1234.jpeg', {type:'image/jpeg'});
+  assert.equal(mediaFile(photo), photo);
+  assert.equal(mediaFile(new File(['photo'], 'IMG_1234.JPG')).type, 'image/jpeg');
+  assert.equal(mediaFile(new File(['photo'], 'IMG_1234.HEIC')).type, 'image/heic');
+  assert.equal(mediaFile(new File(['markup'], 'file.svg', {type:'image/svg+xml'})), null);
+});
+
+test('QuickTime MIME variants from Apple import as MOV videos', () => {
+  const result = mediaFile(new File(['video'], 'IMG_1234.MOV', {type:'application/quicktime'}));
+  assert.equal(result.type,'video/quicktime');
+  assert.equal(result.name,'IMG_1234.MOV');
 });
