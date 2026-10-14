@@ -35,6 +35,8 @@ from routes.payments import payments_bp
 from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
+from routes.videos import videos_bp
+from migrate_videos import migrate as migrate_videos
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -52,6 +54,8 @@ app.register_blueprint(emails_bp)
 
 # Init DB on every startup (safe: all statements use CREATE IF NOT EXISTS)
 init_db()
+migrate_videos()
+app.register_blueprint(videos_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(payment_schedule_bp)
 app.register_blueprint(pipeline_bp)

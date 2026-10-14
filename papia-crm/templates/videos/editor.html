@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Editor de video{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static',filename='css/videos.css') }}">{% endblock %}
+{% block content %}
+<div class="pg-header"><div><h1 class="pg-title">Editor de video</h1><p class="pg-sub">Recorta, combina y dale tu estilo. La edición se realiza en tu navegador.</p></div><a class="btn btn-ghost" href="{{ url_for('videos.index') }}">Biblioteca</a></div>
+<div id="video-editor" class="videos-wrap" data-csrf="{{ session.videos_csrf }}" data-font="{{ url_for('static',filename='fonts/Montserrat.ttf') }}">
+<div id="videos-message" role="status" aria-live="polite"></div>
+<a id="drive-connect" href="{{ url_for('videos.connect') }}" class="btn btn-ghost">Conectar Google Drive</a>
+<div class="videos-toolbar">
+<label>Título<input id="video-title" value="{{ source.titulo if source else 'Mi video' }}" maxlength="240" required></label>
+<label>Cliente<input id="client-search" list="video-clients" placeholder="Sin cliente" autocomplete="off" value="{% for c in clients %}{% if selected|string == c.id|string %}{{ c.first_name }} {{ c.last_name }} (#{{ c.id }}){% endif %}{% endfor %}">
+<datalist id="video-clients">{% for c in clients %}<option data-id="{{ c.id }}" value="{{ c.first_name }} {{ c.last_name }} (#{{ c.id }})"></option>{% endfor %}</datalist></label>
+<label>Descripción<input id="video-description" maxlength="5000" placeholder="Opcional"></label>
+</div>
+<div class="videos-editor-grid">
+<section class="videos-panel"><h2>Previsualización del clip</h2>
+<video id="preview" controls playsinline preload="metadata"></video>
+<p class="videos-help">Reproduce el recorte del clip seleccionado a su velocidad. El formato, texto y mezcla se aplican al exportar.</p>
+<label>Agregar clips desde tu equipo<input id="clip-files" type="file" accept="video/*" multiple></label>
+<div class="videos-inline"><label>Desde Drive<select id="drive-source"><option value="">Selecciona un video</option>{% for v in library %}<option value="{{ v.id }}">{{ v.titulo }}</option>{% endfor %}</select></label><button class="btn btn-ghost" id="add-drive" type="button">Agregar</button></div>
+<h2>Línea de tiempo <span id="total-time">0 s</span></h2>
+<p class="videos-help">Arrastra para ordenar o usa las flechas. Los tiempos están en segundos del archivo original.</p><ol id="timeline" class="videos-timeline"></ol>
+<button type="button" class="btn btn-ghost" id="save-originals">Guardar clips originales en Drive</button>
+</section>
+<section class="videos-panel"><h2>Formato de salida</h2>
+<div class="videos-inline"><label>Proporción<select id="output-format"><option value="1080:1920">9:16 · Vertical</option><option value="1080:1080">1:1 · Cuadrado</option><option value="1920:1080">16:9 · Horizontal</option></select></label>
+<label>Encuadre<select id="output-fit"><option value="crop">Rellenar (recortar)</option><option value="pad">Ajustar (fondo negro)</option></select></label></div>
+<h2>Texto superpuesto</h2><label>Texto<textarea id="overlay-text" maxlength="300" rows="2" placeholder="Escribe tu mensaje"></textarea></label>
+<div class="videos-inline"><label>Posición<select id="text-position"><option value="top">Arriba</option><option value="center">Centro</option><option value="bottom" selected>Abajo</option></select></label><label>Tamaño (px)<input id="text-size" type="number" min="16" max="180" value="64"></label><label>Color<input id="text-color" type="color" value="#ffffff"></label></div>
+<div class="videos-inline"><label>Desde (s)<input id="text-start" type="number" min="0" step="0.1" value="0"></label><label>Hasta (s)<input id="text-end" type="number" min="0.1" step="0.1" value="5"></label></div>
+<h2>Audio</h2><label>Música de fondo<input id="music-file" type="file" accept="audio/*"></label>
+<div class="videos-inline"><label>Volumen original<input id="original-volume" type="range" min="0" max="2" step="0.05" value="1"></label><label>Volumen música<input id="music-volume" type="range" min="0" max="2" step="0.05" value="0.3"></label></div>
+<p class="videos-help">La música se repite hasta el final del video. El audio termina con un desvanecimiento de hasta 2 segundos.</p>
+<label class="videos-checkbox"><input id="local-download" type="checkbox" checked> Descargar también en mi equipo</label>
+<button class="btn btn-primary" id="export-video" type="button">Exportar MP4 y guardar en Drive</button>
+<button class="btn btn-ghost" id="cancel-export" type="button" disabled>Cancelar</button>
+<progress id="video-progress" max="100" value="0" aria-label="Progreso"></progress><p id="video-progress-label" aria-live="polite">Listo para editar</p>
+<a id="export-download" class="btn btn-ghost" hidden>Descargar MP4 exportado</a><button id="retry-save" class="btn btn-ghost" type="button" hidden>Reintentar guardar en Drive</button>
+</section></div></div>
+<script id="videos-data" type="application/json">{{ {'source':source}|tojson }}</script>
+<script id="drive-items" type="application/json">[{% for v in library %}{{ {'id':v.id,'titulo':v.titulo,'drive_file_id':v.drive_file_id,'mime_type':v.mime_type,'size_bytes':v.size_bytes}|tojson }}{{ ',' if not loop.last else '' }}{% endfor %}]</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='js/vendor/ffmpeg/ffmpeg.js') }}"></script><script type="module" src="{{ url_for('static',filename='js/videos-editor.js') }}"></script>{% endblock %}
