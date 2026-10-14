@@ -35,8 +35,21 @@
   </div>
 </div>
 
-<div class="detail-grid">
+  {% if is_admin %}
+  <section class="card" style="padding:16px;margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <h2 style="font-size:16px;margin:0;"><i class="ph ph-film-strip" aria-hidden="true"></i> Videos</h2>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('videos.index', cliente_id=client.id) }}">Ver todos</a>
+    </div>
+    {% for item in recent_client_videos(client.id) %}
+      <a style="display:block;padding-top:10px;" href="{{ url_for('videos.editor', video_id=item.id) }}">{{ item.titulo }} · {{ item.tipo }}</a>
+    {% else %}
+      <p style="color:var(--c-text-2);margin:12px 0 0;">Este cliente todavía no tiene videos.</p>
+    {% endfor %}
+  </section>
+  {% endif %}
 
+<div class="detail-grid">
   <!-- ── LEFT PANEL ── -->
   <div style="display:flex;flex-direction:column;gap:12px;">
 

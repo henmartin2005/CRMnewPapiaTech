@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Estudio de video{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static',filename='css/videos.css') }}">
+<link rel="stylesheet" href="{{ url_for('static',filename='css/videos-studio.css') }}">
+{% endblock %}
+{% block content %}
+<div id="video-editor" class="videos-wrap studio" data-csrf="{{ session.videos_csrf }}" data-font="{{ url_for('static',filename='fonts/Montserrat.ttf') }}">
+  <header class="studio-header">
+    <a class="studio-brand" href="{{ url_for('videos.index') }}" aria-label="Volver a la biblioteca"><span class="studio-mark">p.</span><span>Papia<span class="studio-brand-light"> Studio</span></span></a>
+    <span class="studio-header-divider"></span>
+    <input id="video-title" class="studio-project-title" aria-label="Título del video" value="{{ source.titulo if source else 'Proyecto sin título' }}" maxlength="240" required>
+    <span class="studio-local"><span></span> Edición local</span>
+    <div class="studio-header-actions"><a id="drive-connect" href="{{ url_for('videos.connect') }}" class="studio-button"><i class="ph ph-cloud-arrow-up"></i> Conectar Drive</a><button class="studio-button studio-export" id="export-video" type="button"><i class="ph ph-export"></i> Exportar <span>MP4</span></button></div>
+  </header>
+  <div id="videos-message" role="status" aria-live="polite"></div>
+  <div class="studio-workspace">
+    <nav class="studio-rail" aria-label="Herramientas del editor">
+      <button type="button" class="studio-tool is-active" data-tool="media"><i class="ph ph-folder-simple"></i><span>Medios</span></button>
+      <button type="button" class="studio-tool" data-tool="text"><i class="ph ph-text-t"></i><span>Texto</span></button>
+      <button type="button" class="studio-tool" data-tool="audio"><i class="ph ph-music-notes"></i><span>Audio</span></button>
+      <button type="button" class="studio-tool" data-tool="format"><i class="ph ph-crop"></i><span>Formato</span></button>
+      <button type="button" class="studio-tool" data-tool="project"><i class="ph ph-sliders-horizontal"></i><span>Proyecto</span></button>
+      <a href="{{ url_for('videos.index') }}" class="studio-tool studio-library-link"><i class="ph ph-squares-four"></i><span>Biblioteca</span></a>
+    </nav>
+    <aside class="studio-media">
+      <div class="studio-panel-heading"><h2>Tu contenido</h2><span id="media-count" class="studio-count">0</span></div>
+      <div class="studio-media-tabs"><span class="is-active">Este proyecto</span><a href="{{ url_for('videos.index') }}">Biblioteca Drive <i class="ph ph-arrow-up-right"></i></a></div>
+      <label class="studio-import" id="import-zone" for="clip-files"><i class="ph ph-upload-simple"></i><strong>Importar archivos</strong><span>Arrastra videos aquí o haz clic</span><input id="clip-files" type="file" accept="video/*" multiple></label>
+      <div class="studio-media-caption"><span>ARCHIVOS DEL PROYECTO</span><span id="media-size">0 MB</span></div>
+      <div id="media-bin" class="studio-media-bin"><div class="studio-media-empty"><i class="ph ph-film-slate"></i><p>Un espacio para tus ideas.</p><span>Los clips que importes aparecerán aquí.</span></div></div>
+      <details class="studio-drive-import"><summary><i class="ph ph-google-drive-logo"></i> Agregar desde Google Drive <i class="ph ph-caret-down"></i></summary><label class="studio-field">Video<select id="drive-source"><option value="">Selecciona un video</option>{% for v in library %}<option value="{{ v.id }}">{{ v.titulo }}</option>{% endfor %}</select></label><button class="studio-button" id="add-drive" type="button">Agregar a la línea de tiempo</button></details>
+      <button type="button" class="studio-button studio-save-originals" id="save-originals"><i class="ph ph-cloud-arrow-up"></i> Guardar originales en Drive</button>
+    </aside>
+    <section class="studio-player" aria-label="Vista previa">
+      <div class="studio-player-top"><span><i class="ph ph-monitor-play"></i> Reproductor</span><span id="preview-format" class="studio-format-badge">9:16 <i class="ph ph-caret-down"></i></span></div>
+      <div class="studio-stage">
+        <div id="preview-canvas" class="studio-canvas"><video id="preview" playsinline preload="metadata"></video><div id="preview-overlay" aria-hidden="true"></div><div id="preview-empty" class="studio-preview-empty"><div class="studio-empty-icon"><i class="ph ph-play"></i></div><strong>Todo empieza con un clip.</strong><span>Importa tu video y dale forma<br>a tu próxima historia.</span><button type="button" id="stage-import" class="studio-button"><i class="ph ph-plus"></i> Agregar video</button></div></div>
+      </div>
+      <div class="studio-player-controls"><span class="studio-timecode"><strong id="preview-time">00:00.0</strong><span>/</span><span id="player-duration">00:00.0</span></span><div class="studio-transport"><button type="button" id="previous-clip" aria-label="Clip anterior"><i class="ph ph-skip-back"></i></button><button type="button" id="preview-play" class="studio-play" aria-label="Reproducir"><i class="ph ph-play"></i></button><button type="button" id="next-clip" aria-label="Clip siguiente"><i class="ph ph-skip-forward"></i></button></div><button type="button" id="preview-fullscreen" aria-label="Pantalla completa"><i class="ph ph-corners-out"></i></button></div>
+      <p class="studio-preview-note"><i class="ph ph-info"></i> Vista previa del clip · La música y mezcla final se aplican al exportar.</p>
+    </section>
+    <aside class="studio-inspector">
+      <div class="studio-panel-heading"><h2>Ajustes</h2><i class="ph ph-sliders-horizontal"></i></div>
+      <div class="studio-inspector-tabs" role="tablist" aria-label="Ajustes"><button type="button" class="is-active" data-inspector="format" role="tab" aria-selected="true">Video</button><button type="button" data-inspector="text" role="tab" aria-selected="false">Texto</button><button type="button" data-inspector="audio" role="tab" aria-selected="false">Audio</button><button type="button" data-inspector="project" role="tab" aria-selected="false">Proyecto</button></div>
+      <section class="studio-inspector-section" data-section="format">
+        <h3>Formato del lienzo</h3><p class="studio-hint">Elige dónde vas a contar tu historia.</p>
+        <div class="studio-ratios"><button type="button" class="is-active" data-ratio="1080:1920"><span class="ratio-shape ratio-vertical"></span><strong>9:16</strong><span>Vertical</span></button><button type="button" data-ratio="1080:1080"><span class="ratio-shape ratio-square"></span><strong>1:1</strong><span>Cuadrado</span></button><button type="button" data-ratio="1920:1080"><span class="ratio-shape ratio-landscape"></span><strong>16:9</strong><span>Horizontal</span></button></div>
+        <label class="studio-field">Resolución<select id="output-format"><option value="1080:1920">1080 × 1920 · Vertical</option><option value="1080:1080">1080 × 1080 · Cuadrado</option><option value="1920:1080">1920 × 1080 · Horizontal</option></select></label>
+        <label class="studio-field">Encuadre<select id="output-fit"><option value="crop">Rellenar · Recortar bordes</option><option value="pad">Ajustar · Fondo negro</option></select></label>
+        <div class="studio-tip"><i class="ph ph-lightbulb"></i><p>El formato vertical es ideal para Reels, TikTok y Shorts.</p></div>
+        <h3 class="studio-section-divider">Clip seleccionado</h3><p id="selected-clip-name" class="studio-hint">Selecciona un clip para ajustar su recorte y velocidad en la línea de tiempo.</p>
+      </section>
+      <section class="studio-inspector-section" data-section="text" hidden>
+        <h3>Un mensaje que destaque</h3><label class="studio-field">Texto<textarea id="overlay-text" maxlength="300" rows="3" placeholder="Escribe tu historia…"></textarea></label>
+        <label class="studio-field">Posición<select id="text-position"><option value="top">Arriba</option><option value="center">Centro</option><option value="bottom" selected>Abajo</option></select></label>
+        <div class="studio-field-row"><label class="studio-field">Tamaño (px)<input id="text-size" type="number" min="16" max="180" value="64"></label><label class="studio-field">Color<input id="text-color" type="color" value="#ffffff"></label></div>
+        <h3 class="studio-section-divider">Intervalo en el video</h3><div class="studio-field-row"><label class="studio-field">Desde (s)<input id="text-start" type="number" min="0" step="0.1" value="0"></label><label class="studio-field">Hasta (s)<input id="text-end" type="number" min="0.1" step="0.1" value="5"></label></div><p class="studio-hint">La posición y el tamaño se previsualizan sobre el lienzo. El resultado final usa Montserrat.</p>
+      </section>
+      <section class="studio-inspector-section" data-section="audio" hidden>
+        <h3>El ritmo de tu video</h3><label class="studio-audio-import" for="music-file"><i class="ph ph-music-notes-plus"></i><strong>Agregar música</strong><span id="music-name">Elige un archivo de audio</span><input id="music-file" type="file" accept="audio/*"></label>
+        <label class="studio-field">Audio original <output id="original-volume-label">100 %</output><input id="original-volume" type="range" min="0" max="2" step="0.05" value="1"></label><label class="studio-field">Música de fondo <output id="music-volume-label">30 %</output><input id="music-volume" type="range" min="0" max="2" step="0.05" value="0.3"></label><div class="studio-tip"><i class="ph ph-waveform"></i><p>La música se repite hasta el final, con un desvanecimiento de hasta 2 segundos.</p></div>
+      </section>
+      <section class="studio-inspector-section" data-section="project" hidden><h3>Detalles del proyecto</h3><label class="studio-field">Cliente<input id="client-search" list="video-clients" placeholder="Sin cliente" autocomplete="off" value="{% for c in clients %}{% if selected|string == c.id|string %}{{ c.first_name }} {{ c.last_name }} (#{{ c.id }}){% endif %}{% endfor %}"><datalist id="video-clients">{% for c in clients %}<option data-id="{{ c.id }}" value="{{ c.first_name }} {{ c.last_name }} (#{{ c.id }})"></option>{% endfor %}</datalist></label><label class="studio-field">Descripción<textarea id="video-description" maxlength="5000" placeholder="Una nota sobre este video" rows="3"></textarea></label><label class="studio-checkbox"><input id="local-download" type="checkbox" checked> Descargar también en mi equipo</label><p class="studio-hint">La exportación se guarda en Drive cuando la cuenta está conectada.</p></section>
+      <div class="studio-export-status"><div class="studio-status-label"><span id="video-progress-label" aria-live="polite">Listo para crear</span><button class="studio-cancel" id="cancel-export" type="button" disabled>Cancelar</button></div><progress id="video-progress" max="100" value="0" aria-label="Progreso"></progress><a id="export-download" class="studio-button" hidden>Descargar MP4</a><button id="retry-save" class="studio-button" type="button" hidden>Reintentar guardar en Drive</button></div>
+    </aside>
+    <section class="studio-timeline" aria-label="Línea de tiempo">
+      <div class="studio-timeline-toolbar"><div><i class="ph ph-stack"></i><strong>Línea de tiempo</strong><span id="clip-count">0 clips</span></div><div><span class="studio-timeline-help">Arrastra para reordenar</span><button type="button" id="timeline-zoom-out" aria-label="Alejar línea de tiempo"><i class="ph ph-minus"></i></button><input id="timeline-zoom" type="range" min="20" max="100" value="45" aria-label="Zoom de la línea de tiempo"><button type="button" id="timeline-zoom-in" aria-label="Acercar línea de tiempo"><i class="ph ph-plus"></i></button><span id="total-time">0 s</span></div></div>
+      <div class="studio-tracks"><div class="studio-track-labels"><div><i class="ph ph-timer"></i></div><div><i class="ph ph-film-strip"></i><span>Video 1</span></div><div><i class="ph ph-text-t"></i><span>Texto</span></div><div><i class="ph ph-music-notes"></i><span>Audio</span></div></div><div id="timeline-scroll" class="studio-tracks-scroll"><div id="timeline-content" class="studio-tracks-content"><div id="timeline-ruler" class="studio-ruler"></div><div id="timeline-playhead" class="studio-playhead"><span></span></div><ol id="timeline" class="videos-timeline studio-video-track"></ol><div id="timeline-empty" class="studio-timeline-empty"><i class="ph ph-plus-circle"></i><span>Importa un clip para empezar a editar</span></div><div class="studio-effect-track"><button id="text-track" type="button" class="studio-track-placeholder"><i class="ph ph-plus"></i> Agregar texto</button></div><div class="studio-effect-track"><button id="audio-track" type="button" class="studio-track-placeholder"><i class="ph ph-plus"></i> Agregar música</button></div></div></div></div>
+    </section>
+  </div>
+  <footer class="studio-footer"><span><span class="studio-status-dot"></span> Tu contenido se procesa en este navegador</span><span>MP4 · H.264 + AAC <span class="studio-footer-divider">|</span> <span id="footer-resolution">1080 × 1920</span></span></footer>
+</div>
+<script id="videos-data" type="application/json">{{ {'source':source}|tojson }}</script>
+<script id="drive-items" type="application/json">[{% for v in library %}{{ {'id':v.id,'titulo':v.titulo,'drive_file_id':v.drive_file_id,'mime_type':v.mime_type,'size_bytes':v.size_bytes}|tojson }}{{ ',' if not loop.last else '' }}{% endfor %}]</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='js/vendor/ffmpeg/ffmpeg.js') }}"></script><script type="module" src="{{ url_for('static',filename='js/videos-editor.js') }}"></script>{% endblock %}

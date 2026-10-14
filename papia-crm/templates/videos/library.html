@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Videos{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static',filename='css/videos.css') }}">{% endblock %}
+{% block content %}
+<div class="pg-header"><div><h1 class="pg-title"><i class="ph ph-film-strip"></i> Videos</h1><p class="pg-sub">Tu biblioteca en Google Drive, organizada por cliente.</p></div>
+<a href="{{ url_for('videos.editor', cliente_id=selected if selected != 'sin' else '') }}" class="btn btn-primary">Nuevo video</a></div>
+<div class="videos-wrap" data-csrf="{{ session.videos_csrf }}">
+{% if not connected %}<div class="videos-notice">Conecta la cuenta de Google del administrador para guardar tus videos.
+<a id="drive-connect" class="btn btn-primary" href="{{ url_for('videos.connect') }}">Conectar Google Drive</a></div>{% else %}
+<a id="drive-connect" class="btn btn-ghost" href="{{ url_for('videos.connect') }}" hidden>Reconecta Google Drive</a>{% endif %}
+<div id="videos-message" role="status" aria-live="polite"></div>
+<form class="videos-filters" method="get" action="{{ url_for('videos.index') }}">
+<label>Cliente<select name="cliente_id"><option value="">Todos los clientes</option><option value="sin" {% if selected == 'sin' %}selected{% endif %}>Sin cliente</option>
+{% for c in clients %}<option value="{{ c.id }}" {% if selected|string == c.id|string %}selected{% endif %}>{{ c.first_name }} {{ c.last_name }}</option>{% endfor %}</select></label>
+<label>Buscar por título<input name="q" value="{{ request.args.get('q','') }}" placeholder="Buscar videos…" maxlength="200"></label><button class="btn btn-ghost">Filtrar</button></form>
+<div class="videos-grid">
+{% for item in videos %}
+<article class="videos-card"><div class="videos-poster"><i class="ph ph-film-strip" aria-hidden="true"></i><span>{{ item.tipo }}</span></div>
+<h2>{{ item.titulo }}</h2><p>{{ '%.1f'|format(item.size_bytes / 1048576) }} MB · {{ '%.1f'|format(item.duracion_seg or 0) }} s</p>
+<p>{{ item.created_at[:10] }}</p><div class="videos-actions"><a class="btn btn-primary btn-sm" href="{{ url_for('videos.editor',video_id=item.id) }}">Editar</a>
+<button class="btn btn-ghost btn-sm" data-delete="{{ item.id }}">Eliminar</button></div></article>
+{% else %}<p class="videos-empty">No hay videos para este filtro. Crea tu primer video desde el editor.</p>{% endfor %}
+</div><p class="videos-help">Se muestran hasta 200 videos recientes. Usa los filtros para localizar otros videos.</p>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="{{ url_for('static',filename='js/videos-library.js') }}"></script>{% endblock %}
