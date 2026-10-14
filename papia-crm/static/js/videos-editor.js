@@ -1,4 +1,5 @@
 import {api, upload, downloadDrive, message} from './videos-api.js';
+import {videoFile, droppedFiles, isFileDrag} from './videos-import.js';
 const $ = id => document.getElementById(id);
 const source = JSON.parse($('videos-data').textContent).source;
 const library = JSON.parse($('drive-items').textContent);
@@ -151,11 +152,34 @@ async function addDrive(item) {
   message('Clip añadido a la línea de tiempo.');
 }
 
+async function importClips(files) {
+  if (busy) { message('Espera a que termine la operación actual antes de agregar videos.', true); return; }
+  if (!files.length) { message('Arrastra archivos de video desde tu equipo.', true); return; }
+  controller = new AbortController();
+  setBusy(true);
+  let added = 0;
+  const errors = [];
+  try {
+    for (const file of files) {
+      if (controller.signal.aborted) break;
+      const clip = videoFile(file);
+      if (!clip) { errors.push(`${file.name}: no es un archivo de video compatible.`); continue; }
+      if (!warnSize(clip)) continue;
+      try {
+        progress(added / files.length * 100, `Importando ${file.name}…`);
+        await addClip(clip, clip.name);
+        added++;
+      } catch (error) { errors.push(`${file.name}: ${error.message}`); }
+    }
+    const success = added ? `${added} ${added === 1 ? 'video agregado' : 'videos agregados'} a la línea de tiempo.` : '';
+    message([success, ...errors].filter(Boolean).join(' ') || 'Importación cancelada.', errors.length > 0);
+    progress(100, added ? 'Clips listos para editar' : 'No se agregaron clips');
+  } finally { setBusy(false); }
+}
 $('clip-files').onchange = async event => {
-  const files = [...event.target.files]; setBusy(true);
-  try { for (const file of files) if (warnSize(file)) await addClip(file, file.name); }
-  catch (error) { message(error.message, true); }
-  finally { setBusy(false); event.target.value = ''; }
+  const files = [...event.target.files];
+  event.target.value = '';
+  await importClips(files);
 };
 $('add-drive').onclick = async () => {
   controller = new AbortController(); setBusy(true);
@@ -533,15 +557,32 @@ $('timeline-ruler').onclick = event => {
   }
 };
 const zone = $('import-zone');
-zone.addEventListener('dragover', event => { event.preventDefault(); if (!busy) zone.classList.add('is-dragover'); });
-zone.addEventListener('dragleave', () => zone.classList.remove('is-dragover'));
+zone.addEventListener('dragenter', event => {
+  if (!isFileDrag(event.dataTransfer)) return;
+  event.preventDefault();
+  if (!busy) zone.classList.add('is-dragover');
+});
+zone.addEventListener('dragover', event => {
+  if (!isFileDrag(event.dataTransfer)) return;
+  event.preventDefault(); event.stopPropagation();
+  event.dataTransfer.dropEffect = busy ? 'none' : 'copy';
+  if (!busy) zone.classList.add('is-dragover');
+});
+zone.addEventListener('dragleave', event => {
+  if (!zone.contains(event.relatedTarget)) zone.classList.remove('is-dragover');
+});
 zone.addEventListener('drop', async event => {
-  event.preventDefault(); zone.classList.remove('is-dragover'); if (busy) return;
-  const files = [...event.dataTransfer.files].filter(file => file.type.startsWith('video/'));
-  setBusy(true);
-  try { for (const file of files) if (warnSize(file)) await addClip(file, file.name); }
-  catch (error) { message(error.message, true); }
-  finally { setBusy(false); }
+  event.preventDefault(); event.stopPropagation(); zone.classList.remove('is-dragover');
+  // Read files synchronously: browsers clear the transfer after this event.
+  await importClips(droppedFiles(event.dataTransfer));
+});
+window.addEventListener('dragover', event => {
+  if (isFileDrag(event.dataTransfer)) event.preventDefault();
+});
+window.addEventListener('drop', event => {
+  if (!isFileDrag(event.dataTransfer)) return;
+  event.preventDefault(); zone.classList.remove('is-dragover');
+  message('Suelta los videos en «Importar archivos» para agregarlos a la línea de tiempo.');
 });
 new ResizeObserver(fitCanvas).observe(document.querySelector('.studio-stage'));
 updateStudio(); updateFormat();
