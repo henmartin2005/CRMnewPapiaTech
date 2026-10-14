@@ -11,6 +11,7 @@ let result = null;
 let resultUrl = null;
 let dragged = null;
 let phase = {base: 0, weight: 0};
+let timelineScale = 45;
 const blobUrls = [];
 
 function progress(value, label) {
@@ -26,6 +27,7 @@ function setBusy(value) {
   $('cancel-export').disabled = !value;
   $('retry-save').disabled = value;
   $('drive-connect').style.pointerEvents = value ? 'none' : '';
+  if (!value) renderTimeline();
 }
 
 function clientId() {
@@ -60,6 +62,7 @@ async function addClip(blob, name, parent = null) {
     clips.push(clip);
     selectClip(clip);
     renderTimeline();
+    createThumbnail(clip);
   } catch (error) { URL.revokeObjectURL(url); throw error; }
   finally { probe.removeAttribute('src'); probe.load(); }
 }
@@ -69,6 +72,8 @@ function selectClip(clip) {
   $('preview').src = clip.url;
   $('preview').currentTime = clip.start;
   $('preview').playbackRate = clip.speed;
+  $('preview-empty').hidden = true;
+  $('selected-clip-name').textContent = clip.name;
 }
 
 function totalDuration() { return clips.reduce((sum, c) => sum + (c.end - c.start) / c.speed, 0); }
@@ -79,6 +84,12 @@ function renderTimeline() {
     li.className = `videos-clip ${selected === clip ? 'is-selected' : ''}`;
     li.draggable = true;
     li.dataset.id = clip.id;
+    li.style.width = `${clipWidth(clip)}px`;
+    li.setAttribute('aria-label', `Clip ${index + 1}: ${clip.name}`);
+    const strip = document.createElement('div');
+    strip.className = 'studio-clip-strip';
+    if (clip.thumbnail) strip.style.backgroundImage = `url(${clip.thumbnail})`;
+    strip.onclick = event => { if (!busy && !event.target.closest('button')) { selectClip(clip); renderTimeline(); } };
     const title = document.createElement('div');
     title.className = 'videos-clip-title';
     const name = document.createElement('strong'); name.textContent = `${index + 1}. ${clip.name}`;
@@ -107,21 +118,24 @@ function renderTimeline() {
           input.value = clip[key].toFixed(2); message('El inicio debe ser anterior al fin y ambos deben estar dentro del clip.', true); return;
         }
         clip[key] = value; if (selected === clip) $('preview').currentTime = clip.start;
+        li.style.width = `${clipWidth(clip)}px`;
         $('total-time').textContent = `${totalDuration().toFixed(1)} s`;
+        updateStudio();
       };
       label.append(input); controls.append(label);
     }
     const label = document.createElement('label'); label.textContent = 'Velocidad';
     const speed = document.createElement('select');
     [0.5, 1, 1.5, 2].forEach(value => { const option = new Option(`${value}x`, value); option.selected = value === clip.speed; speed.add(option); });
-    speed.onchange = () => { clip.speed = Number(speed.value); if (selected === clip) $('preview').playbackRate = clip.speed; $('total-time').textContent = `${totalDuration().toFixed(1)} s`; };
-    label.append(speed); controls.append(label); li.append(title, controls);
+    speed.onchange = () => { clip.speed = Number(speed.value); if (selected === clip) $('preview').playbackRate = clip.speed; li.style.width = `${clipWidth(clip)}px`; $('total-time').textContent = `${totalDuration().toFixed(1)} s`; updateStudio(); };
+    label.append(speed); controls.append(label); strip.append(title); li.append(strip, controls);
     li.ondragstart = event => { if (busy) {event.preventDefault(); return;} dragged = index; event.dataTransfer.setData('text/plain', clip.id); };
     li.ondragover = event => event.preventDefault();
     li.ondrop = event => { event.preventDefault(); if (!busy && dragged !== null) move(dragged, index); dragged = null; };
     $('timeline').append(li);
   });
   $('total-time').textContent = `${totalDuration().toFixed(1)} s`;
+  updateStudio();
 }
 function move(from, to) { if (busy || to < 0 || to >= clips.length) return; clips.splice(to, 0, clips.splice(from, 1)[0]); renderTimeline(); }
 $('preview').addEventListener('timeupdate', () => { if (selected && $('preview').currentTime >= selected.end) { $('preview').pause(); $('preview').currentTime = selected.start; } });
@@ -307,3 +321,227 @@ async function initialize() {
   catch(error){message(error.message,true);}finally{setBusy(false);}
 }
 initialize();
+
+// Studio controls share the same clip state and export pipeline.
+function timecode(seconds) {
+  const value = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+  return `${String(Math.floor(value / 60)).padStart(2, '0')}:${(value % 60).toFixed(1).padStart(4, '0')}`;
+}
+function clipWidth(clip) { return Math.max(220, (clip.end - clip.start) / clip.speed * timelineScale); }
+function projectTime() {
+  let elapsed = 0;
+  for (const clip of clips) {
+    if (clip === selected) return elapsed + Math.max(0, ($('preview').currentTime - clip.start) / clip.speed);
+    elapsed += (clip.end - clip.start) / clip.speed;
+  }
+  return 0;
+}
+function updatePlayhead() {
+  let left = 0;
+  for (const clip of clips) {
+    if (clip === selected) {
+      const fraction = Math.max(0, Math.min(1, ($('preview').currentTime - clip.start) / (clip.end - clip.start)));
+      left += fraction * clipWidth(clip); break;
+    }
+    left += clipWidth(clip) + 4;
+  }
+  $('timeline-playhead').style.left = `${selected ? left : 0}px`;
+  $('preview-time').textContent = timecode(projectTime());
+  updateOverlay();
+}
+function updateOverlay() {
+  const overlay = $('preview-overlay');
+  overlay.textContent = $('overlay-text').value;
+  const position = $('text-position').value;
+  overlay.style.top = position === 'top' ? '8%' : position === 'center' ? '50%' : 'auto';
+  overlay.style.bottom = position === 'bottom' ? '8%' : 'auto';
+  overlay.style.transform = position === 'center' ? 'translateY(-50%)' : '';
+  overlay.style.color = $('text-color').value;
+  const width = Number($('output-format').value.split(':')[0]);
+  overlay.style.fontSize = `${Number($('text-size').value) / width * 100}cqw`;
+  const t = projectTime();
+  overlay.hidden = !selected || t < Number($('text-start').value) || t > Number($('text-end').value);
+}
+function fitCanvas() {
+  const stage = document.querySelector('.studio-stage');
+  const [w, h] = $('output-format').value.split(':').map(Number);
+  const style = getComputedStyle(stage);
+  const availableWidth = stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  const availableHeight = stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  const width = Math.max(1, Math.min(availableWidth, availableHeight * w / h));
+  $('preview-canvas').style.width = `${width}px`;
+  $('preview-canvas').style.height = `${width * h / w}px`;
+  $('preview-canvas').style.aspectRatio = `${w} / ${h}`;
+}
+function updateStudio() {
+  $('media-count').textContent = clips.length;
+  $('clip-count').textContent = `${clips.length} ${clips.length === 1 ? 'clip' : 'clips'}`;
+  $('media-size').textContent = `${(clips.reduce((s, c) => s + c.blob.size, 0) / 1048576).toFixed(1)} MB`;
+  $('player-duration').textContent = timecode(totalDuration());
+  $('timeline-empty').hidden = clips.length > 0;
+  $('preview-empty').hidden = selected !== null;
+  $('preview-play').disabled = !selected || busy;
+  $('previous-clip').disabled = !selected || busy;
+  $('next-clip').disabled = !selected || busy;
+  const bin = $('media-bin');
+  if (clips.length) {
+    bin.replaceChildren();
+    for (const clip of clips) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.className = `studio-media-item${selected === clip ? ' is-selected' : ''}`;
+      button.disabled = busy;
+      const thumb = document.createElement('div'); thumb.className = 'studio-media-thumb';
+      if (clip.thumbnail) { const img = new Image(); img.src = clip.thumbnail; img.alt = ''; thumb.append(img); }
+      else { const icon = document.createElement('i'); icon.className = 'ph ph-film-strip'; thumb.append(icon); }
+      const duration = document.createElement('span'); duration.textContent = timecode(clip.duration); thumb.append(duration);
+      const name = document.createElement('span'); name.textContent = clip.name;
+      button.title = clip.name; button.append(thumb, name);
+      button.onclick = () => { selectClip(clip); renderTimeline(); };
+      bin.append(button);
+    }
+  } else {
+    bin.innerHTML = '<div class="studio-media-empty"><i class="ph ph-film-slate"></i><p>Un espacio para tus ideas.</p><span>Los clips que importes aparecerán aquí.</span></div>';
+  }
+  const ruler = $('timeline-ruler'); ruler.replaceChildren();
+  let offset = 0, elapsed = 0;
+  for (const clip of clips) {
+    const duration = (clip.end - clip.start) / clip.speed;
+    const count = Math.max(1, Math.floor(clipWidth(clip) / 85));
+    for (let i = 0; i < count; i++) {
+      const mark = document.createElement('span');
+      mark.style.left = `${offset + i / count * clipWidth(clip)}px`;
+      mark.textContent = timecode(elapsed + i / count * duration);
+      ruler.append(mark);
+    }
+    offset += clipWidth(clip) + 4; elapsed += duration;
+  }
+  if (!clips.length) for (let i = 0; i < 10; i++) {
+    const mark = document.createElement('span'); mark.style.left = `${i * 90}px`; mark.textContent = timecode(i * 5); ruler.append(mark);
+  }
+  $('timeline-content').style.width = `${Math.max(offset, $('timeline-scroll').clientWidth)}px`;
+  updateTracks(); updatePlayhead();
+}
+function updateTracks() {
+  const text = $('overlay-text').value.trim();
+  $('text-track').textContent = text ? `T  ${text}` : '+ Agregar texto';
+  $('text-track').classList.toggle('has-content', Boolean(text));
+  const total = totalDuration();
+  const width = Math.max(0, clips.reduce((n, c) => n + clipWidth(c) + 4, 0) - 4);
+  const start = Math.max(0, Math.min(total, Number($('text-start').value)));
+  const end = Math.max(start, Math.min(total, Number($('text-end').value)));
+  $('text-track').style.marginLeft = text && total ? `${start / total * width}px` : '0';
+  $('text-track').style.width = text && total ? `${Math.max(50, (end - start) / total * width)}px` : '160px';
+  $('text-track').style.minWidth = text ? '50px' : '160px';
+  const music = $('music-file').files[0];
+  $('audio-track').textContent = music ? `♫  ${music.name}` : '+ Agregar música';
+  $('audio-track').classList.toggle('has-content', Boolean(music));
+  $('audio-track').style.width = music ? `${Math.max(160, width)}px` : '160px';
+  $('music-name').textContent = music?.name || 'Elige un archivo de audio';
+}
+function showInspector(section) {
+  document.querySelectorAll('[data-section]').forEach(panel => { panel.hidden = panel.dataset.section !== section; });
+  document.querySelectorAll('[data-inspector]').forEach(button => {
+    const active = button.dataset.inspector === section;
+    button.classList.toggle('is-active', active); button.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[data-tool]').forEach(button => button.classList.toggle('is-active', button.dataset.tool === section));
+}
+function createThumbnail(clip) {
+  const video = document.createElement('video'); video.muted = true; video.preload = 'auto';
+  const cleanup = () => { video.removeAttribute('src'); video.load(); };
+  video.onloadeddata = () => {
+    try {
+      const canvas = document.createElement('canvas'); canvas.width = 160; canvas.height = 90;
+      const ctx = canvas.getContext('2d');
+      const ratio = Math.max(160 / video.videoWidth, 90 / video.videoHeight);
+      const w = video.videoWidth * ratio, h = video.videoHeight * ratio;
+      ctx.drawImage(video, (160 - w) / 2, (90 - h) / 2, w, h);
+      clip.thumbnail = canvas.toDataURL('image/jpeg', 0.6);
+      if (!busy) renderTimeline();
+    } catch {} finally { cleanup(); }
+  };
+  video.onerror = cleanup; video.src = clip.url;
+}
+$('stage-import').onclick = () => $('clip-files').click();
+$('preview-play').onclick = () => {
+  if (!selected || busy) return;
+  if ($('preview').paused) $('preview').play().catch(() => message('No se pudo reproducir este clip.', true));
+  else $('preview').pause();
+};
+function stepClip(delta) {
+  const index = clips.indexOf(selected) + delta;
+  if (busy || index < 0 || index >= clips.length) return;
+  selectClip(clips[index]); renderTimeline();
+}
+$('previous-clip').onclick = () => stepClip(-1);
+$('next-clip').onclick = () => stepClip(1);
+$('preview-fullscreen').onclick = () => {
+  $('preview-canvas').requestFullscreen?.().catch(() => message('No se pudo abrir la pantalla completa.', true));
+};
+$('preview').addEventListener('timeupdate', updatePlayhead);
+$('preview').addEventListener('loadedmetadata', updatePlayhead);
+for (const event of ['play', 'pause', 'ended']) $('preview').addEventListener(event, () => {
+  $('preview-play').innerHTML = `<i class="ph ph-${$('preview').paused ? 'play' : 'pause'}"></i>`;
+  $('preview-play').setAttribute('aria-label', $('preview').paused ? 'Reproducir' : 'Pausar');
+});
+for (const button of document.querySelectorAll('[data-inspector]')) button.onclick = () => showInspector(button.dataset.inspector);
+for (const button of document.querySelectorAll('[data-tool]')) button.onclick = () => {
+  if (button.dataset.tool === 'media') {
+    document.querySelectorAll('[data-tool]').forEach(item => item.classList.toggle('is-active', item === button));
+    document.querySelector('.studio-media').scrollIntoView({behavior:'smooth',block:'nearest'});
+  } else {
+    showInspector(button.dataset.tool);
+    if (matchMedia('(max-width:550px)').matches) document.querySelector('.studio-inspector').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+};
+function updateFormat() {
+  const [w, h] = $('output-format').value.split(':');
+  $('preview-format').textContent = {'1080:1920':'9:16','1080:1080':'1:1','1920:1080':'16:9'}[$('output-format').value];
+  $('footer-resolution').textContent = `${w} × ${h}`;
+  $('preview').style.objectFit = $('output-fit').value === 'crop' ? 'cover' : 'contain';
+  document.querySelectorAll('[data-ratio]').forEach(b => b.classList.toggle('is-active', b.dataset.ratio === $('output-format').value));
+  fitCanvas(); updateOverlay();
+}
+for (const button of document.querySelectorAll('[data-ratio]')) button.onclick = () => { $('output-format').value = button.dataset.ratio; updateFormat(); };
+$('output-format').addEventListener('change', updateFormat);
+$('output-fit').addEventListener('change', updateFormat);
+for (const id of ['overlay-text', 'text-position', 'text-size', 'text-color', 'text-start', 'text-end']) {
+  $(id).addEventListener('input', () => { updateOverlay(); updateTracks(); });
+}
+$('music-file').addEventListener('change', updateTracks);
+for (const id of ['original-volume', 'music-volume']) $(id).addEventListener('input', () => {
+  $(`${id}-label`).textContent = `${Math.round(Number($(id).value) * 100)} %`;
+  if (id === 'original-volume') { $('preview').volume = Math.min(1, Number($(id).value)); }
+});
+$('text-track').onclick = () => { showInspector('text'); $('overlay-text').focus(); };
+$('audio-track').onclick = () => { showInspector('audio'); $('music-file').click(); };
+$('timeline-zoom').oninput = () => { timelineScale = Number($('timeline-zoom').value); renderTimeline(); };
+for (const [id, delta] of [['timeline-zoom-out', -10], ['timeline-zoom-in', 10]]) $(id).onclick = () => {
+  $('timeline-zoom').value = Math.max(20, Math.min(100, timelineScale + delta));
+  timelineScale = Number($('timeline-zoom').value); renderTimeline();
+};
+$('timeline-ruler').onclick = event => {
+  if (!clips.length || busy) return;
+  let x = event.clientX - $('timeline-ruler').getBoundingClientRect().left;
+  for (const clip of clips) {
+    const width = clipWidth(clip);
+    if (x <= width || clip === clips.at(-1)) {
+      selectClip(clip); $('preview').currentTime = clip.start + Math.min(1, Math.max(0, x / width)) * (clip.end - clip.start);
+      renderTimeline(); return;
+    }
+    x -= width + 4;
+  }
+};
+const zone = $('import-zone');
+zone.addEventListener('dragover', event => { event.preventDefault(); if (!busy) zone.classList.add('is-dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('is-dragover'));
+zone.addEventListener('drop', async event => {
+  event.preventDefault(); zone.classList.remove('is-dragover'); if (busy) return;
+  const files = [...event.dataTransfer.files].filter(file => file.type.startsWith('video/'));
+  setBusy(true);
+  try { for (const file of files) if (warnSize(file)) await addClip(file, file.name); }
+  catch (error) { message(error.message, true); }
+  finally { setBusy(false); }
+});
+new ResizeObserver(fitCanvas).observe(document.querySelector('.studio-stage'));
+updateStudio(); updateFormat();
