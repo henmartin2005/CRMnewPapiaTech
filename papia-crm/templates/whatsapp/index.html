@@ -366,6 +366,37 @@
   .wa-sticker { width:120px; height:120px; }
   .wa-stickers { left:6px; right:6px; width:auto; }
 }
+/* ── Plantillas y ventana de 24 h ── */
+.wa-window { flex-shrink:0; display:flex; align-items:center; gap:12px; padding:10px 16px; background:#fff8e1; border-top:1px solid #f3e2a9; color:#54656f; font-size:13.5px; line-height:1.4; z-index:2; }
+.wa-window[hidden], .wa-tpl[hidden] { display:none !important; }
+.wa-window > i { font-size:20px; color:#9a6b00; }
+.wa-window-txt { flex:1; min-width:0; }
+.wa-window-txt b { color:#111b21; }
+.wa-window-btn, .wa-tpl-send { border:none; border-radius:20px; background:var(--wa-green); color:#fff; font-weight:600; font-size:14px; padding:9px 16px; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:6px; }
+.wa-window-btn:hover, .wa-tpl-send:hover { filter:brightness(.95); }
+.wa-tpl-send:disabled { opacity:.45; cursor:not-allowed; }
+.wa-compose.wa-closed { display:none; }
+.wa-tpl { position:absolute; left:16px; right:16px; bottom:76px; z-index:6; max-width:560px; margin:0 auto; max-height:calc(100% - 150px); display:flex; flex-direction:column; background:var(--wa-surface); border-radius:12px; box-shadow:0 6px 24px rgba(11,20,26,.25); overflow:hidden; }
+.wa-tpl-head { display:flex; align-items:center; justify-content:space-between; padding:10px 8px 8px 16px; border-bottom:1px solid var(--wa-line); font-size:15px; }
+.wa-tpl-body { padding:12px 16px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+.wa-tpl-fields { display:flex; flex-direction:column; gap:10px; }
+.wa-tpl-body select, .wa-tpl-field input { width:100%; height:38px; border:1px solid var(--wa-line); border-radius:8px; padding:0 10px; font:14px var(--wa-font); background:#fff; color:var(--wa-text); outline:none; }
+.wa-tpl-body select:focus, .wa-tpl-field input:focus { border-color:var(--wa-green); }
+.wa-tpl-lbl, .wa-tpl-field span { display:block; font-size:12.5px; font-weight:600; color:var(--wa-text-2); margin-bottom:4px; }
+.wa-tpl-field small { font-weight:400; opacity:.7; }
+.wa-tpl-note { font-size:12.5px; color:var(--wa-text-2); }
+.wa-tpl-note:empty, .wa-tpl-reason:empty { display:none; }
+.wa-tpl-note.bad { color:#b42318; font-weight:600; }
+.wa-tpl-reason { font-size:12.5px; color:#9a6b00; background:#fff8e1; border-radius:8px; padding:6px 10px; }
+.wa-tpl-preview { background:var(--wa-out); border-radius:8px; padding:9px 11px; font-size:14px; line-height:19px; white-space:pre-wrap; box-shadow:var(--wa-shadow); }
+.wa-tpl-preview mark { background:#ffe58f; border-radius:3px; padding:0 2px; }
+.wa-tpl-foot { padding:10px 16px 14px; display:flex; justify-content:flex-end; border-top:1px solid var(--wa-line); }
+.tick.failed { cursor:pointer; }
+@media (max-width: 900px) {
+.wa-tpl { left:6px; right:6px; bottom:calc(70px + env(safe-area-inset-bottom, 0px)); max-height:calc(100% - 90px); }
+.wa-window { flex-wrap:wrap; padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.wa-window-btn { width:100%; justify-content:center; }
+}
 </style>
 {% endblock %}
 
@@ -494,10 +525,27 @@
     <input type="file" id="stickerFile" accept="image/webp,image/png,image/jpeg,image/gif" hidden>
     <input type="file" id="attachFile" accept="audio/*,image/*,video/*,application/pdf" hidden>
 
+    <div class="wa-window" id="waWindow" hidden>
+    <i class="bi bi-clock-history"></i>
+    <div class="wa-window-txt"><b>Ventana de 24 h cerrada.</b> <span id="waWindowSub"></span></div>
+    <button type="button" class="wa-window-btn" id="waWindowBtn"><i class="bi bi-file-earmark-text"></i> Enviar plantilla</button>
+    </div>
+    <div class="wa-tpl" id="tplPanel" hidden>
+    <div class="wa-tpl-head"><b>Enviar plantilla aprobada</b><button type="button" class="wa-icon-btn" id="tplClose" title="Cerrar"><i class="bi bi-x-lg" style="font-size:16px;"></i></button></div>
+    <div class="wa-tpl-body">
+    <div class="wa-tpl-reason" id="tplReason"></div>
+    <div><span class="wa-tpl-lbl">Plantilla</span><select id="tplSelect"></select></div>
+    <div class="wa-tpl-note" id="tplNote"></div>
+    <div class="wa-tpl-fields" id="tplFields"></div>
+    <div><span class="wa-tpl-lbl">Así le llegará</span><div class="wa-tpl-preview" id="tplPreview"></div></div>
+    </div>
+    <div class="wa-tpl-foot"><button type="button" class="wa-tpl-send" id="tplSend" disabled><i class="bi bi-send-fill"></i> Enviar plantilla</button></div>
+    </div>
     <footer class="wa-compose" id="composeBar">
       <button class="wa-icon-btn" id="emojiBtn" title="Emojis"><i class="bi bi-emoji-smile"></i></button>
       <button class="wa-icon-btn" id="stickerBtn" type="button" title="Stickers"><i class="bi bi-sticky"></i></button>
       <button class="wa-icon-btn" id="attachBtn" type="button" title="Adjuntar audio, imagen o archivo"><i class="bi bi-paperclip"></i></button>
+      <button class="wa-icon-btn" id="tplBtn" type="button" title="Enviar plantilla aprobada"><i class="bi bi-file-earmark-text"></i></button>
       <textarea class="wa-input" id="msgInput" rows="1" placeholder="Escribe un mensaje"></textarea>
       <button class="wa-icon-btn wa-send" id="sendBtn" title="Enviar (Enter)"><i class="bi bi-send-fill"></i></button>
       <button class="wa-icon-btn" id="micBtn" type="button" title="Grabar nota de voz"><i class="bi bi-mic-fill"></i></button>
@@ -537,6 +585,10 @@
   const STICKERS_URL = {{ url_for('whatsapp.stickers_json') | tojson }};
   const BACKFILL_URL = {{ url_for('whatsapp.media_backfill') | tojson }};
   const CLIENT_NAME = {{ ((active_client.first_name ~ ' ' ~ (active_client.last_name or '')) | trim if active_client else '') | tojson }};
+  const TPL_URL = {{ url_for('whatsapp.templates_json') | tojson }};
+  let WINDOW = {{ (wa_window or {}) | tojson }};
+  const TPL_CTX = {{ (tpl_context or {}) | tojson }};
+  const TPL_PRESET = {{ request.args.get('tpl', '') | tojson }};
 
   // ── Utilidades de fecha (SQLite guarda UTC) ─────
   function toDate(s) {
@@ -588,8 +640,8 @@
       .replace(/(^|[\s(¡¿])_([^_\n]+)_(?=[\s.,;:!?)]|$)/g, '$1<i>$2</i>')
       .replace(/(^|[\s(¡¿])~([^~\n]+)~(?=[\s.,;:!?)]|$)/g, '$1<s>$2</s>');
   }
-  function tickHtml(status) {
-    if (status === 'failed')    return '<i class="bi bi-exclamation-circle-fill tick failed" title="No entregado"></i>';
+  function tickHtml(status, err) {
+    if (status === 'failed')    return '<i class="bi bi-exclamation-circle-fill tick failed" title="' + esc(err || 'No entregado') + '"></i>';
     if (status === 'read')      return '<i class="bi bi-check2-all tick read" title="Leído"></i>';
     if (status === 'delivered') return '<i class="bi bi-check2-all tick" title="Entregado"></i>';
     if (status === 'pending')   return '<i class="bi bi-clock tick" style="font-size:11px" title="Enviando"></i>';
@@ -716,7 +768,7 @@
     row.dataset.id = m.id;
     if (m.media_url && m.media_type === 'sticker') row.classList.add('sticker');
     row.dataset.text = String(m.message || '').toLowerCase();
-    row.innerHTML = `<div class="wa-bub"><span class="txt">${bodyHtml(m)}</span><span class="wa-sp"></span><span class="wa-meta"><span>${esc(hhmm(d))}</span>${dir === 'out' ? tickHtml(m.status) : ''}</span></div>`;
+    row.innerHTML = `<div class="wa-bub"><span class="txt">${bodyHtml(m)}</span><span class="wa-sp"></span><span class="wa-meta"><span>${esc(hhmm(d))}</span>${dir === 'out' ? tickHtml(m.status, waErr(m)) : ''}</span></div>`;
     thread.appendChild(row);
     lastDir = dir; lastAt = d;
     if (m.id != null) rendered.set(String(m.id), { el: row, status: m.status });
@@ -724,13 +776,13 @@
     return row;
   }
 
-  function setStatus(id, status) {
+  function setStatus(id, status, err) {
     const r = rendered.get(String(id));
     if (!r || r.status === status) return;
     r.status = status;
     r.el.classList.remove('pending');
     const t = r.el.querySelector('.wa-meta .tick');
-    if (t) t.outerHTML = tickHtml(status);
+    if (t) t.outerHTML = tickHtml(status, err);
   }
 
   MSGS.forEach(addMessage);
@@ -789,6 +841,7 @@
       .then(r => r.json())
       .then(data => {
         const msgs = data.messages || [];
+        if (data.window) { WINDOW = data.window; paintWindow(); }
         if (force) {
           thread.querySelectorAll('.wa-msg[data-id^="tmp"]').forEach(el => {
             rendered.delete(el.dataset.id); el.remove();
@@ -797,7 +850,7 @@
         const stick = nearBottom();
         let added = 0;
         msgs.forEach(m => {
-          if (rendered.has(String(m.id))) { setStatus(m.id, m.status); return; }
+          if (rendered.has(String(m.id))) { setStatus(m.id, m.status, waErr(m)); return; }
           if (m.id > lastId || force) { if (addMessage(m)) added++; }
         });
         if (added) {
@@ -849,7 +902,7 @@
       if (!data.success) {
         setStatus(tmpId, 'failed');
         if (data.template_required) {
-          if (confirm(data.error + '\n\n¿Abrir el formulario para enviar una plantilla aprobada?')) {
+          if (openTemplates(data.error)) {
             window.location = NEW_URL + '?need_template=1&phone=' + encodeURIComponent(ACTIVE);
           }
         } else {
@@ -921,7 +974,7 @@
         if (!data.success) {
           setStatus(tmpId, 'failed');
           if (data.template_required) {
-            if (confirm(data.error + '\n\n¿Abrir el formulario para enviar una plantilla aprobada?')) {
+            if (openTemplates(data.error)) {
               window.location = NEW_URL + '?need_template=1&phone=' + encodeURIComponent(ACTIVE);
             }
           } else {
@@ -1055,6 +1108,185 @@
   document.addEventListener('click', e => { if (!emojiPanel.contains(e.target)) closeEmoji(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeEmoji(); closeFind(); } });
 
+  {% raw %}
+  // ════════════ PLANTILLAS Y VENTANA DE 24 H ════════════
+  const tplPanel = document.getElementById('tplPanel');
+  const tplSelect = document.getElementById('tplSelect');
+  const tplFields = document.getElementById('tplFields');
+  const tplPreview = document.getElementById('tplPreview');
+  const tplNote = document.getElementById('tplNote');
+  const tplSend = document.getElementById('tplSend');
+  const waWindow = document.getElementById('waWindow');
+  const IS_US = /^1\d{10}$/.test(String(ACTIVE).replace(/\D/g, ''));
+  const TPL_LABELS = {
+    recordatorio_reunion: ['Nombre', 'Fecha', 'Hora'],
+    retomar_conversacion: ['Nombre', 'Tema de la consulta'],
+    primer_contacto: ['Nombre', 'Servicio de interés'],
+    avance_proyecto: ['Nombre', 'Proyecto', 'Actualización'],
+    recordatorio_pago: ['Nombre', 'Monto pendiente', 'Concepto / proyecto', 'Link de pago'],
+    seguimiento_propuesta: ['Nombre', 'Proyecto', 'Link de la propuesta'],
+  };
+  let TPLS = null;
+
+  function waErr(m) {
+    if (!m || m.status !== 'failed') return '';
+    const map = {
+      '131047': 'Ventana de 24 h cerrada: solo se puede enviar una plantilla aprobada.',
+      '131049': 'Meta no lo entregó: las plantillas de Marketing no llegan a números de EE. UU. (o el cliente alcanzó su límite). Usa una plantilla de Utilidad.',
+      '131042': 'Falta configurar la moneda o el método de pago de la cuenta de WhatsApp Business en Meta.',
+      '131026': 'El número no tiene WhatsApp o no puede recibir este mensaje.',
+      '131050': 'El cliente se dio de baja de los mensajes de marketing.',
+      '130472': 'Meta pausó este mensaje para este usuario (experimento de marketing).',
+      '132000': 'El número de variables no coincide con la plantilla.',
+      '132001': 'La plantilla no existe en ese idioma.',
+      '132015': 'La plantilla está pausada por baja calidad.',
+      '132016': 'La plantilla fue deshabilitada por Meta.'
+    };
+    return map[String(m.error_code || '')] || m.error_text || 'No entregado';
+  }
+  function tplCat(t) { return String(t.category || '').toUpperCase(); }
+  function tplBlocked(t) { return IS_US && tplCat(t) === 'MARKETING'; }
+  function tplVarCount(body) {
+    let n = 0;
+    String(body || '').replace(/\{\{(\d+)\}\}/g, (m, k) => { n = Math.max(n, +k); return m; });
+    return n;
+  }
+  function tplLabel(t, i) {
+    const known = TPL_LABELS[t.name];
+    if (known && known[i - 1]) return known[i - 1];
+    const before = String(t.body || '').split('{{' + i + '}}')[0]
+      .replace(/\{\{\d+\}\}/g, '').trim().split(/\s+/).slice(-3).join(' ');
+    return before ? '…' + before : 'Variable ' + i;
+  }
+  function tplDefault(label) {
+    if (/nombre/i.test(label)) return TPL_CTX.first_name || String(CLIENT_NAME || '').split(' ')[0] || '';
+    if (/monto|saldo/i.test(label)) return TPL_CTX.pending || '';
+    if (/proyecto|concepto|tema|servicio/i.test(label)) return TPL_CTX.project || '';
+    return '';
+  }
+  function tplCurrent() { return TPLS && TPLS[+tplSelect.value]; }
+  function tplValues() { return [...tplFields.querySelectorAll('input')].map(i => i.value.trim()); }
+  function tplText(t, vals) { return String(t.body || '').replace(/\{\{(\d+)\}\}/g, (m, k) => vals[k - 1] || m); }
+
+  function updateTplPreview() {
+    const t = tplCurrent();
+    if (!t) { tplPreview.textContent = ''; tplSend.disabled = true; return; }
+    const vals = tplValues();
+    tplPreview.innerHTML = formatBody(tplText(t, vals)).replace(/\{\{(\d+)\}\}/g, '<mark>{{$1}}</mark>');
+    tplSend.disabled = tplBlocked(t) || vals.some(v => !v);
+  }
+  function renderTplFields() {
+    const t = tplCurrent();
+    tplFields.innerHTML = '';
+    if (!t) { updateTplPreview(); return; }
+    const n = tplVarCount(t.body);
+    for (let i = 1; i <= n; i++) {
+      const lab = tplLabel(t, i);
+      const wrap = document.createElement('label');
+      wrap.className = 'wa-tpl-field';
+      wrap.innerHTML = `<span>${esc(lab)} <small>{{${i}}}</small></span><input type="text" autocomplete="off">`;
+      const inp = wrap.querySelector('input');
+      inp.value = tplDefault(lab);
+      inp.placeholder = /link/i.test(lab) ? 'https://…' : lab.replace(/^…/, '');
+      inp.addEventListener('input', updateTplPreview);
+      tplFields.appendChild(wrap);
+    }
+    tplNote.classList.toggle('bad', tplBlocked(t));
+    tplNote.textContent = tplBlocked(t)
+      ? 'Plantilla de Marketing: Meta no la entrega a números de EE. UU. (+1). Elige una de Utilidad.'
+      : (tplCat(t) === 'MARKETING' ? 'Marketing: Meta limita cuántas de estas recibe cada cliente.' : '');
+    updateTplPreview();
+    const empty = [...tplFields.querySelectorAll('input')].find(i => !i.value);
+    if (empty) empty.focus();
+  }
+  function loadTemplates() {
+    if (TPLS) return;
+    tplSelect.innerHTML = '<option value="">Cargando plantillas…</option>';
+    fetch(TPL_URL + '?_t=' + Date.now())
+      .then(r => r.json())
+      .then(d => {
+        const rank = t => (tplBlocked(t) ? 4 : 0) + (tplCat(t) === 'UTILITY' ? 0 : 2)
+          + (String(t.language || '').toLowerCase().startsWith('es') ? 0 : 1);
+        TPLS = (d.templates || []).filter(t => t.name)
+          .sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
+        tplSelect.innerHTML = TPLS.length ? TPLS.map((t, i) =>
+          `<option value="${i}"${tplBlocked(t) ? ' disabled' : ''}>${esc(t.name)} · ${esc(t.language || '')} · ${tplCat(t) === 'UTILITY' ? 'Utilidad' : 'Marketing'}${tplBlocked(t) ? ' — no se entrega en EE. UU.' : ''}</option>`
+        ).join('') : '<option value="">No hay plantillas aprobadas</option>';
+        const pre = TPLS.findIndex(t => t.name === TPL_PRESET && !tplBlocked(t)
+          && String(t.language || '').toLowerCase().startsWith('es'));
+        const first = TPLS.findIndex(t => !tplBlocked(t));
+        tplSelect.value = String(pre >= 0 ? pre : Math.max(first, 0));
+        renderTplFields();
+        if (d.error) tplNote.textContent = 'No se pudieron leer las plantillas: ' + d.error;
+      })
+      .catch(() => { TPLS = null; tplSelect.innerHTML = '<option value="">No se pudieron cargar las plantillas</option>'; });
+  }
+  function openTemplates(reason) {
+    closeEmoji(); closeStickers();
+    document.getElementById('tplReason').textContent = reason || '';
+    tplPanel.hidden = false;
+    loadTemplates();
+    if (reason) poll(true);
+    return false;
+  }
+  function closeTemplates() { tplPanel.hidden = true; }
+
+  function agoText(iso) {
+    const d = toDate(iso); if (!d) return '';
+    const h = Math.floor((Date.now() - d) / 3600000);
+    return h < 48 ? `hace ${h} h` : `hace ${Math.floor(h / 24)} días`;
+  }
+  function paintWindow() {
+    const closed = !!WINDOW && WINDOW.open === false;
+    waWindow.hidden = !closed;
+    composeBar.classList.toggle('wa-closed', closed);
+    document.getElementById('waWindowSub').textContent = WINDOW && WINDOW.last_inbound_at
+      ? `El cliente escribió por última vez ${agoText(WINDOW.last_inbound_at)}. Solo puedes enviarle una plantilla aprobada; cuando responda, el chat se abre normal.`
+      : 'Este contacto aún no te ha escrito. Para iniciar la conversación envía una plantilla aprobada.';
+  }
+
+  tplSend.addEventListener('click', () => {
+    const t = tplCurrent();
+    if (!t || tplSend.disabled) return;
+    const vals = tplValues();
+    tplSend.disabled = true;
+    const tmpId = 'tmp' + (++tmpSeq);
+    addMessage({ id: tmpId, direction: 'outbound', message: tplText(t, vals), created_at: new Date(), status: 'pending' });
+    scrollBottom(true);
+    fetch(SEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: ACTIVE, template: { name: t.name, language: t.language || 'es', params: vals } }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        tplSend.disabled = false;
+        if (!data.success) {
+          setStatus(tmpId, 'failed', data.error);
+          alert('No se pudo enviar la plantilla: ' + (data.error || 'error desconocido'));
+          return;
+        }
+        closeTemplates();
+        poll(true);
+        refreshList();
+      })
+      .catch(() => { tplSend.disabled = false; setStatus(tmpId, 'failed'); alert('Error de conexión al enviar.'); });
+  });
+  tplSelect.addEventListener('change', renderTplFields);
+  document.getElementById('tplBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    if (tplPanel.hidden) openTemplates(''); else closeTemplates();
+  });
+  document.getElementById('waWindowBtn').addEventListener('click', () => openTemplates(''));
+  document.getElementById('tplClose').addEventListener('click', closeTemplates);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTemplates(); });
+  thread.addEventListener('click', e => {
+    const t = e.target.closest('.tick.failed');
+    if (t) alert(t.title || 'No entregado');
+  });
+  paintWindow();
+  if (TPL_PRESET) openTemplates('');
+  {% endraw %}
   // ── Buscar en el chat ──
   const findBar = document.getElementById('findBar');
   const findInput = document.getElementById('findInput');

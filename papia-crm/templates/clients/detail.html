@@ -1112,6 +1112,17 @@ if (reminderInput) {
         // Inject optimistic note into activity feed
         injectActivityNote(msg);
       } else {
+        if (data.template_required) {
+          const act = document.querySelector('.wa-tpl-btn.active');
+          const TPL_FOR = { pago: 'recordatorio_pago', propuesta: 'seguimiento_propuesta' };
+          const dg = String(CLIENT_PHONE || '').replace(/\D/g, '');
+          const e164 = '+' + (dg.length === 10 ? '1' + dg : dg);
+          showToast('Ventana de 24 h cerrada: abriendo el chat para enviar una plantilla aprobada…', 'success');
+          setTimeout(() => {
+            window.location = '/whatsapp?phone=' + encodeURIComponent(e164) + '&tpl=' + (TPL_FOR[act && act.dataset.tpl] || '');
+          }, 900);
+          return;
+        }
         showToast('Error al enviar: ' + (data.error || 'desconocido'), 'danger');
         sendBtn.disabled = false;
         sendBtn.innerHTML = '<i class="bi bi-whatsapp"></i> Enviar mensaje';
