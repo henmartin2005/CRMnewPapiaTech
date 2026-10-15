@@ -113,3 +113,19 @@ def notify_whatsapp(org_id, phone, client_id, sender_name, text, badge=None):
         _send_async(messages)
     except Exception:
         log.exception('Push: error preparando la notificación')
+
+
+def notify_event(org_id, title, body, data=None):
+    """Aviso genérico a la app móvil (p. ej. el cliente subió archivos al portal).
+    Nunca lanza excepción."""
+    try:
+        tokens = _tokens(org_id)
+        if not tokens:
+            return
+        _send_async([{
+            'to': t, 'title': (title or '')[:120], 'body': (body or '')[:180],
+            'sound': 'default', 'channelId': 'whatsapp', 'priority': 'high',
+            'data': data or {},
+        } for t in tokens])
+    except Exception:
+        log.exception('Push: error preparando la notificación')
