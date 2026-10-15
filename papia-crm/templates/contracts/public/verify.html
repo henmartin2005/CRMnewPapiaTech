@@ -1,0 +1,57 @@
+{% extends "contracts/public/_layout.html" %}
+{% block title %}Verifica tu identidad{% endblock %}
+{% block body %}
+<main class="ps-center">
+  <section class="ps-card ps-narrow" aria-labelledby="vt">
+    <div class="ps-icon-badge"><i class="bi bi-shield-lock"></i></div>
+    <div>
+      <div class="ps-eyebrow">Documento para firmar</div>
+      <h1 id="vt" style="font-size:24px;margin-top:4px;">{{ env.title }}</h1>
+    </div>
+    <p class="ps-muted" style="margin:0;">Hola {{ rc.name.split(' ')[0] }}, {{ env.created_by_name or org_name }} te envió este documento.
+      Para proteger tu firma te enviaremos un código de 6 dígitos{% if channel_hint %} a <b>{{ channel_hint }}</b>{% endif %}.</p>
+
+    <div id="stepSend">
+      <button type="button" class="ps-btn primary" id="sendCode" style="width:100%;">Enviarme el código</button>
+    </div>
+    <form id="stepCode" class="ps-hidden" style="display:flex;flex-direction:column;gap:10px;" autocomplete="off">
+      <label for="code" style="font-size:14px;font-weight:600;">Código de verificación</label>
+      <input id="code" class="ps-input ps-otp" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required />
+      <button type="submit" class="ps-btn primary" id="verifyBtn">Verificar y abrir</button>
+      <button type="button" class="ps-btn link" id="resend">Enviar otro código</button>
+    </form>
+    <div class="ps-error" id="err" role="alert"></div>
+    <p class="ps-muted" style="margin:0;font-size:12.5px;">¿No esperabas este documento? Ignora este mensaje o contacta a {{ org_name }}.</p>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var err = document.getElementById('err');
+  function post(url, body) {
+    return fetch(url, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
+                       body: JSON.stringify(body || {})}).then(function (r) { return r.json(); });
+  }
+  function send(btn) {
+    btn.disabled = true; err.textContent = '';
+    post({{ url_for('contracts_public.send_code', token=token)|tojson }}).then(function (d) {
+      btn.disabled = false;
+      if (!d.ok) { err.textContent = d.error; return; }
+      document.getElementById('stepSend').classList.add('ps-hidden');
+      document.getElementById('stepCode').classList.remove('ps-hidden');
+      document.getElementById('code').focus();
+    }).catch(function () { btn.disabled = false; err.textContent = 'Sin conexión. Intenta de nuevo.'; });
+  }
+  document.getElementById('sendCode').addEventListener('click', function () { send(this); });
+  document.getElementById('resend').addEventListener('click', function () { send(this); });
+  document.getElementById('stepCode').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var b = document.getElementById('verifyBtn'); b.disabled = true; err.textContent = '';
+    post({{ url_for('contracts_public.verify_code', token=token)|tojson }}, {code: document.getElementById('code').value})
+      .then(function (d) { if (d.ok) { location.reload(); } else { b.disabled = false; err.textContent = d.error; } })
+      .catch(function () { b.disabled = false; err.textContent = 'Sin conexión. Intenta de nuevo.'; });
+  });
+})();
+</script>
+{% endblock %}

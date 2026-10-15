@@ -1,0 +1,45 @@
+{% extends "contracts/public/_layout.html" %}
+{% block title %}Verificar documento{% endblock %}
+{% block subtitle %}Verificación de documentos firmados{% endblock %}
+{% block body %}
+<main class="ps-center">
+  <section class="ps-card ps-narrow" style="max-width:560px;" aria-labelledby="vt">
+    <div class="ps-icon-badge"><i class="bi bi-patch-check"></i></div>
+    <h1 id="vt" style="font-size:24px;">Verifica un documento firmado</h1>
+    <p class="ps-muted" style="margin:0;">Sube el PDF para comprobar que no fue modificado desde que se firmó, o escribe el ID del sobre.
+      El archivo se analiza en el servidor y no se guarda.</p>
+
+    {% if result == 'match' %}
+      <div style="padding:14px;border-radius:12px;background:#DCFCE7;color:#14532D;">
+        <b><i class="bi bi-check-circle-fill"></i> Documento íntegro.</b> Es exactamente el PDF que se selló al completar
+        "{{ env.title }}" el {{ env.completed_at[:10] }} (ID {{ env.uid }}).
+      </div>
+    {% elif result == 'original' %}
+      <div style="padding:14px;border-radius:12px;background:#FEF3C7;color:#78350F;">
+        <b><i class="bi bi-info-circle-fill"></i> Este es el documento original, sin firmas.</b>
+        Corresponde al sobre {{ env.uid }} ({{ env.status_label|lower }}).
+      </div>
+    {% elif result == 'found' %}
+      <div style="padding:14px;border-radius:12px;background:var(--aqua-soft);">
+        <b>Sobre {{ env.uid }}</b> · "{{ env.title }}" · completado el {{ env.completed_at[:10] }} ·
+        {{ env.recipients|selectattr('role', 'equalto', 'signer')|list|length }} firmante(s).
+        <div style="font-size:12.5px;margin-top:6px;word-break:break-all;">SHA-256 del PDF final: {{ env.final_sha256 }}</div>
+      </div>
+    {% elif result == 'nomatch' %}
+      <div style="padding:14px;border-radius:12px;background:#FEE2E2;color:#7F1D1D;">
+        <b><i class="bi bi-exclamation-octagon-fill"></i> No coincide con ningún documento sellado.</b>
+        Si el PDF se editó, se volvió a guardar o se imprimió a PDF, su huella cambia y ya no es el original firmado.
+      </div>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:12px;">
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;">PDF firmado
+        <input type="file" name="pdf" accept="application/pdf,.pdf" class="ps-input" style="padding:10px;" /></label>
+      <div class="ps-muted" style="text-align:center;font-size:13px;">— o —</div>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;">ID del sobre
+        <input type="text" name="uid" class="ps-input" placeholder="7F3A9E2B-41D0-…" maxlength="40" /></label>
+      <button type="submit" class="ps-btn primary">Verificar</button>
+    </form>
+  </section>
+</main>
+{% endblock %}

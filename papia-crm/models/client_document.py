@@ -31,13 +31,43 @@ CREATE TABLE IF NOT EXISTS client_documents (
 """
 
 
+# Archivos que el cliente sube desde su portal: no se permite SVG (puede llevar JavaScript
+# y se sirve desde el mismo dominio que el CRM).
+CLIENT_ALLOWED_EXTS = ALLOWED_EXTS - {'svg'}
+CLIENT_ACCEPT_ATTR = ','.join('.' + e for e in sorted(CLIENT_ALLOWED_EXTS))
+CLIENT_MAX_FILES = 10
+IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'svg'}
+CATEGORIES = [('logo', 'Logo del negocio'), ('imagen', 'Imágenes'), ('documento', 'Documentos')]
+CATEGORY_LABELS = dict(CATEGORIES)
+
+# Columnas añadidas después de la tabla original
+_EXTRA_COLS = (
+    ('portal_visible', "INTEGER NOT NULL DEFAULT 0"),
+    ('uploaded_by', "TEXT NOT NULL DEFAULT 'admin'"),   # 'admin' | 'client'
+    ('category', "TEXT"),                               # logo | imagen | documento
+    ('admin_seen', "INTEGER NOT NULL DEFAULT 1"),       # 0 = subido por el cliente y aún no revisado
+)
+
+
 def _db():
     db = get_db()
     db.execute(_SCHEMA)
     db.execute(
         "CREATE INDEX IF NOT EXISTS idx_client_docs_client ON client_documents(client_id)"
     )
+    cols = {r[1] for r in db.execute("PRAGMA table_info(client_documents)").fetchall()}
+    changed = False
+    for name, ddl in _EXTRA_COLS:
+        if name not in cols:
+            db.execute(f"ALTER TABLE client_documents ADD COLUMN {name} {ddl}")
+            changed = True
+    if changed:
+        db.commit()
     return db
+
+
+def ensure_schema():
+    _db().close()
 
 
 def client_dir(org_id, client_id):
@@ -81,11 +111,15 @@ def _decorate(row):
             'pptx': 'bi-file-earmark-ppt', 'zip': 'bi-file-earmark-zip',
             'txt': 'bi-file-earmark-text', 'rtf': 'bi-file-earmark-text',
         }
-        if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'svg'):
+        if ext in IMAGE_EXTS:
             d['icon'] = 'bi-file-earmark-image'
+            # HEIC no se muestra en la mayoría de navegadores: sin miniatura
+            d['is_image'] = ext != 'heic'
         else:
             d['icon'] = icons.get(ext, 'bi-file-earmark')
         d['meta'] = ' · '.join(x for x in (ext.upper(), _human_size(d.get('size_bytes'))) if x)
+    d['from_client'] = d.get('uploaded_by') == 'client'
+    d['category_label'] = CATEGORY_LABELS.get(d.get('category') or '', '')
     return d
 
 
@@ -136,6 +170,65 @@ def add_link_document(client_id, org_id, title, url):
             (org_id, client_id, title, url),
         )
         db.commit()
+    finally:
+        db.close()
+
+
+def add_client_upload(client_id, org_id, title, original_name, stored_name, mime_type,
+                      size_bytes, category):
+    """Archivo subido por el cliente desde el portal: visible para él y marcado como nuevo
+    para el administrador."""
+    db = _db()
+    try:
+        cur = db.execute(
+            "INSERT INTO client_documents (org_id, client_id, kind, title, original_name, "
+            "stored_name, mime_type, size_bytes, portal_visible, uploaded_by, category, admin_seen) "
+            "VALUES (?, ?, 'file', ?, ?, ?, ?, ?, 1, 'client', ?, 0)",
+            (org_id, client_id, title, original_name, stored_name, mime_type, size_bytes,
+             category if category in CATEGORY_LABELS else 'documento'),
+        )
+        db.commit()
+        return cur.lastrowid
+    finally:
+        db.close()
+
+
+def list_client_uploads(client_id, org_id):
+    db = _db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM client_documents WHERE client_id=? AND org_id=? AND uploaded_by='client' "
+            "ORDER BY created_at DESC, id DESC",
+            (client_id, org_id),
+        ).fetchall()
+        return [_decorate(r) for r in rows]
+    finally:
+        db.close()
+
+
+def mark_client_uploads_seen(client_id, org_id):
+    db = _db()
+    try:
+        db.execute(
+            "UPDATE client_documents SET admin_seen=1 WHERE client_id=? AND org_id=? AND admin_seen=0",
+            (client_id, org_id),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def set_category(doc_id, client_id, org_id, category):
+    if category not in CATEGORY_LABELS:
+        return False
+    db = _db()
+    try:
+        cur = db.execute(
+            "UPDATE client_documents SET category=? WHERE id=? AND client_id=? AND org_id=?",
+            (category, doc_id, client_id, org_id),
+        )
+        db.commit()
+        return cur.rowcount > 0
     finally:
         db.close()
 

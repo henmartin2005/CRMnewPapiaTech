@@ -26,7 +26,7 @@ SCHED_TZ = ZoneInfo(os.getenv('APP_TIMEZONE', 'America/New_York'))
 from models.client_document import (
     ACCEPT_ATTR, ALLOWED_EXTS, MAX_FILE_BYTES, add_file_document, add_link_document,
     client_dir, delete_client_files, delete_document, file_path, get_document,
-    list_documents,
+    list_documents, mark_client_uploads_seen,
 )
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/clients')
@@ -105,7 +105,26 @@ def detail(client_id):
     notes = get_client_notes(client_id)
     followups = get_client_followups(client_id)
     documents = list_documents(client_id, org_id)
+    client_uploads = [d for d in documents if d.get('from_client')]
+    new_uploads = sum(1 for d in client_uploads if not d.get('admin_seen'))
+    if new_uploads:
+        mark_client_uploads_seen(client_id, org_id)
+    try:
+        from models.contract import list_envelopes
+        contracts = list_envelopes(org_id, client_id=client_id, limit=20)
+    except Exception:
+        contracts = []
     schedule = list_installments(client_id, org_id, today=datetime.now(SCHED_TZ).strftime('%Y-%m-%d'))
+    try:
+        from database import get_db as _wa_db
+        _wdb = _wa_db()
+        wa_messages = _wdb.execute(
+            "SELECT direction, message, created_at, status, phone FROM whatsapp_messages "
+            "WHERE client_id = ? AND org_id = ? ORDER BY id ASC", (client_id, org_id)
+        ).fetchall()
+        _wdb.close()
+    except Exception:
+        wa_messages = []
 
     return render_template(
         'clients/detail.html',
@@ -113,7 +132,11 @@ def detail(client_id):
         notes=notes,
         followups=followups,
         documents=documents,
+        client_uploads=client_uploads,
+        new_uploads=new_uploads,
+        contracts=contracts,
         schedule=schedule,
+        wa_messages=wa_messages,
         profile_layout=get_layout(client_id, org_id),
         docs_accept=ACCEPT_ATTR,
         docs_max_mb=MAX_FILE_BYTES // (1024 * 1024),
