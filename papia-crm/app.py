@@ -100,7 +100,8 @@ def require_login():
     if request.endpoint and request.endpoint.startswith('contracts_public.'):
         return
     # Portal del cliente: páginas públicas (el cliente entra con Google)
-    if request.endpoint in ('portal.login', 'portal.google_start', 'portal.logout', 'portal.home', 'portal.open_doc', 'portal.open_contract'):
+    if request.endpoint in ('portal.login', 'portal.google_start', 'portal.logout', 'portal.home', 'portal.open_doc', 'portal.open_contract',
+                            'portal.upload', 'portal.delete_upload'):
         return
     if request.path.startswith('/api/'):
         return

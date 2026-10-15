@@ -650,7 +650,7 @@
         <span class="section-head-label"><i class="bi bi-person-badge" style="margin-right:5px;"></i>Portal del cliente</span>
       </div>
       <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
-        <div style="font-size:13px;opacity:.8;line-height:1.45;">El cliente entra con Google usando <b>{{ client.email }}</b> y ve el avance de su pizarra, el costo total y los contratos firmados y documentos que marques con <i class="bi bi-eye-fill" style="color:#22c55e;"></i>.</div>
+        <div style="font-size:13px;opacity:.8;line-height:1.45;">El cliente entra con Google usando <b>{{ client.email }}</b> y ve el avance de su pizarra, el costo total y los contratos firmados y documentos que marques con <i class="bi bi-eye-fill" style="color:#22c55e;"></i>. Desde ahí también puede subirte su logo, imágenes y documentos (aparecen en <a href="#documentos">Documentos</a>).</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <a class="btn btn-ghost" target="_blank" href="{{ url_for('portal.admin_preview', client_id=client.id) }}"><i class="bi bi-eye"></i> Vista previa</a>
           <button type="button" class="btn btn-ghost" data-url="https://{{ request.host }}{{ url_for('portal.login') }}" onclick="navigator.clipboard.writeText(this.dataset.url);this.textContent='Enlace copiado ✓';"><i class="bi bi-link-45deg"></i> Copiar enlace del portal</button>
@@ -679,6 +679,7 @@
               '<p style="margin:0 0 8px 0;">&#128202; <b>Avance en tiempo real</b>: cada etapa de tu proyecto, cuál está en progreso y cuáles ya completamos.</p>',
               '<p style="margin:0 0 8px 0;">&#128176; <b>Tu inversión</b>: costo total, lo pagado, lo pendiente y tu plan de pagos.</p>',
               '<p style="margin:0;">&#128196; <b>Contrato y documentos</b>: tu contrato firmado y los archivos del proyecto, listos para ver o descargar.</p>',
+              '<p style="margin:8px 0 0 0;">&#128228; <b>Tus archivos</b>: envíanos tu logo, fotos y documentos directamente desde el portal.</p>',
               '</td></tr></table>',
               '<p style="margin:0 0 10px 0;font-weight:700;color:#0f172a;">Cómo entrar</p>',
               '<p style="margin:0 0 6px 0;"><b style="color:#2A5BFF;">1.</b> Toca el botón <b>Entrar a mi portal</b>.</p>',
@@ -698,7 +699,7 @@
             var text = 'Hola ' + nm + ',\n\n' +
               'Creamos tu Portal del cliente para que sigas tu proyecto con total transparencia.\n\n' +
               'Entra aquí: ' + url + '\n\n' +
-              'Qué vas a encontrar:\n- Avance en tiempo real de cada etapa\n- Tu inversión: total, pagado, pendiente y plan de pagos\n- Tu contrato firmado y documentos del proyecto\n\n' +
+              'Qué vas a encontrar:\n- Avance en tiempo real de cada etapa\n- Tu inversión: total, pagado, pendiente y plan de pagos\n- Tu contrato firmado y documentos del proyecto\n- Un espacio para enviarnos tu logo, fotos y documentos\n\n' +
               'Cómo entrar: toca el enlace, elige "Continuar con Google" y usa este mismo correo (' + em + ').\n\n' +
               '¿Preguntas? WhatsApp: +1 (305) 402-4632 - ' + wa + '\n\nGracias por confiar en nosotros.';
             b.disabled = true; b.textContent = 'Enviando…';
@@ -741,6 +742,28 @@
         </form>
         <div class="docs-hint">PDF, Word, Excel, PowerPoint, imágenes, TXT/CSV o ZIP · máx. {{ docs_max_mb }} MB por archivo</div>
       </div>
+      {% if client_uploads %}
+        <div class="cu-panel">
+          <div class="cu-head">
+            <span><i class="bi bi-cloud-arrow-up"></i> Subidos por el cliente desde su portal
+              {% if new_uploads %}<span class="cu-new">{{ new_uploads }} nuevo{{ 's' if new_uploads > 1 }}</span>{% endif %}</span>
+            <a class="btn btn-ghost btn-sm" href="{{ url_for('portal.admin_uploads_zip', client_id=client.id) }}"><i class="bi bi-file-earmark-zip"></i> Descargar todo</a>
+          </div>
+          <div class="cu-grid">
+            {% for d in client_uploads %}
+            <div class="cu-item{{ ' is-new' if not d.admin_seen }}">
+              <a class="cu-thumb" target="_blank" rel="noopener" title="{{ d.title }}"
+                 href="{{ url_for('clients.open_document', client_id=client.id, doc_id=d.id) }}">
+                {% if d.is_image %}<img src="{{ url_for('clients.open_document', client_id=client.id, doc_id=d.id) }}" alt="{{ d.title }}" loading="lazy">{% else %}<i class="bi {{ d.icon }}"></i>{% endif %}
+              </a>
+              <div class="cu-name" title="{{ d.title }}">{{ d.title }}</div>
+              <div class="cu-meta">{{ d.category_label or 'Archivo' }} · {{ (d.created_at or '')[:10] }}</div>
+              <a class="cu-dl" title="Descargar" href="{{ url_for('clients.open_document', client_id=client.id, doc_id=d.id, dl=1) }}"><i class="bi bi-download"></i></a>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
       {% if documents %}
         <div class="docs-list">
           {% for d in documents %}
@@ -749,7 +772,7 @@
             <div class="docs-main">
               <a class="docs-title" target="_blank" rel="noopener"
                  href="{{ url_for('clients.open_document', client_id=client.id, doc_id=d.id) }}">{{ d.title }}</a>
-              <div class="docs-meta">{{ d.meta }}{% if d.created_at %} · {{ d.created_at[:10] }}{% endif %}</div>
+              <div class="docs-meta">{% if d.from_client %}<span class="cu-tag">Del cliente{% if d.category_label %} · {{ d.category_label }}{% endif %}</span> {% endif %}{{ d.meta }}{% if d.created_at %} · {{ d.created_at[:10] }}{% endif %}</div>
             </div>
             {% if d.kind == 'file' %}
             <a class="btn btn-ghost btn-icon-xs" title="Descargar"
@@ -757,11 +780,13 @@
               <i class="bi bi-download"></i>
             </a>
             {% endif %}
+            {% if not d.from_client %}
             <form method="POST" style="margin:0;" action="{{ url_for('portal.admin_toggle_doc', doc_id=d.id) }}">
               <button type="submit" class="btn btn-ghost btn-icon-xs" title="{{ 'Visible en el portal del cliente (clic para ocultar)' if d.portal_visible else 'Mostrar en el portal del cliente' }}">
                 <i class="bi {{ 'bi-eye-fill' if d.portal_visible else 'bi-eye-slash' }}" style="{{ 'color:#22c55e;' if d.portal_visible else 'opacity:.55;' }}"></i>
               </button>
             </form>
+            {% endif %}
             <form method="POST" style="margin:0;" onsubmit="return confirm('¿Eliminar este documento?');"
                   action="{{ url_for('clients.remove_document', client_id=client.id, doc_id=d.id) }}">
               <button type="submit" class="btn btn-ghost btn-icon-xs" title="Eliminar">
@@ -779,6 +804,21 @@
       {% endif %}
     </div>
     <style>
+      .cu-panel { padding:12px 14px; border-bottom:1px solid var(--c-border); background:var(--c-surface-2); }
+      .cu-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;
+                 font-size:12.5px; font-weight:600; color:var(--c-text-2); margin-bottom:10px; }
+      .cu-new { margin-left:6px; background:#2A5BFF; color:#fff; font-size:11px; padding:2px 8px; border-radius:99px; }
+      .cu-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; }
+      .cu-item { position:relative; border:1px solid var(--c-border); border-radius:10px; background:var(--c-surface); padding:6px; min-width:0; }
+      .cu-item.is-new { border-color:#2A5BFF; box-shadow:0 0 0 2px rgba(42,91,255,.15); }
+      .cu-thumb { display:flex; align-items:center; justify-content:center; height:80px; border-radius:7px; overflow:hidden;
+                  background:var(--c-surface-2); color:var(--c-text-2); font-size:28px; }
+      .cu-thumb img { width:100%; height:100%; object-fit:contain; }
+      .cu-name { font-size:12px; font-weight:600; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .cu-meta { font-size:11px; color:var(--c-text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .cu-dl { position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:7px; display:flex; align-items:center;
+               justify-content:center; background:rgba(0,0,0,.55); color:#fff; font-size:13px; }
+      .cu-tag { font-size:10.5px; font-weight:600; color:#2A5BFF; background:rgba(42,91,255,.1); padding:1px 6px; border-radius:99px; }
       .docs-forms { display:flex; flex-direction:column; gap:8px; border-bottom:1px solid var(--c-border); }
       .docs-tabs { display:flex; gap:4px; }
       .docs-tab { border:1px solid var(--c-border); background:var(--c-surface); color:var(--c-text-2);

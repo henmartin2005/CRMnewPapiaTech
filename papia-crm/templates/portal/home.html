@@ -61,6 +61,36 @@
 .doc .m span{font-size:12px;color:var(--muted)}
 .doc .btn{padding:7px 10px;font-size:13px}
 .stack{display:flex;flex-direction:column;gap:18px}
+.flash{border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;gap:8px;align-items:center}
+.flash.ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac}
+.flash.warn{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fcd34d}
+.flash.err{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fca5a5}
+.up-cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.up-cats input{position:absolute;opacity:0;pointer-events:none}
+.up-cats label{font-size:13px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);cursor:pointer;
+               display:inline-flex;gap:6px;align-items:center}
+.up-cats input:checked+label{background:rgba(91,140,255,.14);color:#c7d6ff;border-color:var(--accent)}
+.up-cats input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:22px 14px;
+      border:1.5px dashed var(--line);border-radius:14px;background:var(--bg2);cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:rgba(91,140,255,.06)}
+.drop i{font-size:26px;color:var(--accent)}
+.drop b{font-size:14px}.drop span{font-size:12px;color:var(--muted)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.up-picked{font-size:12px;color:var(--muted);margin-top:8px;word-break:break-word}
+.up-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.up-row input[type=text]{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);color:var(--text);
+                         border-radius:12px;padding:10px 12px;font:inherit;font-size:14px}
+.up-row .btn[disabled]{opacity:.5;cursor:not-allowed}
+.up-list{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.up-item{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
+.up-thumb{flex:0 0 48px;height:48px;border-radius:10px;background:#0e1424;border:1px solid var(--line);display:flex;
+          align-items:center;justify-content:center;overflow:hidden;font-size:22px;color:var(--muted)}
+.up-thumb img{width:100%;height:100%;object-fit:cover}
+.up-item .m{flex:1;min-width:0}.up-item .m b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-item .m span{font-size:12px;color:var(--muted)}
+.up-item .btn{padding:7px 10px;font-size:13px}
+.up-item form{margin:0}
 @media (max-width:820px){
   .grid{grid-template-columns:1fr}
 }
@@ -89,6 +119,10 @@
       {% if not preview %}<a class="btn" href="{{ url_for('portal.logout') }}"><i class="bi bi-box-arrow-right"></i> Salir</a>{% endif %}
     </div>
   </div>
+
+  {% if portal_flash %}
+  <div class="flash {{ portal_flash[0] }}" role="status"><i class="bi {{ 'bi-check-circle' if portal_flash[0] == 'ok' else 'bi-exclamation-triangle' }}"></i> {{ portal_flash[1] }}</div>
+  {% endif %}
 
   {% if bundles|length > 1 %}
   <div class="tabs">
@@ -195,6 +229,61 @@
         <div class="empty muted">Tu contrato aparecerá aquí en cuanto esté disponible.</div>
         {% endif %}
       </div>
+
+      <div class="card" id="mis-archivos">
+        <div class="sec-h"><h2><i class="bi bi-cloud-arrow-up"></i> Tus archivos</h2>{% if b.uploads %}<small>{{ b.uploads|length }}</small>{% endif %}</div>
+        <p class="muted" style="font-size:13px;margin:-6px 0 14px;line-height:1.45">Envíanos el logo de tu negocio, fotos o documentos para tu proyecto.</p>
+        <form method="POST" enctype="multipart/form-data" action="{{ url_for('portal.upload') }}" id="upForm">
+          <input type="hidden" name="client_id" value="{{ c.id }}">
+          <div class="up-cats" role="radiogroup" aria-label="Tipo de archivo">
+            {% for key, label in upload_categories %}
+            <input type="radio" name="category" id="cat-{{ key }}" value="{{ key }}" {{ 'checked' if loop.first }}>
+            <label for="cat-{{ key }}"><i class="bi {{ {'logo':'bi-patch-check','imagen':'bi-images','documento':'bi-file-earmark-text'}[key] }}"></i> {{ label }}</label>
+            {% endfor %}
+          </div>
+          <label class="drop" id="upDrop">
+            <input type="file" name="files" id="upFiles" multiple accept="{{ upload_accept }}">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <b>Toca para elegir o arrastra aquí</b>
+            <span>Imágenes, PDF, Word, Excel o ZIP · hasta {{ upload_max_files }} archivos · máx. {{ upload_max_mb }} MB c/u</span>
+          </label>
+          <div class="up-picked" id="upPicked"></div>
+          <div class="up-row">
+            <input type="text" name="title" maxlength="200" placeholder="Nota o título (opcional)">
+            <button type="submit" class="btn btn-primary" id="upBtn" disabled><i class="bi bi-upload"></i> Enviar</button>
+          </div>
+        </form>
+        {% if b.uploads %}
+        <div class="up-list">
+          {% for d in b.uploads %}
+          <div class="up-item">
+            <div class="up-thumb">{% if d.is_image %}<img src="{{ url_for('portal.open_doc', doc_id=d.id) }}" alt="" loading="lazy">{% else %}<i class="bi {{ d.icon }}"></i>{% endif %}</div>
+            <div class="m"><b>{{ d.title }}</b><span>{{ d.category_label }} · {{ (d.created_at or '')[:10] }}</span></div>
+            <a class="btn" target="_blank" rel="noopener" href="{{ url_for('portal.open_doc', doc_id=d.id) }}" title="Ver" aria-label="Ver {{ d.title }}"><i class="bi bi-eye"></i></a>
+            <form method="POST" action="{{ url_for('portal.delete_upload', doc_id=d.id) }}" onsubmit="return confirm('¿Eliminar este archivo?');">
+              <button type="submit" class="btn" title="Eliminar" aria-label="Eliminar {{ d.title }}"><i class="bi bi-trash"></i></button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <script>
+      (function(){
+        var input=document.getElementById('upFiles'),drop=document.getElementById('upDrop'),
+            picked=document.getElementById('upPicked'),btn=document.getElementById('upBtn'),
+            form=document.getElementById('upForm'),max={{ upload_max_files }};
+        function show(){
+          var n=input.files.length;btn.disabled=!n;
+          picked.textContent=n?(n>max?'Solo se enviarán los primeros '+max+': ':'')+Array.prototype.map.call(input.files,function(f){return f.name}).join(', '):'';
+        }
+        input.addEventListener('change',show);
+        ['dragenter','dragover'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.add('over')})});
+        ['dragleave','drop'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.remove('over')})});
+        drop.addEventListener('drop',function(ev){if(ev.dataTransfer&&ev.dataTransfer.files.length){input.files=ev.dataTransfer.files;show();}});
+        form.addEventListener('submit',function(){btn.disabled=true;btn.innerHTML='<i class="bi bi-hourglass-split"></i> Subiendo…';});
+      })();
+      </script>
     </div>
   </div>
 </div>

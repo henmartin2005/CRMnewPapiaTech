@@ -1,10 +1,16 @@
 """Portal del cliente: el cliente entra con Google (su email) y ve el avance de su
 proyecto (etapas de la Pizarra), el costo total / pagado / pendiente y su contrato."""
+import io
 import json
+import mimetypes
 import os
 import secrets
 import functools
 import urllib.parse
+import zipfile
+from uuid import uuid4
+
+from werkzeug.utils import secure_filename
 
 from flask import (Blueprint, render_template, request, session, redirect, url_for,
                    send_file, abort, jsonify, g)
@@ -15,11 +21,16 @@ portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
 
 GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 PUBLIC_ENDPOINTS = {'portal.login', 'portal.google_start', 'portal.logout', 'portal.home',
-                    'portal.open_doc'}
+                    'portal.open_doc', 'portal.open_contract', 'portal.upload', 'portal.delete_upload'}
 
 
 # ── Esquema ────────────────────────────────────────────────────────────────
 def ensure_portal_schema():
+    try:
+        from models.client_document import ensure_schema as _docs_schema
+        _docs_schema()  # crea client_documents + columnas del portal (uploaded_by, category…)
+    except Exception:
+        pass
     db = get_db()
     try:
         cols = {r[1] for r in db.execute("PRAGMA table_info(client_documents)").fetchall()}
@@ -134,9 +145,15 @@ def _client_bundle(client_id):
             docs = [dict(r) for r in db.execute(
                 "SELECT id, kind, title, original_name, mime_type, size_bytes, url, created_at "
                 "FROM client_documents WHERE client_id = ? AND org_id = ? AND portal_visible = 1 "
+                "AND COALESCE(uploaded_by, 'admin') != 'client' "
                 "ORDER BY created_at DESC, id DESC", (client_id, org_id)).fetchall()]
         except Exception:
             docs = []
+        try:
+            from models.client_document import list_client_uploads
+            uploads = list_client_uploads(client_id, org_id)
+        except Exception:
+            uploads = []
         contracts = []
         try:
             contracts = [dict(r) for r in db.execute(
@@ -163,6 +180,7 @@ def _client_bundle(client_id):
     return {'client': c, 'org': org, 'projects': projects, 'docs': docs, 'money': money,
             'contracts': contracts,
             'schedule': schedule,
+            'uploads': uploads,
             'overall_pct': int(round(overall_done * 100.0 / overall_total)) if overall_total else 0}
 
 
@@ -172,8 +190,13 @@ def _render_portal(client_ids, email, preview=False):
         return redirect(url_for('portal.login', err='no_client'))
     sel = request.args.get('c', type=int)
     current = next((b for b in bundles if b['client']['id'] == sel), bundles[0])
+    from models.client_document import CATEGORIES, CLIENT_ACCEPT_ATTR, MAX_FILE_BYTES, CLIENT_MAX_FILES
     return render_template('portal/home.html', b=current, bundles=bundles, email=email,
-                           preview=preview)
+                           preview=preview, upload_categories=CATEGORIES,
+                           upload_accept=CLIENT_ACCEPT_ATTR,
+                           upload_max_mb=MAX_FILE_BYTES // (1024 * 1024),
+                           upload_max_files=CLIENT_MAX_FILES,
+                           portal_flash=session.pop('portal_flash', None))
 
 
 # ── Rutas públicas (cliente) ───────────────────────────────────────────────
@@ -282,6 +305,129 @@ def open_contract(env_id):
                      download_name=name)
 
 
+# ── Archivos que sube el cliente (logo, imágenes, documentos) ─────────────
+def _portal_back(client_id, preview):
+    if preview:
+        return redirect(url_for('portal.admin_preview', client_id=client_id) + '#mis-archivos')
+    return redirect(url_for('portal.home', c=client_id) + '#mis-archivos')
+
+
+def _upload_target():
+    """Devuelve (client_id, org_id, preview) si quien sube puede escribir en ese cliente."""
+    client_id = request.form.get('client_id', type=int)
+    if not client_id:
+        return None
+    ids = session.get('portal_client_ids') or []
+    is_admin = bool(session.get('logged_in'))
+    db = get_db()
+    try:
+        row = db.execute("SELECT id, org_id FROM clients WHERE id = ?", (client_id,)).fetchone()
+    finally:
+        db.close()
+    if not row:
+        return None
+    org_id = row[1] or 1
+    if client_id in ids:
+        return client_id, org_id, False
+    if is_admin and org_id == _admin_org():   # vista previa del administrador
+        return client_id, org_id, True
+    return None
+
+
+def _notify_admin_upload(org_id, client_id, n):
+    try:
+        db = get_db()
+        try:
+            c = db.execute("SELECT first_name, last_name, company FROM clients WHERE id = ?",
+                           (client_id,)).fetchone()
+        finally:
+            db.close()
+        name = ' '.join(x for x in ((c[0] or ''), (c[1] or '')) if x).strip() if c else ''
+        name = name or (c[2] if c else '') or 'Un cliente'
+        from services.push import notify_event
+        notify_event(org_id, f'{name} subió {n} archivo(s)',
+                     'Desde el portal del cliente. Ábrelos en su perfil.',
+                     {'type': 'portal_upload', 'client_id': client_id})
+    except Exception:
+        pass
+
+
+@portal_bp.route('/upload', methods=['POST'])
+def upload():
+    target = _upload_target()
+    if not target:
+        if not session.get('portal_client_ids') and not session.get('logged_in'):
+            return redirect(url_for('portal.login'))
+        abort(403)
+    client_id, org_id, preview = target
+    from models.client_document import (CLIENT_ALLOWED_EXTS, CLIENT_MAX_FILES, MAX_FILE_BYTES,
+                                        CATEGORY_LABELS, add_client_upload, client_dir)
+    category = request.form.get('category', 'documento')
+    if category not in CATEGORY_LABELS:
+        category = 'documento'
+    files = [f for f in request.files.getlist('files') if f and f.filename][:CLIENT_MAX_FILES]
+    if not files:
+        session['portal_flash'] = ('err', 'Selecciona al menos un archivo.')
+        return _portal_back(client_id, preview)
+
+    note = (request.form.get('title') or '').strip()[:200]
+    folder = client_dir(org_id, client_id)
+    os.makedirs(folder, exist_ok=True)
+    saved, rejected = 0, []
+    for f in files:
+        original = f.filename
+        ext = original.rsplit('.', 1)[-1].lower() if '.' in original else ''
+        if ext not in CLIENT_ALLOWED_EXTS:
+            rejected.append(f'{original} (tipo no permitido)')
+            continue
+        safe = secure_filename(original) or f'archivo.{ext}'
+        stored = f'{uuid4().hex}_{safe}'
+        path = os.path.join(folder, stored)
+        f.save(path)
+        size = os.path.getsize(path)
+        if size > MAX_FILE_BYTES:
+            os.remove(path)
+            rejected.append(f'{original} (supera {MAX_FILE_BYTES // (1024 * 1024)} MB)')
+            continue
+        title = note if (note and len(files) == 1) else original
+        mime = mimetypes.guess_type(original)[0] or 'application/octet-stream'
+        add_client_upload(client_id, org_id, title, original, stored, mime, size, category)
+        saved += 1
+
+    if saved and not preview:
+        _notify_admin_upload(org_id, client_id, saved)
+    if saved and rejected:
+        session['portal_flash'] = ('warn', f'{saved} archivo(s) subido(s). No se subieron: ' + ', '.join(rejected))
+    elif saved:
+        session['portal_flash'] = ('ok', f'¡Listo! Recibimos {saved} archivo(s).')
+    else:
+        session['portal_flash'] = ('err', 'No se subió nada: ' + ', '.join(rejected))
+    return _portal_back(client_id, preview)
+
+
+@portal_bp.route('/upload/<int:doc_id>/delete', methods=['POST'])
+def delete_upload(doc_id):
+    """El cliente puede borrar lo que él mismo subió (no los documentos del proyecto)."""
+    ids = session.get('portal_client_ids') or []
+    is_admin = bool(session.get('logged_in'))
+    db = get_db()
+    try:
+        row = db.execute("SELECT client_id, org_id, uploaded_by FROM client_documents WHERE id = ?",
+                         (doc_id,)).fetchone()
+    finally:
+        db.close()
+    if not row or row[2] != 'client':
+        abort(404)
+    client_id, org_id = row[0], row[1]
+    preview = client_id not in ids
+    if preview and not (is_admin and org_id == _admin_org()):
+        abort(404)
+    from models.client_document import delete_document
+    delete_document(doc_id, client_id, org_id)
+    session['portal_flash'] = ('ok', 'Archivo eliminado.')
+    return _portal_back(client_id, preview)
+
+
 # ── Rutas de administrador ─────────────────────────────────────────────────
 @portal_bp.route('/admin/preview/<int:client_id>')
 @_admin_required
@@ -337,3 +483,40 @@ def admin_toggle_contract(env_id):
     if not client_id:
         return redirect(url_for('contracts.detail', env_id=env_id))
     return redirect(url_for('clients.detail', client_id=client_id) + '#contratos')
+
+
+@portal_bp.route('/admin/client/<int:client_id>/uploads.zip')
+@_admin_required
+def admin_uploads_zip(client_id):
+    """Descarga en un ZIP todo lo que subió el cliente, ordenado por categoría."""
+    from models.client_document import list_client_uploads, file_path, CATEGORY_LABELS
+    org_id = _admin_org()
+    db = get_db()
+    try:
+        c = db.execute("SELECT first_name, last_name, company FROM clients WHERE id = ? AND org_id = ?",
+                       (client_id, org_id)).fetchone()
+    finally:
+        db.close()
+    if not c:
+        abort(404)
+    buf = io.BytesIO()
+    used = set()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for d in list_client_uploads(client_id, org_id):
+            path = file_path(d)
+            if not os.path.isfile(path):
+                continue
+            folder = CATEGORY_LABELS.get(d.get('category') or '', 'Documentos')
+            name = secure_filename(d.get('original_name') or '') or d['stored_name']
+            arc = f'{folder}/{name}'
+            i = 1
+            while arc in used:
+                base, dot, ext = name.rpartition('.')
+                arc = f'{folder}/{base or name}-{i}{dot}{ext if base else ""}'
+                i += 1
+            used.add(arc)
+            zf.write(path, arc)
+    buf.seek(0)
+    label = secure_filename(c[2] or f'{c[0] or ""} {c[1] or ""}'.strip()) or f'cliente-{client_id}'
+    return send_file(buf, mimetype='application/zip', as_attachment=True,
+                     download_name=f'{label}-archivos.zip')
