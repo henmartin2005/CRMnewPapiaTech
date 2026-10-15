@@ -26,7 +26,7 @@ SCHED_TZ = ZoneInfo(os.getenv('APP_TIMEZONE', 'America/New_York'))
 from models.client_document import (
     ACCEPT_ATTR, ALLOWED_EXTS, MAX_FILE_BYTES, add_file_document, add_link_document,
     client_dir, delete_client_files, delete_document, file_path, get_document,
-    list_documents,
+    list_documents, mark_client_uploads_seen,
 )
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/clients')
@@ -105,6 +105,10 @@ def detail(client_id):
     notes = get_client_notes(client_id)
     followups = get_client_followups(client_id)
     documents = list_documents(client_id, org_id)
+    client_uploads = [d for d in documents if d.get('from_client')]
+    new_uploads = sum(1 for d in client_uploads if not d.get('admin_seen'))
+    if new_uploads:
+        mark_client_uploads_seen(client_id, org_id)
     try:
         from models.contract import list_envelopes
         contracts = list_envelopes(org_id, client_id=client_id, limit=20)
@@ -128,6 +132,8 @@ def detail(client_id):
         notes=notes,
         followups=followups,
         documents=documents,
+        client_uploads=client_uploads,
+        new_uploads=new_uploads,
         contracts=contracts,
         schedule=schedule,
         wa_messages=wa_messages,
