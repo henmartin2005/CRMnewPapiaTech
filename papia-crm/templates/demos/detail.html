@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}{{ link.negocio }} · Demo{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/demos.css') }}">{% endblock %}
+{% block content %}
+{% set tipo_label = {'entrada': 'Entró al demo', 'seccion_vista': 'Vio sección', 'salida': 'Salió', 'bloqueado': 'Intento bloqueado'} %}
+
+<div class="pg-header">
+  <div>
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('demos.index') }}">Demos</a></li>
+      <li class="breadcrumb-item active">{{ link.negocio }}</li>
+    </ol>
+    <h1 class="pg-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      {{ link.negocio }}
+      <span class="demo-badge demo-{{ link.estado }}">{{ link.estado_label }}</span>
+    </h1>
+    <p class="pg-sub">{{ link.nombre_prospecto }}{% if link.telefono %} · {{ link.telefono }}{% endif %} · {{ link.demo_nombre }}
+      {% if client %} · <a href="{{ url_for('clients.detail', client_id=client.id) }}">Ver lead</a>{% endif %}</p>
+  </div>
+  <div class="pg-actions">
+    <button class="btn btn-ghost btn-sm" data-copy="{{ link.mensaje }}"><i class="bi bi-clipboard"></i> Copiar mensaje</button>
+    {% if link.wa_href %}<a class="btn btn-primary btn-sm" href="{{ link.wa_href }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> Enviar por WhatsApp</a>{% endif %}
+  </div>
+</div>
+
+<div class="demo-detail-grid">
+  <div class="demo-col">
+    <section class="section-card">
+      <div class="card-header"><span class="card-header-left"><i class="bi bi-key"></i> Acceso</span></div>
+      <dl class="demo-dl">
+        <dt>Código</dt><dd><code class="demo-code lg">{{ link.codigo }}</code></dd>
+        <dt>Enlace</dt><dd><a href="{{ link.enlace }}" target="_blank" rel="noopener" class="demo-url">{{ link.enlace|replace('https://', '') }}</a>
+          <button class="btn btn-ghost btn-icon-xs" title="Copiar enlace" data-copy="{{ link.enlace }}"><i class="bi bi-link-45deg"></i></button></dd>
+        <dt>Visitas</dt><dd>{% if link.ilimitado %}{{ link.visitas_usadas }} · ilimitado{% else %}{{ link.visitas_usadas }} de {{ link.max_visitas }}{% endif %}</dd>
+        <dt>Vence</dt><dd>{{ link.vence_el|localdatetime }}</dd>
+        <dt>Dispositivo</dt><dd>{% if link.amarrar_dispositivo %}Amarrado al primero que lo abra{% if link.dispositivo_amarrado %} (ya amarrado){% endif %}{% else %}Cualquiera{% endif %}</dd>
+        <dt>Color</dt><dd><span class="demo-swatch sm" style="background:{{ link.color or link.demo_color }}"></span>{{ link.color or link.demo_color }}</dd>
+        <dt>Creado</dt><dd>{{ link.creado_el|localdatetime }}</dd>
+      </dl>
+    </section>
+
+    <section class="section-card">
+      <div class="card-header"><span class="card-header-left"><i class="bi bi-chat-text"></i> Mensaje para WhatsApp</span></div>
+      <pre class="demo-message">{{ link.mensaje }}</pre>
+    </section>
+
+    <section class="section-card">
+      <div class="card-header"><span class="card-header-left"><i class="bi bi-sliders"></i> Acciones</span></div>
+      <form method="post" action="{{ url_for('demos.link_action', link_id=link.id) }}" class="demo-actions">
+        <input type="hidden" name="csrf" value="{{ session.demos_csrf }}">
+        {% if link.activo %}
+          <button class="btn btn-ghost btn-sm" name="accion" value="desactivar"><i class="bi bi-pause-circle"></i> Desactivar</button>
+        {% else %}
+          <button class="btn btn-ghost btn-sm" name="accion" value="activar"><i class="bi bi-play-circle"></i> Activar</button>
+        {% endif %}
+        <button class="btn btn-ghost btn-sm" name="accion" value="extender"><i class="bi bi-calendar-plus"></i> +7 días</button>
+        <button class="btn btn-ghost btn-sm" name="accion" value="mas_visitas"><i class="bi bi-plus-circle"></i> +2 visitas</button>
+        <button class="btn btn-ghost btn-sm" name="accion" value="reiniciar"><i class="bi bi-arrow-counterclockwise"></i> Reiniciar visitas</button>
+        {% if link.ilimitado %}
+          <button class="btn btn-ghost btn-sm" name="accion" value="ilimitado_off"><i class="bi bi-infinity"></i> Quitar ilimitado</button>
+        {% else %}
+          <button class="btn btn-ghost btn-sm" name="accion" value="ilimitado_on"><i class="bi bi-infinity"></i> Hacer ilimitado</button>
+        {% endif %}
+        <button class="btn btn-danger btn-sm" name="accion" value="eliminar"
+                onclick="return confirm('¿Eliminar el código {{ link.codigo }} y su historial?');"><i class="bi bi-trash"></i> Eliminar</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="demo-col">
+    <div class="demo-stats compact">
+      <div class="demo-stat"><span>{{ link.entradas }}</span>Entradas</div>
+      <div class="demo-stat"><span>{{ link.segundos|demo_duration }}</span>Tiempo en el demo</div>
+      <div class="demo-stat"><span>{{ link.secciones_list|length }}</span>Secciones vistas</div>
+      <div class="demo-stat"><span>{{ link.bloqueos }}</span>Bloqueos</div>
+    </div>
+
+    {% if link.secciones_list %}
+    <section class="section-card">
+      <div class="card-header"><span class="card-header-left"><i class="bi bi-eye"></i> Lo que vio</span></div>
+      <div class="demo-sections" style="padding:14px 16px;">
+        {% for s in link.secciones_list %}<span class="demo-tag">{{ s }}</span>{% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="section-card">
+      <div class="card-header"><span class="card-header-left"><i class="bi bi-clock-history"></i> Actividad</span>
+        <span class="demo-muted">{{ logs|length }} evento{{ '' if logs|length == 1 else 's' }}</span></div>
+      <ol class="demo-timeline">
+        {% for e in logs %}
+        <li class="demo-ev demo-ev-{{ e.tipo }}">
+          <span class="demo-ev-dot"></span>
+          <div>
+            <strong>{{ tipo_label.get(e.tipo, e.tipo) }}{% if e.seccion %}: {{ e.seccion }}{% endif %}</strong>
+            <div class="demo-muted">{{ e.fecha_hora|localdatetime }}{% if e.dispositivo %} · {{ e.dispositivo }}{% endif %}{% if e.duracion_segundos %} · {{ e.duracion_segundos|demo_duration }}{% endif %}</div>
+          </div>
+        </li>
+        {% else %}
+        <li class="demo-muted" style="list-style:none;">Todavía no ha abierto el demo.</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/demos.js') }}"></script>{% endblock %}
