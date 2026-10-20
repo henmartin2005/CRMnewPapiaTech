@@ -30,6 +30,7 @@ Haz copia de `papia-crm/papia_crm.db` antes de migrar.
 git switch main && git pull origin main
 cd papia-crm
 python migrate_demos.py          # idempotente; también corre al arrancar Flask
+python import_grooming.py        # trae los 26 códigos de Groomingmiami con su historial (una vez)
 python -m unittest discover -s tests -v
 ```
 
@@ -60,7 +61,7 @@ Payload del webhook:
 Base: `https://datos.papiatech.com/api/demos`. Todas son `POST` con JSON. CORS solo para los
 orígenes permitidos. Límite: 20 validaciones por IP cada 10 minutos.
 
-**`/validar`** — el demo la llama cuando el prospecto entra (con `?c=CODIGO` o escribiendo el código).
+**`/validar`** — el demo la llama cuando el prospecto entra por su enlace `<demo>/d/CODIGO`.
 
 ```json
 // petición
@@ -81,6 +82,17 @@ la sesión; no vuelvas a llamar `/validar` al recargar la página.
 
 **`/evento`** — `{"token": "…", "tipo": "seccion_vista" | "salida", "seccion": "Agenda del dueño", "duracion": 42}`.
 `duracion` en segundos (0–7200). Máximo 400 eventos por código al día.
+
+## Cambio de Groomingmiami al CRM (orden importante)
+
+1. Merge del PR, `git pull`, `migrate_demos.py` e `import_grooming.py` en PythonAnywhere, Reload.
+2. Comprobar `https://datos.papiatech.com/demos`: aparecen los códigos de grooming.
+3. Recién entonces publicar en Lovable la versión de Groomingmiami que valida contra esta API.
+   Si se publica antes, los prospectos verían el demo bloqueado.
+4. Los códigos y registros viejos quedan intactos en Supabase como respaldo.
+
+Si entre la exportación (20 oct 2026) y la publicación hubo visitas nuevas, vuelve a exportar
+`data/grooming_*` antes del paso 1; `import_grooming.py` salta los códigos ya importados.
 
 ## Checklist en producción
 

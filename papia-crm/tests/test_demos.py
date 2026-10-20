@@ -82,6 +82,7 @@ class DemosTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn(link['codigo'].encode(), page.data)
         self.assertIn(b'wa.me/13059865677', page.data)
+        self.assertIn(f"groomingmiami.lovable.app/d/{link['codigo']}".encode(), page.data)
         self.assertEqual(self.browser.get('/demos').status_code, 200)
 
     def test_cannot_link_other_org_client(self):
@@ -188,6 +189,18 @@ class DemosTests(unittest.TestCase):
         leads = self.public.options('/api/new-lead', headers={
             'Origin': 'https://groomingmiami.lovable.app', 'Access-Control-Request-Method': 'POST'})
         self.assertIsNone(leads.headers.get('Access-Control-Allow-Origin'))
+
+    def test_import_grooming_idempotent(self):
+        import import_grooming
+        codes, events = import_grooming.run()
+        self.assertEqual(codes, 26)
+        self.assertGreater(events, 150)
+        self.assertEqual(import_grooming.run(), (0, 0))
+        lucas = self.q("SELECT * FROM demo_links WHERE codigo='LUCASMOBILE-NYPC'", one=True)
+        self.assertEqual((lucas['visitas_usadas'], lucas['max_visitas']), (3, 3))
+        bloqueos = self.q("SELECT COUNT(*) n FROM demo_logs WHERE link_id=? AND tipo='bloqueado'", (lucas['id'],), one=True)
+        self.assertEqual(bloqueos['n'], 2)
+        self.assertEqual(self.browser.get('/demos').status_code, 200)
 
     def test_client_profile_card(self):
         link = self.create(cliente_id='951')

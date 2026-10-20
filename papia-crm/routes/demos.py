@@ -75,7 +75,8 @@ def _link(ident):
 
 
 def demo_url(link):
-    return f"{link['demo_url'].rstrip('/')}/?c={link['codigo']}"
+    # Mismo formato que ya usa Groomingmiami: <demo>/d/<CODIGO>
+    return f"{link['demo_url'].rstrip('/')}/d/{link['codigo']}"
 
 
 def link_status(link):
