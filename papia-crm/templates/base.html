@@ -119,6 +119,15 @@
     </a></li>
     {% endif %}
 
+    {% if is_admin %}
+    <li><a href="{{ url_for('demos.index') }}" class="sb-link {% if request.blueprint == 'demos' %}active{% endif %}">
+      <i class="bi bi-display" aria-hidden="true"></i><span class="sb-label">Demos</span>
+      {% if demo_unread is defined and demo_unread > 0 %}
+        <span class="sb-wa-badge">{{ demo_unread }}</span>
+      {% endif %}
+    </a></li>
+    {% endif %}
+
     {% if 'chat' in enabled_modules %}
     <li>
       <a href="{{ url_for('internal_chat.index') }}"
