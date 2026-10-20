@@ -10,3 +10,4 @@ client_docs/
 *.bak-*
 *.db.bak*
 wa_media/
+contract_files/

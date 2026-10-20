@@ -1,0 +1,290 @@
+{% extends 'portal/_base.html' %}
+{% set c = b.client %}
+{% block title %}{{ c.first_name }} · Portal del cliente{% endblock %}
+{% block style %}
+.preview{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fcd34d;border-radius:12px;
+         padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{height:38px;max-width:140px;object-fit:contain}
+.brand .mark{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+             background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:18px}
+.brand b{display:block;font-size:15px}.brand span{font-size:12px}
+.who{display:flex;align-items:center;gap:10px;font-size:13px}
+.who .btn{padding:8px 12px;font-size:13px}
+.tabs{display:flex;gap:8px;overflow-x:auto;margin-bottom:16px;padding-bottom:4px}
+.tabs a{white-space:nowrap;padding:8px 14px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:13px}
+.tabs a.on{background:var(--card2);color:var(--text);border-color:var(--accent)}
+.hero{display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center;margin-bottom:18px}
+.ring{position:relative;width:150px;height:150px}
+.ring svg{transform:rotate(-90deg)}
+.ring .v{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .v b{font-size:34px;font-weight:800;letter-spacing:-1px}.ring .v span{font-size:12px;color:var(--muted)}
+.hero h1{margin:0 0 6px;font-size:26px;letter-spacing:-.4px}
+.hero .sub{font-size:14px;margin-bottom:14px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;
+      background:rgba(91,140,255,.14);color:#a9c1ff;border:1px solid rgba(91,140,255,.35)}
+.pill.ok{background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.35)}
+.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:18px}
+.sec-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.sec-h h2{font-size:16px;margin:0;display:flex;gap:8px;align-items:center}
+.sec-h small{font-size:12px;color:var(--muted)}
+.proj+.proj{margin-top:26px;padding-top:22px;border-top:1px dashed var(--line)}
+.proj-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:14px}
+.proj-h b{font-size:15px}
+.bar{height:8px;background:#0e1424;border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px}
+.flow{list-style:none;margin:16px 0 0;padding:0;position:relative}
+.flow li{position:relative;display:flex;gap:14px;padding:0 0 18px 0}
+.flow li:last-child{padding-bottom:0}
+.flow li:not(:last-child)::before{content:"";position:absolute;left:15px;top:32px;bottom:0;width:2px;background:var(--line)}
+.flow li.done:not(:last-child)::before{background:linear-gradient(var(--ok),var(--ok))}
+.dot{flex:0 0 32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;
+     border:2px solid var(--line);background:var(--bg2);color:var(--muted);z-index:1}
+.done .dot{background:var(--ok);border-color:var(--ok);color:#06210f}
+.doing .dot{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 6px rgba(91,140,255,.15);animation:pulse 2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 10px rgba(91,140,255,.05)}}
+.st{padding-top:5px}.st b{font-size:14px;font-weight:600}.st span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.done .st b{color:#cbd5e1}.todo .st b{color:var(--muted);font-weight:500}
+.empty{padding:22px;text-align:center;font-size:14px;border:1px dashed var(--line);border-radius:12px}
+.money .big{font-size:30px;font-weight:800;letter-spacing:-.5px;margin:2px 0 14px}
+.kv{display:flex;justify-content:space-between;font-size:14px;padding:9px 0;border-top:1px solid var(--line)}
+.kv b.ok{color:var(--ok)}.kv b.warn{color:var(--warn)}
+.sched{margin-top:14px}
+.sched .row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;padding:8px 0;border-top:1px solid var(--line)}
+.tag{font-size:11px;padding:3px 8px;border-radius:99px;font-weight:600}
+.tag.paid{background:rgba(34,197,94,.14);color:#86efac}.tag.pending{background:rgba(245,158,11,.14);color:#fcd34d}
+.docs{display:flex;flex-direction:column;gap:10px}
+.doc{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
+.doc i.ic{font-size:22px;color:#f87171}
+.doc .m{flex:1;min-width:0}.doc .m b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc .m span{font-size:12px;color:var(--muted)}
+.doc .btn{padding:7px 10px;font-size:13px}
+.stack{display:flex;flex-direction:column;gap:18px}
+.flash{border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;gap:8px;align-items:center}
+.flash.ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac}
+.flash.warn{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fcd34d}
+.flash.err{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fca5a5}
+.up-cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.up-cats input{position:absolute;opacity:0;pointer-events:none}
+.up-cats label{font-size:13px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);cursor:pointer;
+               display:inline-flex;gap:6px;align-items:center}
+.up-cats input:checked+label{background:rgba(91,140,255,.14);color:#c7d6ff;border-color:var(--accent)}
+.up-cats input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:22px 14px;
+      border:1.5px dashed var(--line);border-radius:14px;background:var(--bg2);cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:rgba(91,140,255,.06)}
+.drop i{font-size:26px;color:var(--accent)}
+.drop b{font-size:14px}.drop span{font-size:12px;color:var(--muted)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.up-picked{font-size:12px;color:var(--muted);margin-top:8px;word-break:break-word}
+.up-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.up-row input[type=text]{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);color:var(--text);
+                         border-radius:12px;padding:10px 12px;font:inherit;font-size:14px}
+.up-row .btn[disabled]{opacity:.5;cursor:not-allowed}
+.up-list{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.up-item{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
+.up-thumb{flex:0 0 48px;height:48px;border-radius:10px;background:#0e1424;border:1px solid var(--line);display:flex;
+          align-items:center;justify-content:center;overflow:hidden;font-size:22px;color:var(--muted)}
+.up-thumb img{width:100%;height:100%;object-fit:cover}
+.up-item .m{flex:1;min-width:0}.up-item .m b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-item .m span{font-size:12px;color:var(--muted)}
+.up-item .btn{padding:7px 10px;font-size:13px}
+.up-item form{margin:0}
+@media (max-width:820px){
+  .grid{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .hero{grid-template-columns:1fr;justify-items:center;text-align:center;gap:14px}
+  .ring{width:130px;height:130px}.ring svg{width:130px;height:130px}
+  .hero h1{font-size:21px}
+  .card{padding:18px}
+  .who span.mail{display:none}
+}
+{% endblock %}
+{% block body %}
+<div class="wrap">
+  {% if preview %}
+  <div class="preview"><i class="bi bi-eye"></i> Vista previa de administrador — así ve <b>{{ c.first_name }} {{ c.last_name }}</b> su portal ({{ email or 'sin email' }}).
+    <a href="{{ url_for('clients.detail', client_id=c.id) }}" style="margin-left:auto">← Volver al perfil</a></div>
+  {% endif %}
+
+  <div class="top">
+    <div class="brand">
+      {% if b.org.logo_url %}<img src="{{ b.org.logo_url }}" alt="{{ b.org.name }}">{% else %}<div class="mark"><i class="bi bi-kanban"></i></div>{% endif %}
+      <div><b>{{ b.org.name or 'Papia Tech' }}</b><span class="muted">Portal del cliente</span></div>
+    </div>
+    <div class="who">
+      <span class="muted mail"><i class="bi bi-person-circle"></i> {{ email }}</span>
+      {% if not preview %}<a class="btn" href="{{ url_for('portal.logout') }}"><i class="bi bi-box-arrow-right"></i> Salir</a>{% endif %}
+    </div>
+  </div>
+
+  {% if portal_flash %}
+  <div class="flash {{ portal_flash[0] }}" role="status"><i class="bi {{ 'bi-check-circle' if portal_flash[0] == 'ok' else 'bi-exclamation-triangle' }}"></i> {{ portal_flash[1] }}</div>
+  {% endif %}
+
+  {% if bundles|length > 1 %}
+  <div class="tabs">
+    {% for x in bundles %}
+    <a href="?c={{ x.client.id }}" class="{{ 'on' if x.client.id == c.id else '' }}">{{ x.client.company or x.client.project_type or ('Proyecto ' ~ loop.index) }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% set pct = b.overall_pct %}
+  {% set cur = namespace(s=None) %}
+  {% for p in b.projects %}{% for s in p.stages %}{% if s.state == 'doing' and not cur.s %}{% set cur.s = s %}{% endif %}{% endfor %}{% endfor %}
+  <div class="card hero">
+    <div class="ring">
+      <svg width="150" height="150" viewBox="0 0 150 150">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b8cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+        <circle cx="75" cy="75" r="64" fill="none" stroke="#1d2641" stroke-width="12"/>
+        <circle cx="75" cy="75" r="64" fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round"
+                stroke-dasharray="402.1" stroke-dashoffset="{{ 402.1 - 402.1 * pct / 100 }}"/>
+      </svg>
+      <div class="v"><b>{{ pct }}%</b><span>completado</span></div>
+    </div>
+    <div>
+      <div class="muted" style="font-size:13px;margin-bottom:4px">Hola, {{ c.first_name }} 👋</div>
+      <h1>{{ c.company or c.project_type or 'Tu proyecto' }}</h1>
+      <div class="sub muted">{{ c.project_type }}{% if b.projects %} · {{ b.projects|sum(attribute='done') }} de {{ b.projects|sum(attribute='total') }} etapas completadas{% endif %}</div>
+      {% if b.projects and pct == 100 %}
+        <span class="pill ok"><i class="bi bi-check2-circle"></i> Proyecto completado</span>
+      {% elif cur.s %}
+        <span class="pill"><i class="bi bi-lightning-charge"></i> Etapa actual: {{ cur.s.name }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="sec-h"><h2><i class="bi bi-diagram-3"></i> Avance del proyecto</h2>
+        {% if b.projects %}<small>Actualizado {{ b.projects[0].updated_at }}</small>{% endif %}</div>
+      {% if b.projects %}
+        {% for p in b.projects %}
+        <div class="proj">
+          <div class="proj-h"><b>{{ p.name }}</b><span class="muted" style="font-size:13px">{{ p.pct }}%</span></div>
+          <div class="bar"><i style="width:{{ p.pct }}%"></i></div>
+          {% if p.stages %}
+          <ol class="flow">
+            {% for s in p.stages %}
+            <li class="{{ s.state }}">
+              <div class="dot">{% if s.state == 'done' %}<i class="bi bi-check-lg"></i>{% elif s.state == 'doing' %}<i class="bi bi-arrow-repeat"></i>{% else %}{{ loop.index }}{% endif %}</div>
+              <div class="st"><b>{{ s.name }}</b><span>{% if s.state == 'done' %}Completada{% elif s.state == 'doing' %}En progreso{% else %}Pendiente{% endif %}</span></div>
+            </li>
+            {% endfor %}
+          </ol>
+          {% else %}
+          <div class="empty muted" style="margin-top:14px">Estamos definiendo las etapas de este proyecto.</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty muted">Aún no hay etapas publicadas para tu proyecto. Pronto verás aquí su avance.</div>
+      {% endif %}
+    </div>
+
+    <div class="stack">
+      <div class="card money">
+        <div class="sec-h"><h2><i class="bi bi-wallet2"></i> Inversión</h2></div>
+        <div class="muted" style="font-size:13px">Costo total del proyecto</div>
+        <div class="big">&#36;{{ '{:,.2f}'.format(b.money.total) }}</div>
+        <div class="bar"><i style="width:{{ b.money.pct }}%;background:linear-gradient(90deg,#16a34a,#22c55e)"></i></div>
+        <div class="kv" style="margin-top:12px;border-top:0"><span class="muted">Pagado</span><b class="ok">&#36;{{ '{:,.2f}'.format(b.money.paid) }}</b></div>
+        <div class="kv"><span class="muted">Pendiente</span><b class="{{ 'warn' if b.money.balance > 0 else 'ok' }}">&#36;{{ '{:,.2f}'.format(b.money.balance) }}</b></div>
+        {% if b.schedule %}
+        <div class="sched">
+          <div class="muted" style="font-size:12px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Plan de pagos</div>
+          {% for p in b.schedule %}
+          <div class="row"><span>{{ p.label }}<br><span class="muted" style="font-size:12px">{{ p.due_date }}</span></span>
+            <span style="text-align:right">&#36;{{ '{:,.2f}'.format(p.amount or 0) }}<br><span class="tag {{ p.status }}">{{ 'Pagado' if p.status == 'paid' else 'Pendiente' }}</span></span></div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <div class="sec-h"><h2><i class="bi bi-file-earmark-text"></i> Contrato y documentos</h2></div>
+        {% if b.docs or b.contracts %}
+        <div class="docs">
+          {% for k in b.contracts %}
+          <div class="doc">
+            <i class="bi bi-file-earmark-check ic" style="color:#22c55e"></i>
+            <div class="m"><b>{{ k.title }}</b><span>Firmado · {{ (k.updated_at or k.created_at or '')[:10] }}</span></div>
+            <a class="btn" target="_blank" rel="noopener" href="{{ url_for('portal.open_contract', env_id=k.id) }}" title="Ver"><i class="bi bi-eye"></i></a>
+            <a class="btn" href="{{ url_for('portal.open_contract', env_id=k.id, dl=1) }}" title="Descargar"><i class="bi bi-download"></i></a>
+          </div>
+          {% endfor %}
+          {% for d in b.docs %}
+          <div class="doc">
+            <i class="bi {{ 'bi-link-45deg' if d.kind == 'link' else ('bi-file-earmark-pdf' if (d.mime_type or '').endswith('pdf') or (d.original_name or '').lower().endswith('.pdf') else 'bi-file-earmark') }} ic"></i>
+            <div class="m"><b>{{ d.title }}</b><span>{{ (d.created_at or '')[:10] }}</span></div>
+            <a class="btn" target="_blank" rel="noopener" href="{{ url_for('portal.open_doc', doc_id=d.id) }}" title="Ver"><i class="bi bi-eye"></i></a>
+            {% if d.kind == 'file' %}<a class="btn" href="{{ url_for('portal.open_doc', doc_id=d.id, dl=1) }}" title="Descargar"><i class="bi bi-download"></i></a>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty muted">Tu contrato aparecerá aquí en cuanto esté disponible.</div>
+        {% endif %}
+      </div>
+
+      <div class="card" id="mis-archivos">
+        <div class="sec-h"><h2><i class="bi bi-cloud-arrow-up"></i> Tus archivos</h2>{% if b.uploads %}<small>{{ b.uploads|length }}</small>{% endif %}</div>
+        <p class="muted" style="font-size:13px;margin:-6px 0 14px;line-height:1.45">Envíanos el logo de tu negocio, fotos o documentos para tu proyecto.</p>
+        <form method="POST" enctype="multipart/form-data" action="{{ url_for('portal.upload') }}" id="upForm">
+          <input type="hidden" name="client_id" value="{{ c.id }}">
+          <div class="up-cats" role="radiogroup" aria-label="Tipo de archivo">
+            {% for key, label in upload_categories %}
+            <input type="radio" name="category" id="cat-{{ key }}" value="{{ key }}" {{ 'checked' if loop.first }}>
+            <label for="cat-{{ key }}"><i class="bi {{ {'logo':'bi-patch-check','imagen':'bi-images','documento':'bi-file-earmark-text'}[key] }}"></i> {{ label }}</label>
+            {% endfor %}
+          </div>
+          <label class="drop" id="upDrop">
+            <input type="file" name="files" id="upFiles" multiple accept="{{ upload_accept }}">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <b>Toca para elegir o arrastra aquí</b>
+            <span>Imágenes, PDF, Word, Excel o ZIP · hasta {{ upload_max_files }} archivos · máx. {{ upload_max_mb }} MB c/u</span>
+          </label>
+          <div class="up-picked" id="upPicked"></div>
+          <div class="up-row">
+            <input type="text" name="title" maxlength="200" placeholder="Nota o título (opcional)">
+            <button type="submit" class="btn btn-primary" id="upBtn" disabled><i class="bi bi-upload"></i> Enviar</button>
+          </div>
+        </form>
+        {% if b.uploads %}
+        <div class="up-list">
+          {% for d in b.uploads %}
+          <div class="up-item">
+            <div class="up-thumb">{% if d.is_image %}<img src="{{ url_for('portal.open_doc', doc_id=d.id) }}" alt="" loading="lazy">{% else %}<i class="bi {{ d.icon }}"></i>{% endif %}</div>
+            <div class="m"><b>{{ d.title }}</b><span>{{ d.category_label }} · {{ (d.created_at or '')[:10] }}</span></div>
+            <a class="btn" target="_blank" rel="noopener" href="{{ url_for('portal.open_doc', doc_id=d.id) }}" title="Ver" aria-label="Ver {{ d.title }}"><i class="bi bi-eye"></i></a>
+            <form method="POST" action="{{ url_for('portal.delete_upload', doc_id=d.id) }}" onsubmit="return confirm('¿Eliminar este archivo?');">
+              <button type="submit" class="btn" title="Eliminar" aria-label="Eliminar {{ d.title }}"><i class="bi bi-trash"></i></button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <script>
+      (function(){
+        var input=document.getElementById('upFiles'),drop=document.getElementById('upDrop'),
+            picked=document.getElementById('upPicked'),btn=document.getElementById('upBtn'),
+            form=document.getElementById('upForm'),max={{ upload_max_files }};
+        function show(){
+          var n=input.files.length;btn.disabled=!n;
+          picked.textContent=n?(n>max?'Solo se enviarán los primeros '+max+': ':'')+Array.prototype.map.call(input.files,function(f){return f.name}).join(', '):'';
+        }
+        input.addEventListener('change',show);
+        ['dragenter','dragover'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.add('over')})});
+        ['dragleave','drop'].forEach(function(e){drop.addEventListener(e,function(ev){ev.preventDefault();drop.classList.remove('over')})});
+        drop.addEventListener('drop',function(ev){if(ev.dataTransfer&&ev.dataTransfer.files.length){input.files=ev.dataTransfer.files;show();}});
+        form.addEventListener('submit',function(){btn.disabled=true;btn.innerHTML='<i class="bi bi-hourglass-split"></i> Subiendo…';});
+      })();
+      </script>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "contracts/public/_layout.html" %}
+{% block title %}Revisa y firma · {{ env.title }}{% endblock %}
+{% block subtitle %}{{ sender }} te envió un documento para firmar{% endblock %}
+{% block body %}
+<div class="ps-consent" id="consentBar">
+  <label>
+    <input type="checkbox" id="consent" {% if rc.consent_at %}checked{% endif %} />
+    <span><strong>{{ env.title }}</strong>
+      Acepto usar firmas y registros electrónicos para este documento.
+      <a href="#" id="disclosureLink">Ver divulgación (ESIGN / UETA)</a></span>
+  </label>
+  <button type="button" class="ps-btn primary" id="startBtn">Continuar</button>
+</div>
+{% if env.message %}
+<div style="padding:12px 20px;background:var(--aqua-soft);font-size:14px;color:var(--ink);">
+  <i class="bi bi-chat-left-text" style="color:var(--aqua-text);"></i> <b>Mensaje de {{ sender }}:</b> {{ env.message }}
+</div>
+{% endif %}
+
+<main class="ps-doc" id="doc" aria-label="Documento">
+  <div id="loading" class="ps-muted" style="padding:40px;">Cargando documento…</div>
+</main>
+
+<div class="ps-bottom">
+  <div class="ps-progress">
+    <span id="progressTxt" style="white-space:nowrap;">0 de 0 campos</span>
+    <div class="ps-bar" role="progressbar" aria-label="Progreso de firma" aria-valuemin="0" aria-valuemax="100" id="bar"><span style="width:0%"></span></div>
+  </div>
+  <div class="ps-actions">
+    <button type="button" class="ps-btn ghost" id="declineBtn">Rechazar</button>
+    <button type="button" class="ps-btn" id="nextBtn">Siguiente campo</button>
+    <button type="button" class="ps-btn primary" id="finishBtn" disabled>Finalizar</button>
+  </div>
+</div>
+
+<!-- Adoptar firma -->
+<div class="ps-modal-bg" id="adoptBg">
+  <div class="ps-modal" role="dialog" aria-modal="true" aria-labelledby="adoptTitle">
+    <div class="ps-modal-h">
+      <h2 id="adoptTitle" style="font-size:22px;">Adopta tu firma</h2>
+      <button type="button" class="ps-x" data-close aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="ps-grid2">
+      <label>Nombre completo<input class="ps-input" id="adoptName" maxlength="80" /></label>
+      <label>Iniciales<input class="ps-input" id="adoptInitials" maxlength="5" /></label>
+    </div>
+    <div class="ps-tabs" role="tablist">
+      <button type="button" class="ps-tab" role="tab" aria-selected="true" data-tab="type">Escribir</button>
+      <button type="button" class="ps-tab" role="tab" aria-selected="false" data-tab="draw">Dibujar</button>
+    </div>
+    <div class="ps-pane" data-pane="type" role="radiogroup" aria-label="Estilo de firma" id="stylePane"></div>
+    <div class="ps-pane ps-hidden" data-pane="draw">
+      <div class="ps-pad-wrap">
+        <canvas class="ps-pad" id="pad" aria-label="Área para dibujar tu firma"></canvas>
+        <div class="ps-pad-line"></div>
+        <div class="ps-pad-hint">Firma con el mouse o el dedo sobre la línea</div>
+        <button type="button" class="ps-btn ps-pad-clear" id="padClear">Borrar</button>
+      </div>
+    </div>
+    <p class="ps-legal">Al seleccionar <b>Adoptar y firmar</b> acepto que esta firma e iniciales serán la representación
+      electrónica de mi firma en este documento, con la misma validez que una firma manuscrita.</p>
+    <div class="ps-modal-f">
+      <button type="button" class="ps-btn" data-close>Cancelar</button>
+      <button type="button" class="ps-btn primary" id="adoptBtn">Adoptar y firmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rechazar -->
+<div class="ps-modal-bg" id="declineBg">
+  <div class="ps-modal" role="dialog" aria-modal="true" aria-labelledby="declTitle" style="max-width:480px;">
+    <div class="ps-modal-h">
+      <h2 id="declTitle" style="font-size:20px;">Rechazar firma</h2>
+      <button type="button" class="ps-x" data-close aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="ps-pane">
+      <label for="declReason" class="ps-muted">Cuéntale a {{ sender }} por qué no firmarás. El sobre quedará cancelado.</label>
+      <textarea id="declReason" class="ps-input" style="min-height:96px;padding:10px 14px;" maxlength="1000"></textarea>
+      <div class="ps-error" id="declErr" role="alert"></div>
+    </div>
+    <div class="ps-modal-f">
+      <button type="button" class="ps-btn" data-close>Volver</button>
+      <button type="button" class="ps-btn primary" id="declSend">Rechazar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Divulgación -->
+<div class="ps-modal-bg" id="discBg">
+  <div class="ps-modal" role="dialog" aria-modal="true" aria-labelledby="discTitle">
+    <div class="ps-modal-h">
+      <h2 id="discTitle" style="font-size:20px;">Divulgación de registros y firmas electrónicas</h2>
+      <button type="button" class="ps-x" data-close aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="ps-pane" style="font-size:14px;color:var(--muted);">
+      <p style="margin:0;">{{ org_name }} te envía este documento por medios electrónicos. Al marcar la casilla aceptas recibirlo
+        y firmarlo electrónicamente, conforme a la ley federal ESIGN y a la Ley Uniforme de Transacciones Electrónicas (UETA).</p>
+      <p style="margin:0;">Tu firma electrónica tendrá la misma validez que una firma manuscrita. Puedes pedir una copia en papel
+        o retirar tu consentimiento antes de firmar escribiendo a {{ org_name }}; retirarlo no tiene costo, pero el
+        documento deberá firmarse por otro medio.</p>
+      <p style="margin:0;">Necesitas un navegador actualizado y acceso a tu email o WhatsApp. Al terminar recibirás una copia
+        del documento firmado con su certificado de finalización.</p>
+    </div>
+    <div class="ps-modal-f"><button type="button" class="ps-btn primary" data-close>Entendido</button></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>window.PSIGN = {{ payload|tojson }};</script>
+<script src="{{ url_for('static', filename='js/contracts_sign.js') }}?v=1"></script>
+{% endblock %}

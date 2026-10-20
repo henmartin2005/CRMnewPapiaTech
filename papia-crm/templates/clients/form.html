@@ -67,12 +67,13 @@
 
         <div>
           <label class="form-label">Tipo de proyecto <span style="color:var(--c-danger);">*</span></label>
-          <select name="project_type" class="form-select" required>
-            <option value="">Seleccionar…</option>
-            {% for value, label in project_types %}
-              <option value="{{ value }}" {% if client.project_type == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
+          {% set _pt = namespace(v=client.project_type or '') %}{% for value, label in project_types %}{% if client.project_type == value %}{% set _pt.v = label %}{% endif %}{% endfor %}
+          <input type="text" name="project_type" class="form-control" required maxlength="120" list="projectTypeOptions"
+                 value="{{ _pt.v }}" placeholder="Ej: Landing Page + CRM, Dashboard Contabilidad…" autocomplete="off">
+          <datalist id="projectTypeOptions">
+            {% for value, label in project_types %}<option value="{{ label }}">{% endfor %}
+            <option value="Landing Page + CRM"><option value="Website + CRM"><option value="Dashboard"><option value="Tienda online"><option value="Automatización">
+          </datalist>
         </div>
 
         <div>
