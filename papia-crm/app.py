@@ -37,19 +37,33 @@ from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
 from routes.videos import videos_bp
+from routes.demos import demos_bp, demos_api_bp
 from migrate_videos import migrate as migrate_videos
 from routes.contracts import contracts_bp, contracts_public_bp
 from routes.portal import portal_bp
+from migrate_demos import migrate as migrate_demos
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
 app.permanent_session_lifetime = timedelta(days=7)
 
-# CORS solo para el endpoint público de leads
-CORS(app, resources={r"/api/*": {"origins": [
+# CORS: leads solo desde papiatech.com; la API de demos también desde los demos
+# publicados (Lovable o demo.papiatech.com). Orígenes extra: DEMO_ALLOWED_ORIGINS
+# separados por coma.
+_DEMO_ORIGINS = [
     "https://www.papiatech.com",
     "https://papiatech.com",
-]}})
+    "https://demo.papiatech.com",
+    r"https://[a-z0-9\-]+\.lovable\.app",
+] + [o.strip() for o in os.environ.get('DEMO_ALLOWED_ORIGINS', '').split(',') if o.strip()]
+CORS(app, resources={
+    r"/api/demos/*": {"origins": _DEMO_ORIGINS, "methods": ["POST", "OPTIONS"],
+                      "allow_headers": ["Content-Type"], "max_age": 600},
+    r"/api/*": {"origins": [
+        "https://www.papiatech.com",
+        "https://papiatech.com",
+    ]},
+})
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(leads_bp)
@@ -58,7 +72,10 @@ app.register_blueprint(emails_bp)
 # Init DB on every startup (safe: all statements use CREATE IF NOT EXISTS)
 init_db()
 migrate_videos()
+migrate_demos()
 app.register_blueprint(videos_bp)
+app.register_blueprint(demos_bp)
+app.register_blueprint(demos_api_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(payment_schedule_bp)
 app.register_blueprint(pipeline_bp)

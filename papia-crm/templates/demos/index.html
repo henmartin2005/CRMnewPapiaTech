@@ -1,0 +1,226 @@
+{% extends 'base.html' %}
+{% block title %}Demos{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/demos.css') }}">{% endblock %}
+{% block content %}
+
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title"><i class="bi bi-display"></i> Demos</h1>
+    <p class="pg-sub">Códigos de acceso por prospecto. Sabes quién abrió el demo, cuántas veces y qué vio.</p>
+  </div>
+  <div class="pg-actions">
+    <button class="btn btn-ghost btn-sm" data-bs-toggle="modal" data-bs-target="#demoModal" data-demo-new>
+      <i class="bi bi-collection"></i> Nuevo demo
+    </button>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#linkModal" {% if not demos %}disabled{% endif %}>
+      <i class="bi bi-plus"></i> Nuevo código
+    </button>
+  </div>
+</div>
+
+<!-- Resumen -->
+<div class="demo-stats">
+  <div class="demo-stat"><span>{{ total }}</span>Códigos</div>
+  <div class="demo-stat"><span>{{ counts.get('pendiente', 0) }}</span>Sin abrir</div>
+  <div class="demo-stat demo-stat-ok"><span>{{ counts.get('abierto', 0) }}</span>Abiertos</div>
+  <div class="demo-stat"><span>{{ counts.get('agotado', 0) + counts.get('vencido', 0) }}</span>Agotados o vencidos</div>
+</div>
+
+<!-- Catálogo de demos -->
+<section class="section-card demo-catalog">
+  <div class="card-header">
+    <span class="card-header-left"><i class="bi bi-collection"></i> Catálogo de demos</span>
+    <span class="demo-muted">{{ demos|length }} demo{{ '' if demos|length == 1 else 's' }}</span>
+  </div>
+  <div class="demo-catalog-grid">
+    {% for d in demos %}
+    <article class="demo-card {% if not d.activo %}is-off{% endif %}">
+      <span class="demo-swatch" style="background:{{ d.color }}"></span>
+      <div class="demo-card-body">
+        <strong>{{ d.nombre }}</strong>
+        <a href="{{ d.url }}" target="_blank" rel="noopener" class="demo-muted demo-url">{{ d.url|replace('https://', '') }}</a>
+        <span class="demo-muted">{{ d.enlaces }} código{{ '' if d.enlaces == 1 else 's' }}{% if not d.activo %} · pausado{% endif %}</span>
+      </div>
+      <div class="demo-card-actions">
+        <a class="btn btn-ghost btn-xs" href="{{ url_for('demos.index', demo=d.id) }}">Ver códigos</a>
+        <button class="btn btn-ghost btn-xs" data-bs-toggle="modal" data-bs-target="#demoModal"
+                data-demo='{{ {"id": d.id, "nombre": d.nombre, "slug": d.slug, "url": d.url, "color": d.color, "mensaje": d.mensaje, "activo": d.activo}|tojson|forceescape }}'>
+          Editar
+        </button>
+      </div>
+    </article>
+    {% else %}
+    <p class="demo-muted" style="padding:16px;">Agrega tu primer demo con <strong>Nuevo demo</strong>: nombre, enlace del demo publicado y color.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- Filtros -->
+<div class="toolbar">
+  <div class="toolbar-left">
+    <form method="get" action="{{ url_for('demos.index') }}">
+      {% if demo_filter %}<input type="hidden" name="demo" value="{{ demo_filter }}">{% endif %}
+      {% if estado %}<input type="hidden" name="estado" value="{{ estado }}">{% endif %}
+      <div class="search-wrap">
+        <i class="bi bi-search"></i>
+        <input type="text" name="q" class="search-input" placeholder="Buscar negocio, prospecto o código…" value="{{ q }}" autocomplete="off">
+      </div>
+    </form>
+    <div class="filter-chips">
+      {% for val, label in filters %}
+        <a class="chip {% if estado == val %}active{% endif %}"
+           href="{{ url_for('demos.index', estado=val or None, demo=demo_filter, q=q or None) }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% if demo_filter or q %}
+  <div class="toolbar-right"><a class="btn btn-ghost btn-xs" href="{{ url_for('demos.index') }}"><i class="bi bi-x"></i> Quitar filtros</a></div>
+  {% endif %}
+</div>
+
+<!-- Códigos -->
+<div class="section-card" style="padding:0;overflow:auto;">
+  <table class="crm-table demo-table">
+    <thead>
+      <tr>
+        <th>Negocio</th>
+        <th class="d-none d-sm-table-cell">Demo</th>
+        <th>Código</th>
+        <th>Estado</th>
+        <th class="num">Visitas</th>
+        <th class="d-none d-md-table-cell">Última actividad</th>
+        <th class="d-none d-lg-table-cell">Vio</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for l in links %}
+      <tr>
+        <td>
+          <a href="{{ url_for('demos.detail', link_id=l.id) }}"><strong>{{ l.negocio }}</strong></a>
+          <div class="demo-muted">{{ l.nombre_prospecto }}{% if l.telefono %} · {{ l.telefono }}{% endif %}</div>
+        </td>
+        <td class="d-none d-sm-table-cell"><span class="demo-swatch sm" style="background:{{ l.color or l.demo_color }}"></span>{{ l.demo_nombre }}</td>
+        <td><code class="demo-code">{{ l.codigo }}</code></td>
+        <td><span class="demo-badge demo-{{ l.estado }}">{{ l.estado_label }}</span></td>
+        <td class="num">{% if l.ilimitado %}{{ l.visitas_usadas }} / ∞{% else %}{{ l.visitas_usadas }} / {{ l.max_visitas }}{% endif %}
+          {% if l.bloqueos %}<div class="demo-muted" title="Intentos bloqueados">{{ l.bloqueos }} bloq.</div>{% endif %}</td>
+        <td class="d-none d-md-table-cell">
+          {% if l.ultima_actividad %}{{ l.ultima_actividad|localdatetime }}
+            <div class="demo-muted">{{ l.ultimo_dispositivo or '' }}</div>
+          {% else %}<span class="demo-muted">—</span>{% endif %}
+        </td>
+        <td class="d-none d-lg-table-cell demo-sections">
+          {% for s in l.secciones_list[:4] %}<span class="demo-tag">{{ s }}</span>{% endfor %}
+          {% if l.secciones_list|length > 4 %}<span class="demo-muted">+{{ l.secciones_list|length - 4 }}</span>{% endif %}
+          {% if l.segundos %}<div class="demo-muted">{{ l.segundos|demo_duration }}</div>{% endif %}
+        </td>
+        <td class="demo-row-actions">
+          <button class="btn btn-ghost btn-icon-xs" title="Copiar mensaje" data-copy="{{ l.mensaje }}"><i class="bi bi-clipboard"></i></button>
+          {% if l.wa_href %}<a class="btn btn-ghost btn-icon-xs" title="Abrir en WhatsApp" href="{{ l.wa_href }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp" style="color:#25D366;"></i></a>{% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8"><div class="empty"><i class="bi bi-display"></i><p>No hay códigos para este filtro.</p></div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal: nuevo código -->
+<div class="modal fade" id="linkModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" action="{{ url_for('demos.create_link') }}">
+      <input type="hidden" name="csrf" value="{{ session.demos_csrf }}">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo código de acceso</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body demo-form">
+        <label class="form-label">Demo
+          <select class="form-select" name="demo_id" required>
+            {% for d in demos if d.activo %}<option value="{{ d.id }}" data-color="{{ d.color }}">{{ d.nombre }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="form-label">Lead existente (opcional)
+          <select class="form-select" name="cliente_id" id="leadSelect">
+            <option value="">— Ninguno —</option>
+            {% for c in clients %}<option value="{{ c.id }}" data-name="{{ c.first_name }} {{ c.last_name }}" data-company="{{ c.company or '' }}" data-phone="{{ c.phone or '' }}">{{ c.company or (c.first_name ~ ' ' ~ c.last_name) }}{% if c.company %} · {{ c.first_name }}{% endif %}</option>{% endfor %}
+          </select>
+        </label>
+        <div class="demo-form-row">
+          <label class="form-label">Negocio
+            <input class="form-control" name="negocio" required maxlength="120" placeholder="INNA Beauty Salon">
+          </label>
+          <label class="form-label">Prospecto
+            <input class="form-control" name="nombre_prospecto" required maxlength="120" placeholder="Inna">
+          </label>
+        </div>
+        <div class="demo-form-row">
+          <label class="form-label">WhatsApp
+            <input class="form-control" name="telefono" maxlength="20" placeholder="305-986-5677">
+          </label>
+          <label class="form-label">Color de su marca
+            <input class="form-control form-control-color" type="color" name="color" value="#2A5BFF">
+          </label>
+        </div>
+        <div class="demo-form-row">
+          <label class="form-label">Visitas
+            <input class="form-control" type="number" name="max_visitas" min="1" max="50" value="{{ default_visits }}">
+          </label>
+          <label class="form-label">Vence en (días)
+            <input class="form-control" type="number" name="dias" min="1" max="90" value="{{ default_days }}">
+          </label>
+        </div>
+        <label class="demo-check" id="crearLeadWrap"><input type="checkbox" name="crear_lead" value="1" checked> Crear lead en Clientes (así el aviso crea una tarea en su perfil)</label>
+        <label class="demo-check"><input type="checkbox" name="amarrar_dispositivo" value="1"> Solo funciona en el primer dispositivo que lo abra</label>
+        <label class="demo-check"><input type="checkbox" name="ilimitado" value="1"> Ilimitado (para ti o para presentaciones)</label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary btn-sm">Crear código</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: demo del catálogo -->
+<div class="modal fade" id="demoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" action="{{ url_for('demos.save_demo') }}">
+      <input type="hidden" name="csrf" value="{{ session.demos_csrf }}">
+      <input type="hidden" name="demo_id" value="">
+      <div class="modal-header">
+        <h5 class="modal-title" data-title>Nuevo demo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body demo-form">
+        <div class="demo-form-row">
+          <label class="form-label">Nombre
+            <input class="form-control" name="nombre" required maxlength="80" placeholder="Barbería">
+          </label>
+          <label class="form-label">Identificador (nicho)
+            <input class="form-control" name="slug" required pattern="[a-z0-9][a-z0-9\-]{1,30}" placeholder="barberia">
+          </label>
+        </div>
+        <label class="form-label">Enlace del demo publicado
+          <input class="form-control" name="url" type="url" required placeholder="https://demo.papiatech.com">
+        </label>
+        <label class="form-label">Color por defecto
+          <input class="form-control form-control-color" type="color" name="color" value="#2A5BFF">
+        </label>
+        <label class="form-label">Mensaje de WhatsApp (opcional)
+          <textarea class="form-control" name="mensaje" rows="4" maxlength="1500" placeholder="Hola {nombre}, preparé un demo para {negocio}: {enlace} · Código {codigo}, válido {dias} días."></textarea>
+          <span class="demo-muted">Variables: {nombre} {negocio} {enlace} {codigo} {dias}. Vacío = mensaje estándar.</span>
+        </label>
+        <label class="demo-check"><input type="checkbox" name="activo" value="1" checked> Activo</label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary btn-sm">Guardar demo</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/demos.js') }}"></script>{% endblock %}

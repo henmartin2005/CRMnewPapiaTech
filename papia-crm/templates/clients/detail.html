@@ -3,6 +3,7 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/profile_board.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/demos.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -47,6 +48,27 @@
       <p style="color:var(--c-text-2);margin:12px 0 0;">Este cliente todavía no tiene videos.</p>
     {% endfor %}
   </section>
+  {% endif %}
+
+  {% if is_admin %}
+  {% set _demo_links = client_demo_links(client.id) %}
+  {% if _demo_links %}
+  <section class="card" style="padding:16px;margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <h2 style="font-size:16px;margin:0;"><i class="bi bi-display" aria-hidden="true"></i> Demo</h2>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('demos.index', q=client.company or client.first_name) }}">Ver en Demos</a>
+    </div>
+    {% for dl in _demo_links %}
+      <a href="{{ url_for('demos.detail', link_id=dl.id) }}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:10px;">
+        <code>{{ dl.codigo }}</code>
+        <span class="demo-badge demo-{{ dl.estado }}">{{ dl.estado_label }}</span>
+        <span style="color:var(--c-text-2);">{{ dl.demo_nombre }} · {{ dl.entradas }} entrada{{ '' if dl.entradas == 1 else 's' }}
+          {% if dl.ultima_actividad %}· última {{ dl.ultima_actividad|localdatetime }}{% endif %}
+          {% if dl.secciones_list %}· vio: {{ dl.secciones_list|join(', ') }}{% endif %}</span>
+      </a>
+    {% endfor %}
+  </section>
+  {% endif %}
   {% endif %}
 
 <div class="detail-grid">
