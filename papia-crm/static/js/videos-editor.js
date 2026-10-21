@@ -1,4 +1,6 @@
 import {api, upload, downloadDrive, message} from './videos-api.js';
+import {mediaFile, droppedFiles, isFileDrag} from './videos-import.js';
+import {videoDuration, imageForRendering, compatiblePreview, PHOTO_DURATION} from './videos-media.js';
 const $ = id => document.getElementById(id);
 const source = JSON.parse($('videos-data').textContent).source;
 const library = JSON.parse($('drive-items').textContent);
@@ -46,25 +48,32 @@ function warnSize(blob) {
 }
 
 async function addClip(blob, name, parent = null) {
-  const url = URL.createObjectURL(blob);
-  const probe = document.createElement('video');
-  probe.preload = 'metadata';
+  let url = URL.createObjectURL(blob);
+  const image = blob.type.startsWith('image/');
+  let renderBlob = blob;
   try {
-    const duration = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('No se pudo leer la duración del clip.')), 20000);
-      probe.onloadedmetadata = () => { clearTimeout(timer); resolve(probe.duration); };
-      probe.onerror = () => { clearTimeout(timer); reject(new Error('El navegador no puede leer este formato de video.')); };
-      probe.src = url;
-    });
+    let duration;
+    if (!image) {
+      try { duration = await videoDuration(url,controller?.signal); }
+      catch (error) { if (error.name === 'AbortError') throw error; }
+    }
+    if (duration === undefined) {
+      message(image ? 'Preparando la foto como clip de 5 segundos…' : 'Preparando una vista previa compatible del video de iPhone. El archivo original se conserva.');
+      if (image) renderBlob = await imageForRendering(blob,controller?.signal);
+      const ffmpeg = await loadEngine();
+      phase = {base:0,weight:100,label:image ? 'Preparando foto…' : 'Adaptando la vista previa del video…'};
+      const preview = await compatiblePreview(ffmpeg,renderBlob,image,controller?.signal);
+      URL.revokeObjectURL(url); url = URL.createObjectURL(preview);
+      duration = image ? PHOTO_DURATION : await videoDuration(url,controller?.signal);
+    }
     if (!Number.isFinite(duration) || duration <= 0) throw new Error('La duración del clip no es válida.');
     const clip = {id: crypto.randomUUID(), blob, name, url, duration, start: 0, end: duration,
-      speed: 1, parent, uploadState: {}, saved: Boolean(parent)};
+      speed: 1, parent, image, renderBlob, uploadState: {}, saved: Boolean(parent)};
     clips.push(clip);
     selectClip(clip);
     renderTimeline();
     createThumbnail(clip);
   } catch (error) { URL.revokeObjectURL(url); throw error; }
-  finally { probe.removeAttribute('src'); probe.load(); }
 }
 
 function selectClip(clip) {
@@ -147,22 +156,58 @@ async function addDrive(item) {
   message('Descargando el clip directamente desde Google Drive…');
   const blob = await downloadDrive(item, controller.signal);
   if (!item.size_bytes && !warnSize(blob)) return;
-  await addClip(blob, item.titulo, item.id);
+  const media = (!blob.type || blob.type === 'application/octet-stream') && item.mime_type
+    ? new Blob([blob], {type:item.mime_type}) : blob;
+  await addClip(media, item.titulo, item.id);
   message('Clip añadido a la línea de tiempo.');
 }
 
+async function importClips(files) {
+  if (busy) { message('Espera a que termine la operación actual antes de agregar videos.', true); return; }
+  if (!files.length) { message('Arrastra archivos de video desde tu equipo.', true); return; }
+  controller = new AbortController();
+  setBusy(true);
+  let added = 0;
+  let photos = 0;
+  const errors = [];
+  try {
+    for (const file of files) {
+      if (controller.signal.aborted) break;
+      const clip = mediaFile(file);
+      if (!clip) { errors.push(`${file.name}: importa un video MOV/MP4 o una foto JPEG, PNG o WebP.`); continue; }
+      if (!warnSize(clip)) continue;
+      try {
+        progress(added / files.length * 100, `Importando ${file.name}…`);
+        await addClip(clip, clip.name);
+        added++;
+        if (clip.type.startsWith('image/')) photos++;
+      } catch (error) {
+        if (controller.signal.aborted || error.name === 'AbortError') break;
+        errors.push(`${file.name}: ${error.message}`);
+      }
+    }
+    const success = added ? `${added} ${added === 1 ? 'clip agregado' : 'clips agregados'} a la línea de tiempo.` + (photos ? ' Las fotos duran 5 segundos. Para conservar el movimiento de un video o Live Photo, importa el MOV original.' : '') : '';
+    message([success, ...errors, controller.signal.aborted ? 'Importación cancelada.' : ''].filter(Boolean).join(' ') || 'Importación cancelada.', errors.length > 0);
+    progress(controller.signal.aborted ? $('video-progress').value : 100,
+      controller.signal.aborted ? 'Importación cancelada' : added ? 'Clips listos para editar' : 'No se agregaron clips');
+  } finally { releaseImportEngine(); setBusy(false); }
+}
 $('clip-files').onchange = async event => {
-  const files = [...event.target.files]; setBusy(true);
-  try { for (const file of files) if (warnSize(file)) await addClip(file, file.name); }
-  catch (error) { message(error.message, true); }
-  finally { setBusy(false); event.target.value = ''; }
+  const files = [...event.target.files];
+  event.target.value = '';
+  await importClips(files);
 };
 $('add-drive').onclick = async () => {
   controller = new AbortController(); setBusy(true);
   try { await addDrive(library.find(v => v.id === Number($('drive-source').value))); }
   catch (error) { message(error.message, true); }
-  finally { setBusy(false); }
+  finally { releaseImportEngine(); setBusy(false); }
 };
+
+function releaseImportEngine() {
+  if (engine) {engine.terminate();engine=null;}
+  for (const url of blobUrls.splice(0)) URL.revokeObjectURL(url);
+}
 
 async function toBlobURL(url, mime) {
   const response = await fetch(url, {signal: controller.signal});
@@ -211,10 +256,10 @@ async function compile() {
   let elapsed = 0;
   for (let i=0; i<clips.length; i++) {
     const clip = clips[i];
-    const ext = (clip.name.split('.').pop() || 'mp4').replace(/[^a-zA-Z0-9]/g,'').slice(0,8) || 'mp4';
+    const ext = clip.image ? 'jpg' : (clip.name.split('.').pop() || 'mp4').replace(/[^a-zA-Z0-9]/g,'').slice(0,8) || 'mp4';
     const input = `input${i}.${ext}`;
     const duration = (clip.end-clip.start)/clip.speed;
-    await engine.writeFile(input, new Uint8Array(await clip.blob.arrayBuffer()));
+    await engine.writeFile(input, new Uint8Array(await (clip.renderBlob || clip.blob).arrayBuffer()));
     // The 0.12.10 core can return -1 even after writing valid ffprobe JSON.
     // Validate the actual output, and never reuse a preceding clip's report.
     try { await engine.deleteFile('probe.json'); } catch {}
@@ -223,7 +268,7 @@ async function compile() {
     if (!Array.isArray(info.streams) || !info.streams.some(s => s.codec_type === 'video')) throw new Error('No se pudo analizar el clip.');
     const hasAudio = info.streams.some(s => s.codec_type === 'audio');
     phase = {base: elapsed/total*65, weight: duration/total*65, label: `Procesando clip ${i+1} de ${clips.length}…`};
-    await execute(['-ss',String(clip.start),'-t',String(clip.end-clip.start),'-i',input,
+    await execute([...(clip.image ? ['-loop','1','-framerate','30'] : []),'-ss',String(clip.start),'-t',String(clip.end-clip.start),'-i',input,
       '-f','lavfi','-i','anullsrc=channel_layout=stereo:sample_rate=48000',
       '-filter_complex',`[0:v]setpts=(PTS-STARTPTS)/${clip.speed},${fit},setsar=1,fps=30,format=yuv420p[v];`+
         (hasAudio ? `[0:a]asetpts=PTS-STARTPTS,atempo=${clip.speed},aresample=48000,apad[a]` : '[1:a]anull[a]'),
@@ -318,7 +363,7 @@ window.addEventListener('pagehide', () => {for(const c of clips)URL.revokeObject
 async function initialize() {
   controller = new AbortController();setBusy(true);
   try {await api('token');$('drive-connect').hidden=true;if(source)await addDrive(source);}
-  catch(error){message(error.message,true);}finally{setBusy(false);}
+  catch(error){message(error.message,true);}finally{releaseImportEngine();setBusy(false);}
 }
 initialize();
 
@@ -533,15 +578,32 @@ $('timeline-ruler').onclick = event => {
   }
 };
 const zone = $('import-zone');
-zone.addEventListener('dragover', event => { event.preventDefault(); if (!busy) zone.classList.add('is-dragover'); });
-zone.addEventListener('dragleave', () => zone.classList.remove('is-dragover'));
+zone.addEventListener('dragenter', event => {
+  if (!isFileDrag(event.dataTransfer)) return;
+  event.preventDefault();
+  if (!busy) zone.classList.add('is-dragover');
+});
+zone.addEventListener('dragover', event => {
+  if (!isFileDrag(event.dataTransfer)) return;
+  event.preventDefault(); event.stopPropagation();
+  event.dataTransfer.dropEffect = busy ? 'none' : 'copy';
+  if (!busy) zone.classList.add('is-dragover');
+});
+zone.addEventListener('dragleave', event => {
+  if (!zone.contains(event.relatedTarget)) zone.classList.remove('is-dragover');
+});
 zone.addEventListener('drop', async event => {
-  event.preventDefault(); zone.classList.remove('is-dragover'); if (busy) return;
-  const files = [...event.dataTransfer.files].filter(file => file.type.startsWith('video/'));
-  setBusy(true);
-  try { for (const file of files) if (warnSize(file)) await addClip(file, file.name); }
-  catch (error) { message(error.message, true); }
-  finally { setBusy(false); }
+  event.preventDefault(); event.stopPropagation(); zone.classList.remove('is-dragover');
+  // Read files synchronously: browsers clear the transfer after this event.
+  await importClips(droppedFiles(event.dataTransfer));
+});
+window.addEventListener('dragover', event => {
+  if (isFileDrag(event.dataTransfer)) event.preventDefault();
+});
+window.addEventListener('drop', event => {
+  if (!isFileDrag(event.dataTransfer)) return;
+  event.preventDefault(); zone.classList.remove('is-dragover');
+  message('Suelta los videos en «Importar archivos» para agregarlos a la línea de tiempo.');
 });
 new ResizeObserver(fitCanvas).observe(document.querySelector('.studio-stage'));
 updateStudio(); updateFormat();
