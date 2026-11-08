@@ -675,6 +675,30 @@
         <div style="font-size:13px;opacity:.8;line-height:1.45;">El cliente entra con Google usando <b>{{ client.email }}</b> y ve el avance de su pizarra, el costo total y los contratos firmados y documentos que marques con <i class="bi bi-eye-fill" style="color:#22c55e;"></i>. Desde ahí también puede subirte su logo, imágenes y documentos (aparecen en <a href="#documentos">Documentos</a>).</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <a class="btn btn-ghost" target="_blank" href="{{ url_for('portal.admin_preview', client_id=client.id) }}"><i class="bi bi-eye"></i> Vista previa</a>
+        </div>
+        {% if onboarding %}
+        <div class="ob-box" style="border:1px solid rgba(128,128,128,.25);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <b style="font-size:14px;"><i class="bi bi-rocket-takeoff" style="margin-right:5px;"></i>Onboarding</b>
+            {% if onboarding.status == 'submitted' %}
+              <span style="font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:rgba(34,197,94,.15);color:#16a34a;">Enviado {{ (onboarding.submitted_at or '')[:10] }}</span>
+              {% if not onboarding.admin_seen %}<span style="font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:rgba(42,91,255,.15);color:#2a5bff;">Nuevo</span>{% endif %}
+            {% elif onboarding.exists %}
+              <span style="font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:rgba(245,158,11,.15);color:#d97706;">En progreso</span>
+            {% else %}
+              <span style="font-size:12px;opacity:.7;">Sin empezar</span>
+            {% endif %}
+            <span style="margin-left:auto;font-size:13px;font-weight:600;">{{ onboarding.pct }}%</span>
+          </div>
+          <div style="height:6px;border-radius:99px;background:rgba(128,128,128,.2);overflow:hidden;"><i style="display:block;height:100%;width:{{ onboarding.pct }}%;background:linear-gradient(90deg,#2a5bff,#22d3ee);"></i></div>
+          <div style="font-size:12px;opacity:.75;">{{ onboarding.sections_done }} de {{ onboarding.sections_total }} secciones completas{% if onboarding.updated_at %} · última edición {{ onboarding.updated_at[:16] }}{% endif %}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a class="btn btn-ghost btn-sm" target="_blank" href="{{ url_for('portal.admin_onboarding', client_id=client.id) }}"><i class="bi bi-pencil-square"></i> Abrir / completar</a>
+            <a class="btn btn-ghost btn-sm" target="_blank" href="{{ url_for('portal.admin_onboarding_answers', client_id=client.id) }}"><i class="bi bi-list-check"></i> Ver respuestas</a>
+          </div>
+        </div>
+        {% endif %}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button type="button" class="btn btn-ghost" data-url="https://{{ request.host }}{{ url_for('portal.login') }}" onclick="navigator.clipboard.writeText(this.dataset.url);this.textContent='Enlace copiado ✓';"><i class="bi bi-link-45deg"></i> Copiar enlace del portal</button>
           <button type="button" class="btn btn-ghost" id="portalInviteBtn" data-client-id="{{ client.id }}" data-email="{{ client.email }}" data-name="{{ client.first_name }}" data-url="https://{{ request.host }}{{ url_for('portal.login') }}"><i class="bi bi-send"></i> Enviar acceso por email</button>
         </div>

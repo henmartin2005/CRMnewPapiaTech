@@ -1,0 +1,475 @@
+{% extends 'portal/_base.html' %}
+{% set c = b.client %}
+{% block title %}{{ tpl.title }} · {{ c.company or c.first_name }}{% endblock %}
+{% block style %}
+.preview{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fcd34d;border-radius:12px;
+         padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.preview a{color:#fde68a;text-decoration:underline}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{height:34px;max-width:130px;object-fit:contain}
+.brand .mark{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+             background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:16px}
+.brand b{display:block;font-size:14px}.brand span{font-size:12px}
+.back{font-size:13px;display:inline-flex;gap:6px;align-items:center;color:var(--muted)}
+.back:hover{color:var(--text)}
+.flash{border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;gap:8px;align-items:center}
+.flash.ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac}
+.flash.warn{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fcd34d}
+.flash.err{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fca5a5}
+
+.head{margin-bottom:14px}
+.head h1{margin:0 0 6px;font-size:26px;letter-spacing:-.4px}
+.head p{margin:0;font-size:14px;line-height:1.55;max-width:720px}
+.prog{display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap}
+.prog .bar{flex:1;min-width:180px;height:10px;background:#0e1424;border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.prog .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .4s}
+.prog b{font-size:15px;min-width:48px}
+.save-st{font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;min-width:150px}
+.save-st.err{color:#fca5a5}
+.status{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:600;
+        background:rgba(91,140,255,.14);color:#a9c1ff;border:1px solid rgba(91,140,255,.35)}
+.status.ok{background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.35)}
+
+.layout{display:grid;grid-template-columns:264px 1fr;gap:20px;align-items:start}
+.nav{position:sticky;top:16px;display:flex;flex-direction:column;gap:4px;padding:12px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font-size:13px;color:var(--muted)}
+.nav a:hover{background:var(--card2);color:var(--text)}
+.nav a.on{background:var(--card2);color:var(--text)}
+.nav .n{flex:0 0 22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;
+        justify-content:center;font-size:11px;font-weight:700}
+.nav a.done .n{background:var(--ok);border-color:var(--ok);color:#06210f}
+.nav a.part .n{border-color:var(--accent);color:var(--accent)}
+.nav .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav .c{font-size:11px;font-variant-numeric:tabular-nums}
+
+.secs{display:flex;flex-direction:column;gap:18px;min-width:0}
+.sec{scroll-margin-top:16px}
+.sec-h{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.sec-h .ic{flex:0 0 38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;
+           background:rgba(91,140,255,.12);color:#a9c1ff;border:1px solid rgba(91,140,255,.25)}
+.sec-h h2{margin:0;font-size:18px;letter-spacing:-.2px}
+.sec-h .cnt{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sec-lead{font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 6px}
+.fld{padding:16px 0;border-top:1px solid var(--line)}
+.fld:first-of-type{border-top:0}
+.fld>label,.fld>.lbl{display:block;font-size:14px;font-weight:600;margin-bottom:4px;line-height:1.4}
+.hint{display:block;font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.45;font-weight:400}
+.in{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:11px 13px;
+    font:inherit;font-size:14px;transition:border-color .15s}
+.in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,140,255,.18)}
+textarea.in{min-height:92px;resize:vertical;line-height:1.5}
+.in::placeholder{color:#5b6688}
+.opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.opts input{position:absolute;opacity:0;pointer-events:none}
+.opts label{font-size:13px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);color:var(--muted);cursor:pointer;
+            background:var(--bg2);font-weight:500}
+.opts input:checked+label{background:rgba(91,140,255,.16);color:#d6e1ff;border-color:var(--accent)}
+.opts input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.checks{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);
+       cursor:pointer;font-size:14px;line-height:1.45}
+.check input{margin:2px 0 0;width:18px;height:18px;accent-color:var(--accent);flex:0 0 18px}
+.check:has(input:checked){border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.06)}
+
+.tbl{margin-top:8px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.trow{display:grid;grid-template-columns:var(--cols) 40px;gap:0;border-top:1px solid var(--line)}
+.trow:first-child{border-top:0}
+.trow.th{background:var(--card2);font-size:12px;color:var(--muted);font-weight:600}
+.trow.th>div{padding:9px 10px}
+.trow .cell{padding:6px;min-width:0}
+.trow .cell .cl{display:none}
+.trow .cell .in{padding:9px 10px;border-radius:9px;font-size:13px}
+.trow .del{display:flex;align-items:center;justify-content:center}
+.trow .del button{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px;font-size:15px}
+.trow .del button:hover{color:#fca5a5;background:rgba(248,113,113,.1)}
+.add-row{margin-top:8px;background:none;border:1px dashed var(--line);color:var(--accent);border-radius:10px;padding:8px 12px;
+         font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.add-row:hover{border-color:var(--accent)}
+
+.up{margin-top:8px}
+.up-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-bottom:10px}
+.up-it{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0e1424;aspect-ratio:1;display:flex;
+       align-items:center;justify-content:center;font-size:24px;color:var(--muted)}
+.up-it img{width:100%;height:100%;object-fit:cover}
+.up-it span{position:absolute;left:0;right:0;bottom:0;font-size:10px;color:#cbd5e1;background:rgba(11,15,26,.82);padding:3px 5px;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drop{display:flex;align-items:center;gap:12px;padding:14px;border:1.5px dashed var(--line);border-radius:12px;background:var(--bg2);cursor:pointer;
+      transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:rgba(91,140,255,.06)}
+.drop i{font-size:24px;color:var(--accent)}
+.drop b{display:block;font-size:13px}.drop small{font-size:12px;color:var(--muted)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.up-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.up-row .picked{flex:1;min-width:0;font-size:12px;color:var(--muted);word-break:break-word}
+.up-row .btn[disabled]{opacity:.5;cursor:not-allowed}
+.up-row .btn{padding:8px 14px;font-size:13px}
+
+.foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between}
+.foot p{margin:0;font-size:13px;color:var(--muted);line-height:1.5;max-width:560px}
+.btn-lg{padding:13px 22px;font-size:15px}
+.sent{text-align:center;padding:26px 18px}
+.sent i{font-size:40px;color:var(--ok)}
+.sent h3{margin:8px 0 6px;font-size:19px}
+.sent p{margin:0;color:var(--muted);font-size:14px}
+
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .nav{position:static;flex-direction:row;overflow-x:auto;padding:8px;gap:6px}
+  .nav a{flex:0 0 auto}
+  .nav .t,.nav .c{display:none}
+}
+@media (max-width:680px){
+  .head h1{font-size:21px}
+  .card{padding:16px}
+  .trow.th{display:none}
+  .trow{grid-template-columns:1fr;padding:8px 4px;position:relative}
+  .trow .cell{padding:4px 6px}
+  .trow .cell .cl{display:block;font-size:11px;color:var(--muted);margin:0 0 3px 2px}
+  .trow .del{position:absolute;top:6px;right:4px}
+  .trow .cell:first-child .cl{padding-right:36px}
+  .sec-h h2{font-size:16px}
+}
+{% endblock %}
+
+{% macro field_value(f) %}{{ data.get(f.key, '') if data.get(f.key) is string else '' }}{% endmacro %}
+
+{% block body %}
+<div class="wrap">
+  {% if preview %}
+  <div class="preview"><i class="bi bi-eye"></i>
+    <span>Vista de administrador: ves y puedes editar el formulario de <b>{{ c.first_name }} {{ c.last_name }}</b>. Lo que cambies se guarda en su perfil.</span>
+    <span style="margin-left:auto;display:flex;gap:14px;flex-wrap:wrap">
+      <a href="{{ url_for('portal.admin_onboarding_answers', client_id=c.id) }}" target="_blank" rel="noopener">Ver respuestas / imprimir</a>
+      <a href="{{ url_for('clients.detail', client_id=c.id) }}">← Volver al perfil</a>
+    </span>
+  </div>
+  {% endif %}
+
+  <div class="top">
+    <div class="brand">
+      {% if b.org.logo_url %}<img src="{{ b.org.logo_url }}" alt="{{ b.org.name }}">{% else %}<div class="mark"><i class="bi bi-kanban"></i></div>{% endif %}
+      <div><b>{{ b.org.name or 'Papia Tech' }}</b><span class="muted">Portal del cliente</span></div>
+    </div>
+    <a class="back" href="{{ url_for('portal.admin_preview', client_id=c.id) if preview else url_for('portal.home', c=c.id) }}"><i class="bi bi-arrow-left"></i> Volver al portal</a>
+  </div>
+
+  {% if portal_flash %}
+  <div class="flash {{ portal_flash[0] }}" role="status"><i class="bi {{ 'bi-check-circle' if portal_flash[0] == 'ok' else 'bi-exclamation-triangle' }}"></i> {{ portal_flash[1] }}</div>
+  {% endif %}
+
+  <div class="card head">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <span class="muted" style="font-size:13px">{{ c.company or (c.first_name ~ ' ' ~ (c.last_name or '')) }}</span>
+      <span class="status {{ 'ok' if rec.status == 'submitted' else '' }}" id="obStatus">
+        {% if rec.status == 'submitted' %}<i class="bi bi-check2-circle"></i> Enviado {{ (rec.submitted_at or '')[:10] }}{% else %}<i class="bi bi-pencil"></i> Borrador{% endif %}
+      </span>
+    </div>
+    <h1>{{ tpl.title }}</h1>
+    <p class="muted">{{ tpl.intro }}</p>
+    <div class="prog">
+      <div class="bar" role="progressbar" aria-label="Avance del formulario" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct }}"><i id="obBar" style="width:{{ pct }}%"></i></div>
+      <b id="obPct">{{ pct }}%</b>
+      <span class="save-st" id="obSave" aria-live="polite">{% if rec.updated_at %}<i class="bi bi-cloud-check"></i> Guardado{% endif %}</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="card nav" aria-label="Secciones">
+      {% for s in tpl.sections %}
+      {% set d, t = per[s.key] %}
+      <a href="#{{ s.key }}" data-nav="{{ s.key }}" class="{{ 'done' if d == t else ('part' if d else '') }}">
+        <span class="n">{% if d == t %}<i class="bi bi-check-lg"></i>{% else %}{{ loop.index }}{% endif %}</span>
+        <span class="t">{{ s.title }}</span>
+        <span class="c muted" data-cnt="{{ s.key }}">{{ d }}/{{ t }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+
+    <div class="secs">
+      {% for s in tpl.sections %}
+      {% set d, t = per[s.key] %}
+      <section class="card sec" id="{{ s.key }}" data-sec="{{ s.key }}">
+        <div class="sec-h">
+          <div class="ic"><i class="bi {{ s.icon }}"></i></div>
+          <h2>{{ loop.index }}. {{ s.title }}</h2>
+          <span class="cnt" data-cnt2="{{ s.key }}">{{ d }} de {{ t }}</span>
+        </div>
+        {% if s.lead %}<p class="sec-lead">{{ s.lead }}</p>{% endif %}
+
+        {% for f in s.fields %}
+        {% set fid = 'f-' ~ f.key %}
+        <div class="fld" data-field="{{ f.key }}" data-type="{{ f.type }}"{% if f.type == 'uploads' %} data-uploads="{{ (uploads_by_cat.get(f.category) or [])|length }}"{% endif %}{% if f.default_rows %} data-skip-first="1"{% endif %}>
+          {% if f.type in ('text', 'email', 'tel', 'url', 'number') %}
+            <label for="{{ fid }}">{{ f.label }}</label>
+            {% if f.hint %}<span class="hint">{{ f.hint }}</span>{% endif %}
+            <input class="in" id="{{ fid }}" type="{{ 'text' if f.type == 'number' else f.type }}"{% if f.type == 'number' %} inputmode="decimal"{% endif %}
+                   value="{{ field_value(f) }}" maxlength="4000" autocomplete="off">
+          {% elif f.type == 'textarea' %}
+            <label for="{{ fid }}">{{ f.label }}</label>
+            {% if f.hint %}<span class="hint">{{ f.hint }}</span>{% endif %}
+            <textarea class="in" id="{{ fid }}" maxlength="4000">{{ field_value(f) }}</textarea>
+          {% elif f.type in ('choice', 'yesno') %}
+            {% set opts = f.options if f.type == 'choice' else ['si', 'no'] %}
+            <div class="lbl" id="{{ fid }}-l">{{ f.label }}</div>
+            {% if f.hint %}<span class="hint">{{ f.hint }}</span>{% endif %}
+            <div class="opts" role="radiogroup" aria-labelledby="{{ fid }}-l">
+              {% for o in opts %}
+              <input type="radio" name="{{ fid }}" id="{{ fid }}-{{ loop.index }}" value="{{ o }}" {{ 'checked' if data.get(f.key) == o }}>
+              <label for="{{ fid }}-{{ loop.index }}">{{ {'si': 'Sí', 'no': 'No'}.get(o, o) if f.type == 'yesno' else o }}</label>
+              {% endfor %}
+            </div>
+          {% elif f.type == 'checklist' %}
+            <div class="lbl">{{ f.label }}</div>
+            {% if f.hint %}<span class="hint">{{ f.hint }}</span>{% endif %}
+            <div class="checks">
+              {% set sel = data.get(f.key) or [] %}
+              {% for it in f['items'] %}
+              <label class="check"><input type="checkbox" value="{{ it }}" {{ 'checked' if it in sel }}> <span>{{ it }}</span></label>
+              {% endfor %}
+            </div>
+          {% elif f.type == 'table' %}
+            <div class="lbl">{{ f.label }}</div>
+            {% if f.hint %}<span class="hint">{{ f.hint }}</span>{% endif %}
+            {% set rows = data.get(f.key) or f.default_rows or [] %}
+            {% set ns = namespace(cols='') %}
+            {% for col in f.columns %}{% set ns.cols = ns.cols ~ ' ' ~ (col.w or 1.4) ~ 'fr' %}{% endfor %}
+            <div class="tbl" style="--cols:{{ ns.cols }}" data-cols='{{ f.columns|tojson }}'>
+              <div class="trow th">{% for col in f.columns %}<div>{{ col.label }}</div>{% endfor %}<div></div></div>
+              {% set pad = (f.min_rows or 1) - rows|length %}
+              {% for r in rows %}
+              <div class="trow">
+                {% for col in f.columns %}
+                <div class="cell {{ 'w' ~ col.w if col.w }}"><span class="cl">{{ col.label }}</span>
+                  {% if col.type == 'choice' %}
+                  <select class="in" data-col="{{ col.key }}" aria-label="{{ col.label }}"><option value=""></option>{% for o in col.options %}<option {{ 'selected' if r.get(col.key) == o }}>{{ o }}</option>{% endfor %}</select>
+                  {% else %}
+                  <input class="in" data-col="{{ col.key }}" aria-label="{{ col.label }}" value="{{ r.get(col.key, '') }}" maxlength="500"{% if col.type == 'number' %} inputmode="decimal"{% endif %}{% if col.type in ('email', 'tel') %} type="{{ col.type }}"{% endif %}>
+                  {% endif %}
+                </div>
+                {% endfor %}
+                <div class="del"><button type="button" title="Quitar fila" aria-label="Quitar fila"><i class="bi bi-x-lg"></i></button></div>
+              </div>
+              {% endfor %}
+              {% for _ in range(pad if pad > 0 else 0) %}
+              <div class="trow">
+                {% for col in f.columns %}
+                <div class="cell {{ 'w' ~ col.w if col.w }}"><span class="cl">{{ col.label }}</span>
+                  {% if col.type == 'choice' %}
+                  <select class="in" data-col="{{ col.key }}" aria-label="{{ col.label }}"><option value=""></option>{% for o in col.options %}<option>{{ o }}</option>{% endfor %}</select>
+                  {% else %}
+                  <input class="in" data-col="{{ col.key }}" aria-label="{{ col.label }}" value="" maxlength="500"{% if col.type == 'number' %} inputmode="decimal"{% endif %}{% if col.type in ('email', 'tel') %} type="{{ col.type }}"{% endif %}>
+                  {% endif %}
+                </div>
+                {% endfor %}
+                <div class="del"><button type="button" title="Quitar fila" aria-label="Quitar fila"><i class="bi bi-x-lg"></i></button></div>
+              </div>
+              {% endfor %}
+            </div>
+            <button type="button" class="add-row"><i class="bi bi-plus-lg"></i> Agregar fila</button>
+          {% elif f.type == 'uploads' %}
+            {% set ups = uploads_by_cat.get(f.category) or [] %}
+            <div class="lbl">{{ f.label }}{% if ups %} <span class="muted" style="font-weight:500">· {{ ups|length }} recibido{{ 's' if ups|length > 1 }}</span>{% endif %}</div>
+            {% if f.hint %}<span class="hint">{{ f.hint }}</span>{% endif %}
+            <div class="up">
+              {% if ups %}
+              <div class="up-list">
+                {% for u in ups %}
+                <a class="up-it" href="{{ url_for('portal.open_doc', doc_id=u.id) }}" target="_blank" rel="noopener" title="{{ u.title }}">
+                  {% if u.is_image %}<img src="{{ url_for('portal.open_doc', doc_id=u.id) }}" alt="{{ u.title }}" loading="lazy">{% else %}<i class="bi {{ u.icon }}"></i>{% endif %}
+                  <span>{{ u.title }}</span>
+                </a>
+                {% endfor %}
+              </div>
+              {% endif %}
+              <form method="POST" enctype="multipart/form-data" action="{{ url_for('portal.upload') }}" class="up-form">
+                <input type="hidden" name="client_id" value="{{ c.id }}">
+                <input type="hidden" name="category" value="{{ f.category }}">
+                <input type="hidden" name="back" value="onboarding:{{ s.key }}">
+                <label class="drop">
+                  <input type="file" name="files" multiple accept="{{ upload_accept }}">
+                  <i class="bi bi-cloud-arrow-up"></i>
+                  <span><b>Toca para elegir o arrastra aquí</b><small>Hasta {{ upload_max_files }} archivos por envío · máx. {{ upload_max_mb }} MB c/u</small></span>
+                </label>
+                <div class="up-row">
+                  <span class="picked"></span>
+                  <button type="submit" class="btn btn-primary" disabled><i class="bi bi-upload"></i> Subir</button>
+                </div>
+              </form>
+            </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </section>
+      {% endfor %}
+
+      <div class="card" id="obFinish">
+        {% if rec.status == 'submitted' and not preview %}
+        <div class="sent">
+          <i class="bi bi-check-circle-fill"></i>
+          <h3>Recibimos su formulario</h3>
+          <p>Lo enviaste el {{ (rec.submitted_at or '')[:10] }}. Puedes seguir editando: cada cambio se guarda solo y lo vemos al instante.</p>
+        </div>
+        {% else %}
+        <div class="foot">
+          <p>{% if preview %}Como administrador puedes marcar el formulario como enviado si el cliente te dio la información por otra vía.{% else %}Cuando termine, toque <b>Enviar formulario</b>. Si le falta algo, puede enviarlo igual y completarlo después: sus respuestas se guardan solas.{% endif %}</p>
+          <button type="button" class="btn btn-primary btn-lg" id="obSubmit"><i class="bi bi-send"></i> {{ 'Marcar como enviado' if preview else 'Enviar formulario' }}</button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var CLIENT_ID = {{ c.id }}, PREVIEW = {{ 'true' if preview else 'false' }};
+  var SAVE_URL = {{ url_for('portal.onboarding_save')|tojson }};
+  var saveEl = document.getElementById('obSave'), bar = document.getElementById('obBar'), pctEl = document.getElementById('obPct');
+  var dirty = false, timer = null, inflight = null;
+
+  function fieldValue(el){
+    var t = el.dataset.type;
+    if (t === 'uploads') return undefined;
+    if (t === 'choice' || t === 'yesno'){ var r = el.querySelector('input[type=radio]:checked'); return r ? r.value : ''; }
+    if (t === 'checklist') return Array.prototype.map.call(el.querySelectorAll('input[type=checkbox]:checked'), function(i){ return i.value; });
+    if (t === 'table'){
+      return Array.prototype.map.call(el.querySelectorAll('.trow:not(.th)'), function(row){
+        var o = {}; row.querySelectorAll('[data-col]').forEach(function(i){ o[i.dataset.col] = i.value.trim(); }); return o;
+      }).filter(function(o){ return Object.keys(o).some(function(k){ return o[k]; }); });
+    }
+    var i = el.querySelector('.in'); return i ? i.value.trim() : '';
+  }
+  function answered(el){
+    var t = el.dataset.type, v = fieldValue(el);
+    if (t === 'uploads') return (+el.dataset.uploads) > 0;
+    if (t === 'table'){
+      var skip = el.dataset.skipFirst === '1', first = (JSON.parse(el.querySelector('.tbl').dataset.cols)[0] || {}).key;
+      return v.some(function(r){ return Object.keys(r).some(function(k){ return r[k] && !(skip && k === first); }); });
+    }
+    if (t === 'checklist') return v.length > 0;
+    return !!v;
+  }
+  function collect(){
+    var data = {};
+    document.querySelectorAll('[data-field]').forEach(function(el){
+      var v = fieldValue(el); if (v !== undefined) data[el.dataset.field] = v;
+    });
+    return data;
+  }
+  function refreshProgress(){
+    var all = 0, done = 0;
+    document.querySelectorAll('[data-sec]').forEach(function(sec){
+      var f = sec.querySelectorAll('[data-field]'), d = 0;
+      f.forEach(function(el){ if (answered(el)) d++; });
+      all += f.length; done += d;
+      var k = sec.dataset.sec, nav = document.querySelector('[data-nav="'+k+'"]');
+      var c1 = document.querySelector('[data-cnt="'+k+'"]'), c2 = document.querySelector('[data-cnt2="'+k+'"]');
+      if (c1) c1.textContent = d + '/' + f.length;
+      if (c2) c2.textContent = d + ' de ' + f.length;
+      if (nav){
+        nav.classList.toggle('done', d === f.length); nav.classList.toggle('part', d > 0 && d < f.length);
+        var n = nav.querySelector('.n'), idx = Array.prototype.indexOf.call(nav.parentNode.children, nav) + 1;
+        n.innerHTML = d === f.length ? '<i class="bi bi-check-lg"></i>' : idx;
+      }
+    });
+    var pct = all ? Math.round(done * 100 / all) : 0;
+    bar.style.width = pct + '%'; pctEl.textContent = pct + '%';
+    bar.parentNode.setAttribute('aria-valuenow', pct);
+  }
+  function setSave(state, text){
+    saveEl.className = 'save-st' + (state === 'err' ? ' err' : '');
+    var ic = {saving: 'bi-arrow-repeat', ok: 'bi-cloud-check', err: 'bi-exclamation-triangle'}[state];
+    saveEl.innerHTML = '<i class="bi ' + ic + '"></i> ' + text;
+  }
+  function save(extra){
+    clearTimeout(timer);
+    var payload = Object.assign({client_id: CLIENT_ID, preview: PREVIEW, data: collect()}, extra || {});
+    dirty = false; setSave('saving', 'Guardando…');
+    inflight = fetch(SAVE_URL, {method: 'POST', credentials: 'same-origin', keepalive: true,
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)})
+      .then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(j){
+        var t = new Date(); setSave('ok', 'Guardado ' + t.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}));
+        return j;
+      })
+      .catch(function(){ dirty = true; setSave('err', 'No se pudo guardar. Revisa tu conexión.'); throw new Error('save'); });
+    return inflight;
+  }
+  function schedule(){ dirty = true; refreshProgress(); clearTimeout(timer); timer = setTimeout(function(){ save().catch(function(){}); }, 900); }
+
+  document.addEventListener('input', function(e){ if (e.target.closest('[data-field]') && !e.target.closest('.up-form')) schedule(); });
+  document.addEventListener('change', function(e){ if (e.target.closest('[data-field]') && !e.target.closest('.up-form')) schedule(); });
+
+  // Tablas: agregar / quitar filas
+  document.querySelectorAll('[data-type=table]').forEach(function(el){
+    var tbl = el.querySelector('.tbl');
+    el.querySelector('.add-row').addEventListener('click', function(){
+      var rows = tbl.querySelectorAll('.trow:not(.th)'), tpl = rows[rows.length - 1];
+      var row = tpl.cloneNode(true);
+      row.querySelectorAll('input').forEach(function(i){ i.value = ''; });
+      row.querySelectorAll('select').forEach(function(s){ s.selectedIndex = 0; });
+      tbl.appendChild(row); var first = row.querySelector('.in'); if (first) first.focus();
+    });
+    tbl.addEventListener('click', function(e){
+      var b = e.target.closest('.del button'); if (!b) return;
+      var rows = tbl.querySelectorAll('.trow:not(.th)'), row = b.closest('.trow');
+      if (rows.length > 1) row.remove();
+      else { row.querySelectorAll('input').forEach(function(i){ i.value = ''; }); row.querySelectorAll('select').forEach(function(s){ s.selectedIndex = 0; }); }
+      schedule();
+    });
+  });
+
+  // Subidas: guarda lo escrito antes de enviar el archivo
+  document.querySelectorAll('.up-form').forEach(function(form){
+    var input = form.querySelector('input[type=file]'), drop = form.querySelector('.drop'),
+        picked = form.querySelector('.picked'), btn = form.querySelector('button[type=submit]'), max = {{ upload_max_files }};
+    function show(){
+      var n = input.files.length; btn.disabled = !n;
+      picked.textContent = n ? (n > max ? 'Solo se enviarán los primeros ' + max + ': ' : '') + Array.prototype.map.call(input.files, function(f){ return f.name; }).join(', ') : '';
+    }
+    input.addEventListener('change', show);
+    ['dragenter', 'dragover'].forEach(function(ev){ drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function(ev){ drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('over'); }); });
+    drop.addEventListener('drop', function(e){ if (e.dataTransfer && e.dataTransfer.files.length){ input.files = e.dataTransfer.files; show(); } });
+    form.addEventListener('submit', function(e){
+      e.preventDefault(); btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Subiendo…';
+      var go = function(){ HTMLFormElement.prototype.submit.call(form); };
+      (dirty ? save() : Promise.resolve()).then(go, go);
+    });
+  });
+
+  // Enviar formulario
+  var sub = document.getElementById('obSubmit');
+  if (sub) sub.addEventListener('click', function(){
+    refreshProgress();
+    var pct = parseInt(pctEl.textContent, 10) || 0;
+    var msg = pct < 100 ? 'El formulario está al ' + pct + '%. ¿Enviarlo así? Podrá seguir completándolo después.' : '¿Enviar el formulario a Papia Tech?';
+    if (!confirm(msg)) return;
+    sub.disabled = true; sub.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando…';
+    save({submit: true}).then(function(){
+      var st = document.getElementById('obStatus');
+      st.className = 'status ok'; st.innerHTML = '<i class="bi bi-check2-circle"></i> Enviado';
+      document.getElementById('obFinish').innerHTML = '<div class="sent"><i class="bi bi-check-circle-fill"></i><h3>' +
+        (PREVIEW ? 'Marcado como enviado' : '¡Gracias! Recibimos su formulario') + '</h3><p>' +
+        (PREVIEW ? 'El estado quedó como enviado en el perfil del cliente.' : 'Le avisaremos si necesitamos algo más. Puede seguir editando: cada cambio se guarda solo.') + '</p></div>';
+    }).catch(function(){ sub.disabled = false; sub.innerHTML = '<i class="bi bi-send"></i> Reintentar envío'; });
+  });
+
+  // Sección activa en el índice
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (en.isIntersecting){
+          document.querySelectorAll('[data-nav]').forEach(function(a){ a.classList.toggle('on', a.dataset.nav === en.target.id); });
+        }
+      });
+    }, {rootMargin: '-30% 0px -60% 0px'});
+    document.querySelectorAll('[data-sec]').forEach(function(s){ io.observe(s); });
+  }
+
+  window.addEventListener('beforeunload', function(e){ if (dirty){ save().catch(function(){}); e.preventDefault(); e.returnValue = ''; } });
+  refreshProgress();
+})();
+</script>
+{% endblock %}

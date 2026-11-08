@@ -118,7 +118,7 @@ def require_login():
         return
     # Portal del cliente: páginas públicas (el cliente entra con Google)
     if request.endpoint in ('portal.login', 'portal.google_start', 'portal.logout', 'portal.home', 'portal.open_doc', 'portal.open_contract',
-                            'portal.upload', 'portal.delete_upload'):
+                            'portal.upload', 'portal.delete_upload', 'portal.onboarding', 'portal.onboarding_save'):
         return
     if request.path.startswith('/api/'):
         return

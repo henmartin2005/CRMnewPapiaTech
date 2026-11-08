@@ -10,7 +10,7 @@ DOCS_ROOT = os.path.join(BASE_DIR, 'client_docs')
 MAX_FILE_BYTES = 25 * 1024 * 1024  # 25 MB por archivo
 ALLOWED_EXTS = {
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'txt', 'rtf', 'odt',
-    'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'svg', 'zip',
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'svg', 'zip', 'ai', 'eps',
 }
 ACCEPT_ATTR = ','.join('.' + e for e in sorted(ALLOWED_EXTS))
 
@@ -37,14 +37,15 @@ CLIENT_ALLOWED_EXTS = ALLOWED_EXTS - {'svg'}
 CLIENT_ACCEPT_ATTR = ','.join('.' + e for e in sorted(CLIENT_ALLOWED_EXTS))
 CLIENT_MAX_FILES = 10
 IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'svg'}
-CATEGORIES = [('logo', 'Logo del negocio'), ('imagen', 'Imágenes'), ('documento', 'Documentos')]
+CATEGORIES = [('logo', 'Logo del negocio'), ('imagen', 'Imágenes'), ('antes_despues', 'Antes y después'),
+              ('documento', 'Documentos')]
 CATEGORY_LABELS = dict(CATEGORIES)
 
 # Columnas añadidas después de la tabla original
 _EXTRA_COLS = (
     ('portal_visible', "INTEGER NOT NULL DEFAULT 0"),
     ('uploaded_by', "TEXT NOT NULL DEFAULT 'admin'"),   # 'admin' | 'client'
-    ('category', "TEXT"),                               # logo | imagen | documento
+    ('category', "TEXT"),                               # logo | imagen | antes_despues | documento
     ('admin_seen', "INTEGER NOT NULL DEFAULT 1"),       # 0 = subido por el cliente y aún no revisado
 )
 

@@ -21,7 +21,8 @@ portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
 
 GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 PUBLIC_ENDPOINTS = {'portal.login', 'portal.google_start', 'portal.logout', 'portal.home',
-                    'portal.open_doc', 'portal.open_contract', 'portal.upload', 'portal.delete_upload'}
+                    'portal.open_doc', 'portal.open_contract', 'portal.upload', 'portal.delete_upload',
+                    'portal.onboarding', 'portal.onboarding_save'}
 
 
 # ── Esquema ────────────────────────────────────────────────────────────────
@@ -29,6 +30,11 @@ def ensure_portal_schema():
     try:
         from models.client_document import ensure_schema as _docs_schema
         _docs_schema()  # crea client_documents + columnas del portal (uploaded_by, category…)
+    except Exception:
+        pass
+    try:
+        from models.onboarding import ensure_schema as _ob_schema
+        _ob_schema()
     except Exception:
         pass
     db = get_db()
@@ -191,7 +197,13 @@ def _render_portal(client_ids, email, preview=False):
     sel = request.args.get('c', type=int)
     current = next((b for b in bundles if b['client']['id'] == sel), bundles[0])
     from models.client_document import CATEGORIES, CLIENT_ACCEPT_ATTR, MAX_FILE_BYTES, CLIENT_MAX_FILES
+    try:
+        from models.onboarding import summary as _ob_summary
+        onboarding = _ob_summary(current['client']['id'], current['client'].get('org_id') or 1)
+    except Exception:
+        onboarding = None
     return render_template('portal/home.html', b=current, bundles=bundles, email=email,
+                           onboarding=onboarding,
                            preview=preview, upload_categories=CATEGORIES,
                            upload_accept=CLIENT_ACCEPT_ATTR,
                            upload_max_mb=MAX_FILE_BYTES // (1024 * 1024),
@@ -307,6 +319,12 @@ def open_contract(env_id):
 
 # ── Archivos que sube el cliente (logo, imágenes, documentos) ─────────────
 def _portal_back(client_id, preview):
+    back = request.form.get('back', '')
+    if back.startswith('onboarding'):
+        anchor = '#' + back.split(':', 1)[1] if ':' in back else ''
+        if preview:
+            return redirect(url_for('portal.admin_onboarding', client_id=client_id) + anchor)
+        return redirect(url_for('portal.onboarding', c=client_id) + anchor)
     if preview:
         return redirect(url_for('portal.admin_preview', client_id=client_id) + '#mis-archivos')
     return redirect(url_for('portal.home', c=client_id) + '#mis-archivos')
@@ -520,3 +538,137 @@ def admin_uploads_zip(client_id):
     label = secure_filename(c[2] or f'{c[0] or ""} {c[1] or ""}'.strip()) or f'cliente-{client_id}'
     return send_file(buf, mimetype='application/zip', as_attachment=True,
                      download_name=f'{label}-archivos.zip')
+
+
+# ── Onboarding: formulario de inicio que completa el cliente ──────────────
+def _onboarding_access(client_id, as_admin=False):
+    """(org_id, preview) si quien entra puede ver/editar el onboarding de ese cliente.
+    as_admin=True fuerza la vista de administrador (rutas /admin)."""
+    if not client_id:
+        return None
+    ids = session.get('portal_client_ids') or []
+    is_admin = bool(session.get('logged_in'))
+    db = get_db()
+    try:
+        row = db.execute("SELECT id, org_id FROM clients WHERE id = ?", (client_id,)).fetchone()
+    finally:
+        db.close()
+    if not row:
+        return None
+    org_id = row[1] or 1
+    if as_admin:
+        return (org_id, True) if (is_admin and org_id == _admin_org()) else None
+    if client_id in ids:
+        return org_id, False
+    if is_admin and org_id == _admin_org():
+        return org_id, True
+    return None
+
+
+def _render_onboarding(client_id, org_id, preview):
+    from models import onboarding as ob
+    from models.client_document import (list_client_uploads, CLIENT_ACCEPT_ATTR, MAX_FILE_BYTES,
+                                        CLIENT_MAX_FILES)
+    bundle = _client_bundle(client_id)
+    if not bundle:
+        abort(404)
+    rec = ob.load(client_id, org_id)
+    tpl = ob.get_template(rec['template_key'])
+    uploads = list_client_uploads(client_id, org_id)
+    by_cat = {}
+    for d in uploads:
+        by_cat.setdefault(d.get('category') or 'documento', []).append(d)
+    pct, per = ob.progress(tpl, rec['data'], {k: len(v) for k, v in by_cat.items()})
+    return render_template('portal/onboarding.html', b=bundle, tpl=tpl, rec=rec, data=rec['data'],
+                           pct=pct, per=per, uploads_by_cat=by_cat, preview=preview,
+                           upload_accept=CLIENT_ACCEPT_ATTR,
+                           upload_max_mb=MAX_FILE_BYTES // (1024 * 1024),
+                           upload_max_files=CLIENT_MAX_FILES,
+                           email=session.get('portal_email', '') if not preview else (bundle['client'].get('email') or ''),
+                           portal_flash=session.pop('portal_flash', None))
+
+
+@portal_bp.route('/onboarding')
+def onboarding():
+    ids = session.get('portal_client_ids') or []
+    if not ids:
+        return redirect(url_for('portal.login'))
+    client_id = request.args.get('c', type=int) or ids[0]
+    access = _onboarding_access(client_id)
+    if not access or access[1]:
+        abort(404)
+    return _render_onboarding(client_id, access[0], preview=False)
+
+
+@portal_bp.route('/onboarding/save', methods=['POST'])
+def onboarding_save():
+    """Autoguardado (JSON). Con submit=true marca el formulario como enviado."""
+    if not request.is_json:
+        abort(400)
+    body = request.get_json(silent=True) or {}
+    try:
+        client_id = int(body.get('client_id') or 0)
+    except (TypeError, ValueError):
+        client_id = 0
+    access = _onboarding_access(client_id, as_admin=bool(body.get('preview')))
+    if not access:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    org_id, preview = access
+    from models import onboarding as ob
+    submit = bool(body.get('submit'))
+    prev_status = ob.load(client_id, org_id)['status']
+    rec = ob.save(client_id, org_id, body.get('data') or {}, submit=submit, by_client=not preview)
+    if submit and not preview and prev_status != 'submitted':
+        _notify_admin_onboarding(org_id, client_id, rec['progress'])
+    return jsonify({'ok': True, 'progress': rec['progress'], 'status': rec['status'],
+                    'saved_at': rec.get('updated_at')})
+
+
+def _notify_admin_onboarding(org_id, client_id, pct):
+    try:
+        db = get_db()
+        try:
+            c = db.execute("SELECT first_name, last_name, company FROM clients WHERE id = ?",
+                           (client_id,)).fetchone()
+        finally:
+            db.close()
+        name = (c[2] or ' '.join(x for x in (c[0] or '', c[1] or '') if x).strip()) if c else ''
+        from services.push import notify_event
+        notify_event(org_id, f'{name or "Un cliente"} envió su formulario de inicio',
+                     f'Completado al {pct}%. Revísalo en su perfil.',
+                     {'type': 'portal_onboarding', 'client_id': client_id})
+    except Exception:
+        pass
+
+
+@portal_bp.route('/admin/onboarding/<int:client_id>')
+@_admin_required
+def admin_onboarding(client_id):
+    access = _onboarding_access(client_id, as_admin=True)
+    if not access:
+        abort(404)
+    return _render_onboarding(client_id, access[0], preview=True)
+
+
+@portal_bp.route('/admin/onboarding/<int:client_id>/respuestas')
+@_admin_required
+def admin_onboarding_answers(client_id):
+    """Vista de lectura e impresión (Guardar como PDF) de todas las respuestas."""
+    access = _onboarding_access(client_id, as_admin=True)
+    if not access:
+        abort(404)
+    org_id = access[0]
+    from models import onboarding as ob
+    from models.client_document import list_client_uploads
+    bundle = _client_bundle(client_id)
+    rec = ob.load(client_id, org_id)
+    tpl = ob.get_template(rec['template_key'])
+    uploads = list_client_uploads(client_id, org_id)
+    by_cat = {}
+    for d in uploads:
+        by_cat.setdefault(d.get('category') or 'documento', []).append(d)
+    pct, per = ob.progress(tpl, rec['data'], {k: len(v) for k, v in by_cat.items()})
+    if rec['exists']:
+        ob.mark_seen(client_id, org_id)
+    return render_template('portal/onboarding_answers.html', b=bundle, tpl=tpl, rec=rec,
+                           data=rec['data'], pct=pct, per=per, uploads_by_cat=by_cat)

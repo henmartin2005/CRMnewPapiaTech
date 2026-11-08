@@ -94,6 +94,14 @@ def new_client():
     )
 
 
+def _onboarding_summary(client_id, org_id):
+    try:
+        from models.onboarding import summary
+        return summary(client_id, org_id)
+    except Exception:
+        return None
+
+
 @clients_bp.route('/<int:client_id>')
 def detail(client_id):
     org_id = g.org_id if hasattr(g, 'org_id') else 1
@@ -133,6 +141,7 @@ def detail(client_id):
         followups=followups,
         documents=documents,
         client_uploads=client_uploads,
+        onboarding=_onboarding_summary(client_id, org_id),
         new_uploads=new_uploads,
         contracts=contracts,
         schedule=schedule,

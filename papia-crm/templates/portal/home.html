@@ -91,6 +91,16 @@
 .up-item .m span{font-size:12px;color:var(--muted)}
 .up-item .btn{padding:7px 10px;font-size:13px}
 .up-item form{margin:0}
+.ob{display:flex;align-items:center;gap:18px;margin-bottom:18px;flex-wrap:wrap;
+    background:linear-gradient(135deg,rgba(91,140,255,.16),rgba(34,211,238,.08) 60%,var(--bg2));border-color:rgba(91,140,255,.45)}
+.ob .ic{flex:0 0 48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;
+        background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.ob .m{flex:1;min-width:220px}
+.ob .m b{display:block;font-size:16px;margin-bottom:2px}
+.ob .m span{font-size:13px}
+.ob .bar{margin-top:10px;max-width:360px}
+.ob.sent{background:linear-gradient(180deg,var(--card),var(--bg2));border-color:var(--line)}
+.ob.sent .ic{background:rgba(34,197,94,.16);color:#86efac}
 @media (max-width:820px){
   .grid{grid-template-columns:1fr}
 }
@@ -156,6 +166,26 @@
       {% endif %}
     </div>
   </div>
+
+  {% if onboarding %}
+  {% set ob_sent = onboarding.status == 'submitted' %}
+  <div class="card ob{{ ' sent' if ob_sent }}" id="onboarding">
+    <div class="ic"><i class="bi {{ 'bi-clipboard2-check' if ob_sent else 'bi-rocket-takeoff' }}"></i></div>
+    <div class="m">
+      <b>Onboarding · Formulario de inicio</b>
+      {% if ob_sent %}
+      <span class="muted">Recibimos su formulario. Puede volver a editarlo cuando quiera.</span>
+      {% else %}
+      <span class="muted">Complete los datos de su negocio, servicios, fotos y accesos para que comencemos su proyecto.</span>
+      <div class="bar"><i style="width:{{ onboarding.pct }}%"></i></div>
+      <span class="muted" style="font-size:12px">{{ onboarding.pct }}% completado · {{ onboarding.sections_done }} de {{ onboarding.sections_total }} secciones</span>
+      {% endif %}
+    </div>
+    <a class="btn {{ '' if ob_sent else 'btn-primary' }}" href="{{ url_for('portal.admin_onboarding', client_id=c.id) if preview else url_for('portal.onboarding', c=c.id) }}">
+      <i class="bi {{ 'bi-pencil' if ob_sent else ('bi-arrow-right-circle' if onboarding.pct else 'bi-play-circle') }}"></i>
+      {{ 'Ver o editar' if ob_sent else ('Continuar' if onboarding.pct else 'Comenzar onboarding') }}</a>
+  </div>
+  {% endif %}
 
   <div class="grid">
     <div class="card">
@@ -238,7 +268,7 @@
           <div class="up-cats" role="radiogroup" aria-label="Tipo de archivo">
             {% for key, label in upload_categories %}
             <input type="radio" name="category" id="cat-{{ key }}" value="{{ key }}" {{ 'checked' if loop.first }}>
-            <label for="cat-{{ key }}"><i class="bi {{ {'logo':'bi-patch-check','imagen':'bi-images','documento':'bi-file-earmark-text'}[key] }}"></i> {{ label }}</label>
+            <label for="cat-{{ key }}"><i class="bi {{ {'logo':'bi-patch-check','imagen':'bi-images','antes_despues':'bi-arrow-left-right','documento':'bi-file-earmark-text'}[key] }}"></i> {{ label }}</label>
             {% endfor %}
           </div>
           <label class="drop" id="upDrop">
