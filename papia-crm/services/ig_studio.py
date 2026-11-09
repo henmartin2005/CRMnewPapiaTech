@@ -1143,23 +1143,77 @@ def runs_summary(org_id):
 
 # ── Claude ──────────────────────────────────────────────────────────────────
 
-def _claude(model, system, messages, tool, max_tokens=900, timeout=40):
-    resp = requests.post(ANTHROPIC_URL, headers={
+# Modelos que rechazan tool_choice forzado ("tool"/"any"). Se aprende en caliente
+# para no gastar una llamada fallida cada vez.
+_NO_FORCED_TOOL = set()
+
+
+def _claude_post(payload, timeout):
+    return requests.post(ANTHROPIC_URL, headers={
         'x-api-key': os.getenv('ANTHROPIC_API_KEY', ''),
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
-    }, json={
-        'model': model, 'max_tokens': max_tokens, 'system': system, 'messages': messages,
-        'tools': [tool], 'tool_choice': {'type': 'tool', 'name': tool['name']},
-    }, timeout=timeout)
-    if resp.status_code != 200:
-        raise RuntimeError(f'Claude API {resp.status_code}: {resp.text[:300]}')
-    data = resp.json()
-    usage = data.get('usage') or {}
-    _record_usage(data.get('model') or model, usage)
+    }, json=payload, timeout=timeout)
+
+
+def _tool_input(data, tool):
     for block in data.get('content') or []:
         if block.get('type') == 'tool_use' and block.get('name') == tool['name']:
-            return block.get('input') or {}, usage, data.get('model') or model
+            return block.get('input') or {}
+    return None
+
+
+def _claude(model, system, messages, tool, max_tokens=900, timeout=40):
+    """Llama a Claude y devuelve el input de `tool`.
+
+    Primero intenta forzar la herramienta. Si el modelo no acepta tool_choice forzado
+    (los modelos con razonamiento integrado responden 400), repite con tool_choice=auto
+    y una instrucción explícita en el system; si aun así contesta en texto, insiste una vez.
+    """
+    base = {'model': model, 'max_tokens': max_tokens, 'messages': list(messages), 'tools': [tool]}
+    forced = model not in _NO_FORCED_TOOL
+
+    if forced:
+        resp = _claude_post({**base, 'system': system,
+                             'tool_choice': {'type': 'tool', 'name': tool['name']}}, timeout)
+        if resp.status_code == 400 and 'tool_choice' in resp.text:
+            _NO_FORCED_TOOL.add(model)
+            forced = False
+        elif resp.status_code != 200:
+            raise RuntimeError(f'Claude API {resp.status_code}: {resp.text[:300]}')
+
+    if not forced:
+        system_auto = (f"{system}\n\nIMPORTANTE: responde únicamente llamando a la herramienta "
+                       f"`{tool['name']}` con todos sus campos. No escribas texto fuera de la herramienta.")
+        payload = {**base, 'system': system_auto, 'tool_choice': {'type': 'auto'}}
+        resp = _claude_post(payload, timeout)
+        if resp.status_code != 200:
+            raise RuntimeError(f'Claude API {resp.status_code}: {resp.text[:300]}')
+
+    data = resp.json()
+    used_model = data.get('model') or model
+    usage = data.get('usage') or {}
+    _record_usage(used_model, usage)
+    result = _tool_input(data, tool)
+    if result is not None:
+        return result, usage, used_model
+
+    if not forced:
+        # Contestó en texto: un reintento recordándole que use la herramienta.
+        retry_msgs = payload['messages'] + [
+            {'role': 'assistant', 'content': data.get('content') or [{'type': 'text', 'text': '...'}]},
+            {'role': 'user', 'content': f"Ahora entrega el resultado llamando a la herramienta `{tool['name']}`."},
+        ]
+        resp = _claude_post({**payload, 'messages': retry_msgs}, timeout)
+        if resp.status_code != 200:
+            raise RuntimeError(f'Claude API {resp.status_code}: {resp.text[:300]}')
+        data = resp.json()
+        usage = data.get('usage') or {}
+        _record_usage(data.get('model') or model, usage)
+        result = _tool_input(data, tool)
+        if result is not None:
+            return result, usage, data.get('model') or model
+
     raise RuntimeError('Claude no devolvió la decisión estructurada.')
 
 
