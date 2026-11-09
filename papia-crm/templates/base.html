@@ -223,6 +223,16 @@
     </li>
     {% endif %}
 
+    {% if is_admin %}
+    <li>
+      <a href="{{ url_for('ig_studio.analitica') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('ig_studio.') %}active{% endif %}">
+        <i class="bi bi-graph-up-arrow" style="color:#E1306C;"></i>
+        <span class="sb-label">Instagram Studio</span>
+      </a>
+    </li>
+    {% endif %}
+
     {% if is_superadmin %}
     <li>
       <a href="#" class="sb-link sb-disabled">

@@ -8,7 +8,7 @@ Webhook de entrada para Messenger e Instagram Direct.
 import os
 import hmac
 import hashlib
-from flask import Blueprint, request, jsonify, session, g, render_template, abort
+from flask import Blueprint, request, jsonify, session, g, render_template, abort, current_app
 from database import get_db
 from services.meta_send import send_message
 
@@ -259,6 +259,13 @@ def receive():
                 org_id = _get_connection_org_id(page_id, 'instagram')
                 client_id = _find_client_by_sender(sender_id, 'instagram', org_id)
                 _save_message('instagram', sender_id, page_id, 'inbound', text, msg_id, client_id, org_id)
+
+    # ── Instagram Studio: comentarios (field=comments) → agente con Claude ──
+    try:
+        from services import ig_studio
+        ig_studio.handle_webhook(data)
+    except Exception:
+        current_app.logger.exception('Instagram Studio: fallo al procesar el webhook')
 
     return jsonify({'status': 'ok'})
 

@@ -1,0 +1,110 @@
+{% extends 'ig_studio/_layout.html' %}
+{% block subtitle %}Agentes con Claude para comentarios y DMs, uno por cuenta o para ambas{% endblock %}
+{% block head_actions %}
+<button type="button" class="btn btn-ghost btn-sm" data-igs-new-agent="dm"><i class="bi bi-plus-lg"></i> Agente de DMs</button>
+<button type="button" class="btn btn-primary btn-sm" data-igs-new-agent="comments"><i class="bi bi-plus-lg"></i> Agente de comentarios</button>
+{% endblock %}
+
+{% block studio %}
+<div class="igs-row igs-row-top">
+  <section class="igs-agent-list" aria-label="Agentes">
+    {% for a in agents %}
+    <a class="igs-card igs-agent-card {% if selected and selected.id == a.id %}is-on{% endif %}" href="{{ url_for('ig_studio.agente', id=a.id) }}">
+      <span class="igs-agent-top"><strong>{{ a.name }}</strong><span class="igs-badge {{ 's-replied' if a.enabled else 's-ignored' }}">{{ 'Activo' if a.enabled else 'Apagado' }}</span></span>
+      <span class="muted">{{ 'Comentarios' if a.kind == 'comments' else 'DMs' }} ·
+        {% if a.ig_user_id %}{% for acc in accounts if acc.ig_user_id == a.ig_user_id %}@{{ acc.username }}{% endfor %}{% else %}ambas cuentas{% endif %}
+        {% if a.is_default %}· por defecto{% endif %}</span>
+      <span class="muted">{{ a.runs_24h }} ejecuciones · {{ '%.1f'|format(a.error_pct) }}% error · {{ '%.1f'|format(a.latency_s) }} s</span>
+    </a>
+    {% else %}<p class="igs-empty">Sin agentes. Crea el primero.</p>{% endfor %}
+  </section>
+
+  {% if selected %}
+  <form class="igs-card igs-agent-form" data-igs-agent-form="{{ selected.id }}">
+    <div class="igs-card-head">
+      <div>
+        <label class="visually-hidden" for="ag-name">Nombre del agente</label>
+        <input id="ag-name" name="name" class="igs-title-input" value="{{ selected.name }}" maxlength="80" required>
+        <p>{{ 'Responde comentarios públicos' if selected.kind == 'comments' else 'Prompt para el Asistente IA del Inbox (DMs)' }}</p>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Guardar cambios</button>
+    </div>
+
+    <label class="igs-field">Instrucciones e identidad
+      <textarea name="prompt" rows="8" maxlength="6000" class="igs-mono">{{ selected.prompt }}</textarea>
+      <small>Siempre aplica: nunca da precios, nunca inventa, y te pasa la conversación si piden hablar contigo o es una crítica fuerte.</small>
+    </label>
+
+    <div class="igs-grid-2">
+      <label class="igs-field">Cuenta
+        <select name="ig_user_id">
+          <option value="">Ambas cuentas</option>
+          {% for acc in accounts %}<option value="{{ acc.ig_user_id }}" {% if selected.ig_user_id == acc.ig_user_id %}selected{% endif %}>@{{ acc.username }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="igs-field">Modelo
+        <input name="model" value="{{ selected.model }}" placeholder="Por defecto (IG_STUDIO_MODEL)" maxlength="60">
+      </label>
+    </div>
+
+    {% if selected.kind == 'comments' %}
+    <div class="igs-rules">
+      <h3>Qué hace con cada comentario</h3>
+      <div><span>Comentario positivo o de apoyo</span><span class="igs-badge s-replied">Responder</span></div>
+      <div><span>Pide info, precio o comenta «info»</span><span class="igs-badge s-replied_dm">Responder + DM</span></div>
+      <div><span>Crítica o duda difícil</span><span class="igs-badge s-review">Borrador para revisar</span></div>
+      <div><span>Spam, negativo o fuera de tema</span><span class="igs-badge s-ignored">Ignorar</span></div>
+    </div>
+    {% endif %}
+
+    <div class="igs-grid-2">
+      <div class="igs-toggles">
+        <h3>Configuración</h3>
+        <label class="igs-toggle"><span>Agente activo</span><input type="checkbox" name="enabled" {% if selected.enabled %}checked{% endif %}></label>
+        {% if selected.kind == 'comments' %}
+        <label class="igs-toggle"><span>Agente por defecto para comentarios</span><input type="checkbox" name="is_default" {% if selected.is_default %}checked{% endif %}></label>
+        <label class="igs-toggle"><span>Enviar DM cuando piden info</span><input type="checkbox" name="auto_dm" {% if selected.auto_dm %}checked{% endif %}></label>
+        <label class="igs-toggle"><span>Crear lead en el Pipeline</span><input type="checkbox" name="create_leads" {% if selected.create_leads %}checked{% endif %}></label>
+        <label class="igs-toggle"><span>Agrupar si la persona comenta varias veces</span><input type="checkbox" name="cancel_on_new" {% if selected.cancel_on_new %}checked{% endif %}></label>
+        <label class="igs-toggle"><span>Solo en horario laboral (L–S, 9 AM–7 PM)</span><input type="checkbox" name="business_hours" {% if selected.business_hours %}checked{% endif %}></label>
+        <label class="igs-toggle"><span>Retraso de respuesta (segundos)</span><input type="number" name="reply_delay" min="0" max="600" value="{{ selected.reply_delay }}"></label>
+        {% endif %}
+      </div>
+      {% if selected.kind == 'comments' %}
+      <div class="igs-test">
+        <h3>Probar sin publicar</h3>
+        <label class="visually-hidden" for="ag-test">Comentario de prueba</label>
+        <textarea id="ag-test" rows="3" placeholder="Ej.: ¿Cuánto cuesta una página para mi barbería?"></textarea>
+        <button type="button" class="btn btn-ghost btn-sm" data-igs-test="{{ selected.id }}">Ver qué haría</button>
+        <div class="igs-test-out" data-igs-test-out hidden></div>
+      </div>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<section class="igs-card">
+  <div class="igs-card-head">
+    <h2>Ejecuciones recientes</h2>
+    <span class="muted">Últimas 24 h · {{ summary.runs }} ejecuciones · {{ '%.1f'|format(summary.error_pct) }}% error · {{ '%.1f'|format(summary.latency_s) }} s promedio</span>
+  </div>
+  <div class="igs-table-wrap">
+    <table class="igs-table">
+      <thead><tr><th>Hora</th><th>Agente</th><th>Mensaje recibido</th><th>Acción</th><th class="r">Latencia</th><th>Estado</th></tr></thead>
+      <tbody>
+      {% for r in runs %}
+        <tr>
+          <td class="muted nowrap">{{ r.created_at|localdatetime }}</td>
+          <td class="nowrap">{{ r.agent_name or '—' }}{% if r.username %} <small class="muted">@{{ r.username }}</small>{% endif %}</td>
+          <td>{{ r.input }}</td>
+          <td>{{ r.action }}</td>
+          <td class="r nowrap">{% if r.latency_ms %}{{ '%.1f'|format(r.latency_ms / 1000) }} s{% else %}—{% endif %}</td>
+          <td><span class="igs-badge {{ {'ok': 's-replied', 'pending': 's-review', 'error': 's-error'}.get(r.status, 's-ignored') }}" {% if r.error %}title="{{ r.error }}"{% endif %}>{{ {'ok': 'OK', 'pending': 'Pendiente', 'error': 'Error'}.get(r.status, r.status) }}</span></td>
+        </tr>
+      {% else %}<tr><td colspan="6" class="igs-empty">Aún no hay ejecuciones.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -37,8 +37,10 @@ from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
 from routes.videos import videos_bp
 from routes.demos import demos_bp, demos_api_bp
+from routes.ig_studio import ig_studio_bp
 from migrate_videos import migrate as migrate_videos
 from migrate_demos import migrate as migrate_demos
+from migrate_ig_studio import migrate as migrate_ig_studio
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'papia-crm-dev-secret-2024')
@@ -70,6 +72,7 @@ app.register_blueprint(emails_bp)
 init_db()
 migrate_videos()
 migrate_demos()
+migrate_ig_studio()
 app.register_blueprint(videos_bp)
 app.register_blueprint(demos_bp)
 app.register_blueprint(demos_api_bp)
@@ -86,6 +89,7 @@ app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
 app.register_blueprint(vault_bp)
 app.register_blueprint(mobile_api_bp)
+app.register_blueprint(ig_studio_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────
