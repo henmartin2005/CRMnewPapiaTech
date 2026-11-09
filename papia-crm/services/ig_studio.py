@@ -9,7 +9,7 @@ reporte con plan de contenido.
 Variables de entorno:
   IG_APP_ID / IG_APP_SECRET   app de Instagram dentro de la app de Meta "Papia Tech CRM"
   IG_REDIRECT_URI             https://datos.papiatech.com/instagram-studio/oauth/callback
-  IG_GRAPH_VERSION            v23.0 por defecto
+  IG_GRAPH_VERSION            v25.0 por defecto (la misma del webhook)
   IG_STUDIO_MODEL             modelo para comentarios (claude-haiku-5-5)
   IG_STUDIO_STRATEGY_MODEL    modelo para la estrategia semanal (claude-sonnet-5-5)
   IG_STUDIO_REPORT_EMAIL      a dónde se manda el reporte semanal
@@ -141,7 +141,7 @@ def _env(*names, default=''):
 
 
 def graph_base():
-    return f"https://graph.instagram.com/{_env('IG_GRAPH_VERSION', default='v23.0')}"
+    return f"https://graph.instagram.com/{_env('IG_GRAPH_VERSION', default='v25.0')}"
 
 
 def now_utc_str():
