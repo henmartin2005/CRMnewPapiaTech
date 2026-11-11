@@ -1,0 +1,76 @@
+{% extends 'ig_studio/_layout.html' %}
+{% block subtitle %}Reporte generado por Claude cada lunes a las 8:00 AM{% endblock %}
+{% block head_actions %}
+{% if report %}<span class="igs-chip">Semana del {{ report.week_start[8:10] }}/{{ report.week_start[5:7] }}</span>{% endif %}
+<button type="button" class="btn btn-ghost btn-sm" data-igs-generate>{{ 'Regenerar' if report else 'Generar ahora' }}</button>
+{% if report %}<button type="button" class="btn btn-primary btn-sm" data-igs-email><i class="bi bi-envelope"></i> Enviármelo por email</button>{% endif %}
+{% endblock %}
+
+{% block studio %}
+{% if report %}
+{% set d = report.data %}{% set m = d.get('metricas', {}) %}
+<section class="igs-card igs-summary">
+  <div>
+    <span class="igs-eyebrow is-accent">Resumen de la semana pasada</span>
+    <p class="igs-lead">{{ d.get('resumen', '') }}</p>
+  </div>
+  <div class="igs-mini-kpis">
+    <div><span>Seguidores</span><strong>{{ '%+d'|format(m.get('seguidores') or 0) }}</strong><small>sem. anterior {{ '%+d'|format(m.get('seguidores_prev') or 0) }}</small></div>
+    <div><span>Alcance</span><strong>{{ '{:,}'.format(m.get('alcance') or 0) }}</strong><small>{% if m.get('alcance_delta_pct') is not none %}{{ '%+.0f'|format(m.alcance_delta_pct) }}% vs. anterior{% else %}sin comparación{% endif %}</small></div>
+    <div><span>Leads IG</span><strong>{{ m.get('leads') or 0 }}</strong><small>sem. anterior {{ m.get('leads_prev') or 0 }}</small></div>
+  </div>
+</section>
+
+<section class="igs-three">
+  <div class="igs-card"><h2 class="igs-good">Qué funcionó</h2>{% for w in d.get('que_funciono', []) %}<p>{{ w }}</p>{% endfor %}</div>
+  <div class="igs-card"><h2 class="igs-warn-text">Qué no funcionó</h2>{% for w in d.get('que_no_funciono', []) %}<p>{{ w }}</p>{% endfor %}</div>
+  <div class="igs-card"><h2>Lo que más te preguntan</h2>
+    {% for q in d.get('preguntas_frecuentes', []) %}<div class="igs-ask"><span>{{ q.tema }}</span><strong>{{ q.veces }}</strong></div>
+    {% else %}<p class="muted">Sin preguntas registradas esta semana.</p>{% endfor %}
+    <small class="muted">De los DMs y comentarios de la semana</small>
+  </div>
+</section>
+
+<section>
+  <div class="igs-card-head igs-plan-head">
+    <h2>Plan de contenido</h2>
+    {% set approved = report['items']|selectattr('approved')|list|length %}
+    <span class="muted" data-igs-approved data-total="{{ report['items']|length }}">{{ approved }} de {{ report['items']|length }} aprobados</span>
+  </div>
+  <div class="igs-plan-wrap">
+    <div class="igs-plan">
+      {% for day in days_order %}
+      <div class="igs-plan-day">
+        <span class="igs-plan-label">{{ day }}</span>
+        {% for it in plan_by_day.get(day, []) %}
+        <div class="igs-card igs-plan-item">
+          <div class="igs-plan-top"><span class="igs-type t-{{ it.type|lower }}">{{ it.type }}</span><span class="muted">{{ it.time }}</span></div>
+          <strong>{{ it.title }}</strong>
+          <span class="muted">Hook: {{ it.hook }}</span>
+          <small class="muted">{{ it.account }}</small>
+          <button type="button" class="btn btn-sm {{ 'igs-approved' if it.approved else 'btn-ghost' }}" data-igs-plan="{{ it.id }}" aria-pressed="{{ 'true' if it.approved else 'false' }}">{{ 'Aprobado' if it.approved else 'Aprobar' }}</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <p class="muted igs-model">Generado {{ report.generated_at|localdatetime }} con {{ report.model }}.</p>
+</section>
+{% else %}
+<section class="igs-card igs-connect">
+  <div>
+    <h2>Todavía no hay reporte</h2>
+    <p>Se genera solo cada lunes a las 8:00 AM con los datos de la semana anterior. Puedes generarlo ahora; mientras más días de datos tenga el CRM, mejor sale.</p>
+  </div>
+  <button type="button" class="btn btn-primary" data-igs-generate>Generar ahora</button>
+</section>
+{% endif %}
+
+<details class="igs-card igs-context">
+  <summary>Contexto fijo que Claude usa para la estrategia</summary>
+  <label class="visually-hidden" for="igs-context">Contexto fijo</label>
+  <textarea id="igs-context" rows="5" maxlength="3000">{{ context_text }}</textarea>
+  <button type="button" class="btn btn-ghost btn-sm" data-igs-save-context>Guardar contexto</button>
+</details>
+{% endblock %}

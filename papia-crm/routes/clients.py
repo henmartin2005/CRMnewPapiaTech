@@ -5,7 +5,7 @@ from models.client import (
     get_all_clients, get_client, create_client, update_client,
     delete_client, get_client_notes, add_note, get_client_followups,
     add_followup, PIPELINE_STAGES, PROJECT_TYPES, NOTE_TYPES,
-    FOLLOW_UP_METHODS, STAGE_COLORS
+    FOLLOW_UP_METHODS, STAGE_COLORS, get_org_pipeline_stages
 )
 
 from database import get_db
@@ -60,7 +60,7 @@ def list_clients():
         'clients/list.html',
         clients=clients,
         search=search,
-        stage_labels=dict(PIPELINE_STAGES),
+        stage_labels=dict(get_org_pipeline_stages(org_id)),
         stage_colors=STAGE_COLORS,
         project_labels=dict(PROJECT_TYPES),
     )
@@ -77,7 +77,7 @@ def new_client():
             return render_template(
                 'clients/form.html',
                 client=request.form,
-                pipeline_stages=PIPELINE_STAGES,
+                pipeline_stages=get_org_pipeline_stages(org_id),
                 project_types=PROJECT_TYPES,
                 is_edit=False,
             )
@@ -88,7 +88,7 @@ def new_client():
     return render_template(
         'clients/form.html',
         client={},
-        pipeline_stages=PIPELINE_STAGES,
+        pipeline_stages=get_org_pipeline_stages(org_id),
         project_types=PROJECT_TYPES,
         is_edit=False,
     )
@@ -149,11 +149,11 @@ def detail(client_id):
         profile_layout=get_layout(client_id, org_id),
         docs_accept=ACCEPT_ATTR,
         docs_max_mb=MAX_FILE_BYTES // (1024 * 1024),
-        pipeline_stages=PIPELINE_STAGES,
+        pipeline_stages=get_org_pipeline_stages(org_id),
         project_types=PROJECT_TYPES,
         note_types=NOTE_TYPES,
         followup_methods=FOLLOW_UP_METHODS,
-        stage_labels=dict(PIPELINE_STAGES),
+        stage_labels=dict(get_org_pipeline_stages(org_id)),
         stage_colors=STAGE_COLORS,
         project_labels=dict(PROJECT_TYPES),
         now_str=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -176,7 +176,7 @@ def edit_client(client_id):
             return render_template(
                 'clients/form.html',
                 client=request.form,
-                pipeline_stages=PIPELINE_STAGES,
+                pipeline_stages=get_org_pipeline_stages(org_id),
                 project_types=PROJECT_TYPES,
                 is_edit=True,
                 client_id=client_id,
@@ -188,7 +188,7 @@ def edit_client(client_id):
     return render_template(
         'clients/form.html',
         client=client,
-        pipeline_stages=PIPELINE_STAGES,
+        pipeline_stages=get_org_pipeline_stages(org_id),
         project_types=PROJECT_TYPES,
         is_edit=True,
         client_id=client_id,
@@ -246,7 +246,7 @@ def update_stage(client_id):
     from models.client import update_pipeline_stage
     org_id = g.org_id if hasattr(g, 'org_id') else 1
     stage = request.form.get('stage')
-    valid_stages = [s for s, _ in PIPELINE_STAGES]
+    valid_stages = [s for s, _ in get_org_pipeline_stages(org_id)]
     if stage in valid_stages:
         update_pipeline_stage(client_id, stage, org_id=org_id)
         return jsonify({'ok': True})

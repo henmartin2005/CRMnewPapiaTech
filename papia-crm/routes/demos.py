@@ -3,24 +3,32 @@
 - /demos/...       panel de administración (solo admin / superadmin).
 - /api/demos/...   API pública que usan los demos (Lovable) para validar el
                    código y reportar actividad. No expone otros datos del CRM.
+- /d/<CODIGO>      puerta de entrada para demos en modo 'redireccion' (apps que
+                   no se pueden tocar, p. ej. un CRM en PythonAnywhere): cuenta la
+                   visita, avisa y redirige. La app destino no se modifica.
 """
 import hmac
+import os
 import re
 import secrets
 from datetime import timedelta
 from urllib.parse import quote
 
-from flask import (Blueprint, abort, flash, g, jsonify, redirect, render_template,
-                   request, session, url_for)
+from flask import (Blueprint, abort, flash, g, jsonify, make_response, redirect,
+                   render_template, request, session, url_for)
 
 from database import get_db
 from services import demo_access as da
 
 demos_bp = Blueprint('demos', __name__, url_prefix='/demos')
 demos_api_bp = Blueprint('demos_api', __name__, url_prefix='/api/demos')
+demos_go_bp = Blueprint('demos_go', __name__)
 
 SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,30}$')
 COLOR_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
+MODOS = ('codigo', 'redireccion')
+# Base pública de los enlaces /d/CODIGO de los demos en modo redirección.
+PUBLIC_BASE = (os.environ.get('DEMO_PUBLIC_BASE') or 'https://datos.papiatech.com').rstrip('/')
 DEFAULT_MESSAGE = ('Hola {nombre}, soy Henrry de PapiaTech. Preparé un demo de cómo se vería '
                    'el sistema para {negocio}: {enlace}\n\nTu código de acceso es {codigo} '
                    '(válido {dias} días). ¿Lo revisas y me dices qué te parece?')
@@ -64,6 +72,7 @@ def _demo(ident):
 def _link(ident):
     row = _db_rows('''SELECT l.*, d.nombre AS demo_nombre, d.slug AS nicho, d.url AS demo_url,
                              d.color AS demo_color, d.mensaje AS demo_mensaje,
+                             d.modo AS demo_modo,
                              c.first_name AS c_first, c.last_name AS c_last
                         FROM demo_links l
                         JOIN demos d ON d.id = l.demo_id
@@ -75,6 +84,9 @@ def _link(ident):
 
 
 def demo_url(link):
+    # Modo redirección: el enlace pasa por el CRM, que cuenta la visita.
+    if 'demo_modo' in link.keys() and link['demo_modo'] == 'redireccion':
+        return f"{PUBLIC_BASE}/d/{link['codigo']}"
     # Mismo formato que ya usa Groomingmiami: <demo>/d/<CODIGO>
     return f"{link['demo_url'].rstrip('/')}/d/{link['codigo']}"
 
@@ -114,7 +126,7 @@ def whatsapp_href(link):
 
 _LINK_STATS = '''
     SELECT l.*, d.nombre AS demo_nombre, d.slug AS nicho, d.url AS demo_url, d.color AS demo_color,
-           d.mensaje AS demo_mensaje,
+           d.mensaje AS demo_mensaje, d.modo AS demo_modo,
            (SELECT COUNT(*) FROM demo_logs x WHERE x.link_id=l.id AND x.tipo='entrada')   AS entradas,
            (SELECT COUNT(*) FROM demo_logs x WHERE x.link_id=l.id AND x.tipo='bloqueado') AS bloqueos,
            (SELECT MAX(fecha_hora) FROM demo_logs x WHERE x.link_id=l.id)                 AS ultima_actividad,
@@ -333,6 +345,7 @@ def save_demo():
     url = (f.get('url') or '').strip()[:300]
     color = (f.get('color') or '#2A5BFF').strip()
     mensaje = (f.get('mensaje') or '').strip()[:1500]
+    modo = f.get('modo') if f.get('modo') in MODOS else 'codigo'
     if not nombre or not SLUG_RE.match(slug) or not url.startswith('https://') or not COLOR_RE.match(color):
         flash('Revisa el demo: nombre, identificador (minúsculas, números y guiones), URL https:// y color #RRGGBB.',
               'danger')
@@ -342,14 +355,15 @@ def save_demo():
     try:
         if demo_id:
             _demo(demo_id)
-            db.execute('UPDATE demos SET nombre=?, slug=?, url=?, color=?, mensaje=?, activo=? WHERE id=? AND org_id=?',
-                       (nombre, slug, url, color, mensaje, 1 if f.get('activo') else 0, demo_id, g.org_id))
+            db.execute('UPDATE demos SET nombre=?, slug=?, url=?, color=?, mensaje=?, modo=?, activo=? '
+                       'WHERE id=? AND org_id=?',
+                       (nombre, slug, url, color, mensaje, modo, 1 if f.get('activo') else 0, demo_id, g.org_id))
         else:
             if db.execute('SELECT 1 FROM demos WHERE org_id=? AND slug=?', (g.org_id, slug)).fetchone():
                 flash(f'Ya existe un demo con el identificador "{slug}".', 'danger')
                 return redirect(url_for('demos.index'))
-            db.execute('INSERT INTO demos(org_id, slug, nombre, url, color, mensaje) VALUES (?,?,?,?,?,?)',
-                       (g.org_id, slug, nombre, url, color, mensaje))
+            db.execute('INSERT INTO demos(org_id, slug, nombre, url, color, mensaje, modo) VALUES (?,?,?,?,?,?,?)',
+                       (g.org_id, slug, nombre, url, color, mensaje, modo))
         db.commit()
     finally:
         db.close()
@@ -474,3 +488,106 @@ def api_event():
     finally:
         db.close()
     return jsonify(ok=True)
+
+
+# ═══════════════════ Puerta /d/CODIGO (modo redirección) ════════════════════
+# Vistas previas de enlaces (WhatsApp, iMessage, Facebook…) no cuentan visita.
+PREVIEW_BOT_RE = re.compile(
+    r'WhatsApp|facebookexternalhit|Facebot|meta-externalagent|Twitterbot|TelegramBot|Slackbot|'
+    r'Discordbot|LinkedInBot|SkypeUriPreview|Pinterest|redditbot|Applebot|Googlebot|bingbot|'
+    r'Embedly|Iframely|bot\b|crawler|spider|preview', re.I)
+DEVICE_COOKIE = 'papia_demo_dev'
+SESSION_COOKIE = 'papia_demo_ses'
+
+
+def _gate_response(resp):
+    resp.headers['Cache-Control'] = 'no-store'
+    resp.headers['X-Robots-Tag'] = 'noindex, nofollow'
+    # La app destino no recibe el código ni la URL del CRM en el Referer.
+    resp.headers['Referrer-Policy'] = 'no-referrer'
+    return resp
+
+
+def _gate_page(status, titulo, texto):
+    contacto = re.sub(r'\D', '', os.environ.get('DEMO_CONTACT_WHATSAPP', ''))
+    html = render_template('demos/acceso.html', titulo=titulo, texto=texto,
+                           wa=f'https://wa.me/{contacto}' if contacto else None)
+    return _gate_response(make_response(html, status))
+
+
+def _gate_target(codigo):
+    return _db_rows('''SELECT l.id, l.codigo, l.activo, l.vence_el, d.url AS demo_url, d.modo AS demo_modo,
+                             d.activo AS demo_activo, d.nombre AS demo_nombre
+                        FROM demo_links l JOIN demos d ON d.id = l.demo_id
+                       WHERE l.codigo=?''', (codigo,), one=True)
+
+
+@demos_go_bp.route('/d/<codigo>', methods=['GET', 'HEAD'], endpoint='open')
+def gate_open(codigo):
+    codigo = da.normalize_code(codigo)
+    target = _gate_target(codigo) if codigo else None
+    ua = request.headers.get('User-Agent') or ''
+
+    # HEAD y bots de vista previa: respuesta neutra, sin gastar visita.
+    if request.method == 'HEAD' or PREVIEW_BOT_RE.search(ua):
+        nombre = target['demo_nombre'] if target else 'Demo'
+        return _gate_page(200, f'{nombre} · PapiaTech', 'Abre el enlace para ver tu demo.')
+
+    if not target:
+        return _gate_page(404, 'Acceso no válido', 'Este enlace de demo no existe o ya no está disponible.')
+
+    # Demo en modo código (Lovable): solo lo enviamos a su propio /d/CODIGO.
+    if target['demo_modo'] != 'redireccion':
+        return _gate_response(redirect(f"{target['demo_url'].rstrip('/')}/d/{target['codigo']}", 302))
+
+    destino = target['demo_url']
+    vigente = (target['activo'] and target['demo_activo']
+               and da.from_db(target['vence_el']) >= da.now_utc())
+
+    # Recargar dentro de la misma sesión (45 min) no gasta otra visita.
+    ses = da.verify_session(request.cookies.get(SESSION_COOKIE))
+    if vigente and ses and ses.get('lid') == target['id'] and ses.get('c') == target['codigo']:
+        return _gate_response(redirect(destino, 302))
+
+    device_id = request.cookies.get(DEVICE_COOKIE) or ''
+    if not re.match(r'^[A-Za-z0-9\-]{8,64}$', device_id):
+        device_id = secrets.token_hex(16)
+    dispositivo = da.describe_device(ua)
+
+    db = get_db()
+    try:
+        db.execute('BEGIN IMMEDIATE')
+        if da.rate_limited(db, da.client_ip(request)):
+            db.commit()
+            return _gate_page(429, 'Demasiados intentos', 'Espera unos minutos y vuelve a abrir el enlace.')
+        link, existing = da.consume_visit(db, codigo, device_id)
+        avisar_bloqueo = False
+        if link:
+            da.add_log(db, link['id'], 'entrada', dispositivo=dispositivo)
+        elif existing:
+            avisar_bloqueo = not db.execute(
+                "SELECT 1 FROM demo_logs WHERE link_id=? AND tipo='bloqueado' "
+                "AND fecha_hora >= datetime('now','-1 hour')", (existing['id'],)).fetchone()
+            da.add_log(db, existing['id'], 'bloqueado', dispositivo=dispositivo)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+    if not link:
+        if existing and avisar_bloqueo:
+            da.notify_owner(existing, 'bloqueado', dispositivo)
+        return _gate_page(403, 'Acceso no válido',
+                          'Este acceso ya venció o llegó a su límite de visitas. Pide un nuevo enlace.')
+
+    if link['visitas_usadas'] == 1:
+        da.notify_owner(link, 'primera_visita', dispositivo)
+    resp = _gate_response(redirect(destino, 302))
+    secure = request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https'
+    resp.set_cookie(DEVICE_COOKIE, device_id, max_age=60 * 60 * 24 * 365, httponly=True,
+                    samesite='Lax', secure=secure, path='/d/')
+    resp.set_cookie(SESSION_COOKIE, da.sign_session(link), max_age=da.SESSION_MINUTES * 60,
+                    httponly=True, samesite='Lax', secure=secure, path='/d/')
+    return resp

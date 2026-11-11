@@ -88,6 +88,7 @@
 }
 .wa-chip:hover { background: #e9edef; }
 .wa-chip.on { background: #d9fdd3; color: #008069; }
+.wa-line-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #e7f3ff; color: #1d6fb8; font-size: 11px; font-weight: 600; vertical-align: middle; }
 
 .wa-list { flex: 1; overflow-y: auto; }
 .wa-row {
@@ -429,6 +430,7 @@
       <button class="wa-chip on" data-filter="all">Todos</button>
       <button class="wa-chip" data-filter="unread">No leídos</button>
       <button class="wa-chip" data-filter="leads">Sin registrar</button>
+      {% if wa_lines and wa_lines|length > 1 %}{% for acc, label in wa_lines.items() %}<button class="wa-chip" data-filter="line:{{ acc }}">{{ label }}</button>{% endfor %}{% endif %}
     </div>
 
     <div class="wa-list" id="chatList"></div>
@@ -672,6 +674,7 @@
     const rows = CHATS.filter(c => {
       if (filter === 'unread' && !(c.unread > 0)) return false;
       if (filter === 'leads' && c.client_id) return false;
+      if (filter.startsWith('line:') && c.line_id !== filter.slice(5)) return false;
       if (!q) return true;
       return (c.name || '').toLowerCase().includes(q)
           || (qDigits && (c.phone || '').replace(/\D/g, '').includes(qDigits))
@@ -702,7 +705,7 @@
           ${avatarHtml(c.name, c.phone)}
           <div class="wa-row-body">
             <div class="wa-row-line">
-              <span class="wa-row-name">${esc(name)}</span>
+              <span class="wa-row-name">${esc(name)}${c.line ? `<span class="wa-line-tag">${esc(c.line)}</span>` : ''}</span>
               <span class="wa-row-time">${esc(listTime(c.last_at))}</span>
             </div>
             <div class="wa-row-line">

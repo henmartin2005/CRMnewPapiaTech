@@ -229,6 +229,7 @@
       <div class="pl-sub"><b id="plTotal">{{ ns.total }}</b> contactos · valor total <b>{{ ns.value | currency }}</b></div>
     </div>
     <div class="pl-actions">
+      <button type="button" class="pl-btn" id="plAddStage"><i class="bi bi-plus-lg"></i> Agregar pipeline</button>
       <a href="{{ url_for('clients.new_client') }}" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg"></i> Nuevo lead
       </a>
@@ -270,6 +271,7 @@
             <div class="pl-kebab-wrap" data-menu>
               <button class="pl-kebab" type="button" title="Opciones"><i class="bi bi-three-dots-vertical"></i></button>
               <div class="pl-menu">
+                <button type="button" data-delete style="color:#b42318"><i class="bi bi-trash"></i> Eliminar columna</button>
                 <button type="button" data-rename><i class="bi bi-pencil"></i> Renombrar columna</button>
 <div class="pl-menu-sep"></div>
 <div class="pl-menu-label">Ordenar por</div>
@@ -348,6 +350,16 @@
   <button class="x" id="plBulkCancel" type="button">Cancelar</button>
 </div>
 
+<dialog id="plStageDialog" style="border:1px solid #e4e7ec;border-radius:14px;padding:24px;width:min(440px,90vw);box-shadow:0 24px 60px #10182833">
+  <form id="plStageForm">
+    <h2 id="plStageTitle" style="font-size:20px;margin:0 0 12px"></h2>
+    <p id="plStageInfo" style="font-size:14px;color:#475467"></p>
+    <div id="plStageNameWrap"><label for="plStageName">Nombre de la columna</label><input class="form-control" id="plStageName" maxlength="40" autocomplete="off"></div>
+    <div id="plStageTargetWrap"><label for="plStageTarget">Mover contactos a</label><select class="form-select" id="plStageTarget"></select></div>
+    <p id="plStageError" role="alert" style="color:#b42318;font-size:13px;margin-top:12px"></p>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><button type="button" class="pl-btn" id="plStageCancel">Cancelar</button><button type="submit" class="btn btn-primary btn-sm" id="plStageSubmit">Guardar</button></div>
+  </form>
+</dialog>
 <div class="pl-toast" id="plToast"></div>
 {% endblock %}
 
@@ -686,6 +698,50 @@ board.querySelectorAll('.pl-col').forEach(col => {
     saveColOrder(prev);
   });
 });
+const stageDialog = document.getElementById('plStageDialog');
+const stageForm = document.getElementById('plStageForm');
+const stageNameInput = document.getElementById('plStageName');
+const stageTarget = document.getElementById('plStageTarget');
+const stageError = document.getElementById('plStageError');
+const stageSubmit = document.getElementById('plStageSubmit');
+let removingStage = null;
+function openStageDialog(col) {
+  removingStage = col ? col.dataset.stage : null;
+  document.querySelectorAll('.pl-menu.open').forEach(m => m.classList.remove('open'));
+  document.getElementById('plStageTitle').textContent = col ? 'Eliminar columna' : 'Agregar pipeline';
+  document.getElementById('plStageInfo').textContent = col
+    ? 'Se eliminará la columna «' + STAGE_NAMES[removingStage] + '». Sus ' + col.querySelectorAll('.pl-card').length + ' contactos se trasladarán a la columna que elijas. No se borrarán clientes ni su historial.'
+    : 'Crea una nueva columna para organizar tus contactos.';
+  document.getElementById('plStageNameWrap').hidden = !!col;
+  document.getElementById('plStageTargetWrap').hidden = !col;
+  stageNameInput.required = !col;
+  stageNameInput.value = '';
+  stageTarget.replaceChildren();
+  Object.entries(STAGE_NAMES).filter(([k]) => k !== removingStage).forEach(([k, n]) => stageTarget.add(new Option(n, k)));
+  stageSubmit.textContent = col ? 'Eliminar y trasladar' : 'Crear columna';
+  stageSubmit.disabled = !!col && stageTarget.options.length === 0;
+  stageError.textContent = stageSubmit.disabled ? 'Debe quedar al menos una columna.' : '';
+  stageDialog.showModal();
+}
+document.getElementById('plAddStage').addEventListener('click', () => openStageDialog(null));
+document.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', e => {
+  e.stopPropagation(); openStageDialog(btn.closest('.pl-col'));
+}));
+document.getElementById('plStageCancel').addEventListener('click', () => stageDialog.close());
+stageForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  stageSubmit.disabled = true; stageError.textContent = '';
+  try {
+    const response = await fetch(removingStage ? {{ url_for('pipeline.delete_stage') | tojson }} : {{ url_for('pipeline.create_stage') | tojson }}, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(removingStage ? {stage:removingStage, target:stageTarget.value} : {label:stageNameInput.value.trim()})
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'No se pudo guardar el cambio.');
+    window.location.reload();
+  } catch (err) { stageError.textContent = err.message; stageSubmit.disabled = false; }
+});
+
 })();
 </script>
 {% endblock %}

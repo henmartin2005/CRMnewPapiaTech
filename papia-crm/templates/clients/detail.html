@@ -2,7 +2,7 @@
 {% block title %}{{ client.first_name }} {{ client.last_name }}{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/profile_board.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile_board.css') }}?v=3">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/demos.css') }}">
 {% endblock %}
 
@@ -281,6 +281,8 @@
       .sched-form .form-control { font-size:13px; min-width:0; }
       .sched-check { font-size:12px; color:var(--c-text-2); display:flex; gap:6px; align-items:center; }
     </style>
+
+    {{ maintenance_card(client)|safe }}
 
     <!-- Brochure -->
     <div class="section-card">
@@ -1026,14 +1028,19 @@
       <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
 
         <div>
-          <label class="form-label">Monto a cobrar (USD)</label>
+          <label class="form-label">Monto que quieres recibir (USD)</label>
           <div style="position:relative;">
             <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3);font-size:14px;">$</span>
             <input type="number" class="form-control" id="stripeAmount"
                    step="0.01" min="0.50"
                    value="{{ '%.2f' | format(client.pending) }}"
-                   style="padding-left:22px;" />
+                   style="padding-left:22px;" oninput="stripeQuote()" />
           </div>
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px;">
+            <input type="checkbox" id="stripePassFees" checked onchange="stripeQuote()">
+            El cliente paga la comisión de Stripe (precio con tarjeta)
+          </label>
+          <div id="stripeBreak" data-no-mask style="display:none;margin-top:8px;padding:10px 12px;border:1px solid var(--c-border);border-radius:var(--radius-sm);background:var(--c-surface-2);font-size:12.5px;line-height:1.7;"></div>
         </div>
 
         <div>
@@ -1087,7 +1094,7 @@
     state: {{ profile_layout | tojson }}
   };
 </script>
-<script src="{{ url_for('static', filename='js/profile_board.js') }}?v=2" defer></script>
+<script src="{{ url_for('static', filename='js/profile_board.js') }}?v=5" defer></script>
 <script>
 function toggleBrochure(checkbox) {
   document.getElementById('brochureHidden').value = checkbox.checked ? '1' : '0';
@@ -1306,6 +1313,34 @@ function openStripeModal() {
   document.getElementById('stripeError').style.display      = 'none';
   document.getElementById('stripeGenBtn').style.display     = '';
   new bootstrap.Modal(document.getElementById('stripeModal')).show();
+  stripeQuote(true);
+}
+
+let stripeQuoteTimer = null, stripeQuoteInit = false;
+function stripeQuote(initial) {
+  clearTimeout(stripeQuoteTimer);
+  stripeQuoteTimer = setTimeout(async () => {
+    const box = document.getElementById('stripeBreak');
+    const net = parseFloat(document.getElementById('stripeAmount').value) || 0;
+    if (net <= 0) { box.style.display = 'none'; return; }
+    try {
+      const r = await fetch('/pagos/cotizar?neto=' + net);
+      if (!r.ok) { box.style.display = 'none'; return; }
+      const q = await r.json();
+      const cb = document.getElementById('stripePassFees');
+      if (initial && !stripeQuoteInit) { cb.checked = !!q.pass_fees; stripeQuoteInit = true; }
+      const f = n => '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      if (cb.checked) {
+        box.innerHTML = `Por Zelle: <b>${f(q.zelle)}</b><br>Con tarjeta (link de Stripe): <b style="color:#635BFF;">${f(q.card)}</b>`
+          + ` <span style="color:var(--c-text-3);">(incluye comisión ${f(q.fee)})</span><br>Recibes: <b style="color:var(--c-success);">${f(q.receive)}</b>`;
+      } else {
+        const fee = Math.round((Math.round(net * q.fee_pct) / 100 + q.fee_fixed) * 100) / 100;
+        box.innerHTML = `Cobro con tarjeta: <b>${f(net)}</b><br>Comisión de Stripe: <b style="color:var(--c-danger);">${f(fee)}</b><br>`
+          + `Recibes: <b style="color:var(--c-success);">${f(net - fee)}</b>`;
+      }
+      box.style.display = '';
+    } catch (e) { box.style.display = 'none'; }
+  }, initial ? 0 : 250);
 }
 
 async function generateStripeLink() {
@@ -1325,7 +1360,8 @@ async function generateStripeLink() {
     const res  = await fetch('/payments/create-link', {
       method:  'POST',
       headers: {'Content-Type': 'application/json'},
-      body:    JSON.stringify({ client_id: CLIENT_ID, amount, description: desc }),
+      body:    JSON.stringify({ client_id: CLIENT_ID, amount, description: desc,
+                               pass_fees: document.getElementById('stripePassFees').checked }),
     });
     const data = await res.json();
 

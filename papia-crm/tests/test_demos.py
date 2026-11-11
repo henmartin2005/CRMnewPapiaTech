@@ -209,6 +209,60 @@ class DemosTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn(link['codigo'].encode(), page.data)
 
+    # ── Modo redirección (/d/CODIGO) ──────────────────────────────────────────
+    def redirect_demo(self):
+        r = self.browser.post('/demos/catalogo', data={
+            'csrf': 'csrf', 'nombre': 'CRM Inmobiliario', 'slug': 'crm-inmobiliario',
+            'url': 'https://deboracmpp.pythonanywhere.com/login', 'color': '#1E40AF',
+            'modo': 'redireccion', 'activo': '1'})
+        self.assertEqual(r.status_code, 302)
+        return self.q("SELECT * FROM demos WHERE org_id=1 AND slug='crm-inmobiliario'", one=True)
+
+    def test_redirect_mode_counts_and_redirects(self):
+        demo = self.redirect_demo()
+        self.assertEqual(demo['modo'], 'redireccion')
+        link = self.create(demo_id=demo['id'], negocio='DMPP Realty', max_visitas='2')
+        detail = self.browser.get(f"/demos/enlaces/{link['id']}")
+        self.assertIn(f"https://datos.papiatech.com/d/{link['codigo']}".encode(), detail.data)
+
+        ua = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36', 'X-Real-IP': '9.9.9.9'}
+        # Vista previa de WhatsApp y HEAD: no cuentan.
+        self.assertEqual(self.public.get(f"/d/{link['codigo']}", headers={'User-Agent': 'WhatsApp/2.24.1 A'}).status_code, 200)
+        self.assertEqual(self.public.head(f"/d/{link['codigo']}", headers=ua).status_code, 200)
+        self.assertEqual(self.q('SELECT visitas_usadas v FROM demo_links WHERE id=?', (link['id'],), one=True)['v'], 0)
+
+        with patch('services.demo_access.notify_owner') as notify:
+            r = self.public.get(f"/d/{link['codigo'].lower()}", headers=ua)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r.headers['Location'], 'https://deboracmpp.pythonanywhere.com/login')
+        self.assertEqual(r.headers['Referrer-Policy'], 'no-referrer')
+        notify.assert_called_once()
+        # Recargar en la misma sesión no gasta otra visita.
+        self.assertEqual(self.public.get(f"/d/{link['codigo']}", headers=ua).status_code, 302)
+        row = self.q('SELECT visitas_usadas v FROM demo_links WHERE id=?', (link['id'],), one=True)
+        self.assertEqual(row['v'], 1)
+        entradas = self.q("SELECT COUNT(*) n FROM demo_logs WHERE link_id=? AND tipo='entrada'", (link['id'],), one=True)
+        self.assertEqual(entradas['n'], 1)
+
+        # Otro navegador gasta visitas hasta el límite y luego queda bloqueado.
+        other = self.app.test_client()
+        self.assertEqual(other.get(f"/d/{link['codigo']}", headers=ua).status_code, 302)
+        third = self.app.test_client()
+        with patch('services.demo_access.notify_owner'):
+            blocked = third.get(f"/d/{link['codigo']}", headers=ua)
+        self.assertEqual(blocked.status_code, 403)
+        self.assertNotIn(b'deboracmpp', blocked.data)
+        self.assertEqual(self.public.get('/d/NOEXISTE-ZZZZ', headers=ua).status_code, 404)
+        page = self.browser.get('/demos')
+        self.assertIn(b'Abierto', page.data.replace(b'Agotado', b'Abierto'))
+
+    def test_code_mode_gate_forwards_without_counting(self):
+        link = self.create()
+        r = self.public.get(f"/d/{link['codigo']}", headers={'User-Agent': 'Mozilla/5.0 Chrome/130'})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r.headers['Location'], f"https://groomingmiami.lovable.app/d/{link['codigo']}")
+        self.assertEqual(self.q('SELECT visitas_usadas v FROM demo_links WHERE id=?', (link['id'],), one=True)['v'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

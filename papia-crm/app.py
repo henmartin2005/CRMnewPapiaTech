@@ -33,11 +33,12 @@ from routes.proposals import proposals_bp
 from routes.admin import admin_bp
 from routes.super import super_bp
 from routes.payments import payments_bp
+from routes.pagos import pagos_bp
 from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
 from routes.videos import videos_bp
-from routes.demos import demos_bp, demos_api_bp
+from routes.demos import demos_bp, demos_api_bp, demos_go_bp
 from migrate_videos import migrate as migrate_videos
 from routes.contracts import contracts_bp, contracts_public_bp
 from routes.portal import portal_bp
@@ -76,6 +77,7 @@ migrate_demos()
 app.register_blueprint(videos_bp)
 app.register_blueprint(demos_bp)
 app.register_blueprint(demos_api_bp)
+app.register_blueprint(demos_go_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(payment_schedule_bp)
 app.register_blueprint(pipeline_bp)
@@ -85,6 +87,7 @@ app.register_blueprint(proposals_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(super_bp)
 app.register_blueprint(payments_bp)
+app.register_blueprint(pagos_bp)
 app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
 app.register_blueprint(vault_bp)
@@ -93,6 +96,12 @@ app.register_blueprint(mobile_api_bp)
 app.register_blueprint(contracts_bp)
 app.register_blueprint(contracts_public_bp)
 app.register_blueprint(portal_bp)
+
+# ── Instagram Studio ──
+from migrate_ig_studio import migrate as migrate_ig_studio
+from routes.ig_studio import ig_studio_bp
+migrate_ig_studio()
+app.register_blueprint(ig_studio_bp)
 
 
 # ── Set org context on each request ─────────────────────────────────────────
@@ -110,7 +119,7 @@ def set_org_context():
 def require_login():
     open_endpoints = {'auth.login', 'auth.logout', 'auth.google_login', 'auth.google_callback', 'static', 'whatsapp.webhook', 'whatsapp.zernio_webhook',
                       'payments.stripe_webhook', 'payments.success',
-                      'meta_webhook.verify', 'meta_webhook.receive'}
+                      'meta_webhook.verify', 'meta_webhook.receive', 'demos_go.open'}
     if request.endpoint in open_endpoints:
         return
     # Papia Sign: páginas públicas del firmante y de verificación
@@ -316,6 +325,9 @@ def method_icon_filter(value):
     }
     return icons.get(value, 'chat-fill')
 
+
+from maintenance import setup as setup_maintenance
+setup_maintenance(app)
 
 if __name__ == '__main__':
     init_db()

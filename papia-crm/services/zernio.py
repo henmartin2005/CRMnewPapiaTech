@@ -14,6 +14,8 @@ Variables de entorno:
   ZERNIO_WEBHOOK_SECRET   secreto HMAC del webhook (el mismo que pones en Zernio)
   ZERNIO_API_BASE_URL     opcional, default https://zernio.com/api
 """
+import contextlib
+import contextvars
 import hashlib
 import hmac
 import os
@@ -46,8 +48,46 @@ def api_key() -> str:
     return os.getenv('ZERNIO_API_KEY', '').strip()
 
 
-def account_id() -> str:
+_ACTIVE_ACCOUNT = contextvars.ContextVar('zernio_active_account', default='')
+
+
+def default_account_id() -> str:
+    """Línea principal (la del .env)."""
     return os.getenv('ZERNIO_WA_ACCOUNT_ID', '').strip()
+
+
+def account_id() -> str:
+    """Línea activa dentro de use_account(...) o, si no, la principal."""
+    return _ACTIVE_ACCOUNT.get() or default_account_id()
+
+
+@contextlib.contextmanager
+def use_account(acc_id):
+    """Envía / consulta desde otra línea de WhatsApp dentro del bloque with."""
+    token = _ACTIVE_ACCOUNT.set((acc_id or '').strip())
+    try:
+        yield
+    finally:
+        _ACTIVE_ACCOUNT.reset(token)
+
+
+def lines() -> dict:
+    """Líneas de WhatsApp conectadas: {accountId: etiqueta}.
+    .env → ZERNIO_WA_LINES=accountId:305,accountId:786"""
+    out = {}
+    for part in os.getenv('ZERNIO_WA_LINES', '').split(','):
+        acc, _, label = part.strip().partition(':')
+        acc = acc.strip()
+        if acc:
+            out[acc] = label.strip() or acc[-4:]
+    main = default_account_id()
+    if main and main not in out:
+        out = {main: 'Principal', **out}
+    return out
+
+
+def line_label(acc_id) -> str:
+    return lines().get(acc_id or default_account_id(), '')
 
 
 def is_configured() -> bool:

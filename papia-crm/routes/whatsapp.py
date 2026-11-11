@@ -327,6 +327,60 @@ def _save_conv_id(phone: str, conversation_id: str, org_id=1, inbound=False):
     db.close()
 
 
+_LINE_COL_OK = False
+
+
+def _ensure_line_column():
+    """Columna con la línea (accountId de Zernio) por la que va cada conversación."""
+    global _LINE_COL_OK
+    if _LINE_COL_OK:
+        return
+    db = get_db()
+    try:
+        cols = {r[1] for r in db.execute('PRAGMA table_info(whatsapp_conversations)').fetchall()}
+        if 'zernio_account_id' not in cols:
+            db.execute('ALTER TABLE whatsapp_conversations ADD COLUMN zernio_account_id TEXT')
+            db.commit()
+        _LINE_COL_OK = True
+    finally:
+        db.close()
+
+
+def _set_conv_account(phone: str, acc_id, org_id=1):
+    if not phone or not acc_id:
+        return
+    _ensure_line_column()
+    db = get_db()
+    db.execute(
+        "UPDATE whatsapp_conversations SET zernio_account_id = ? WHERE org_id = ? AND phone = ?",
+        (acc_id, org_id, zernio.to_e164(phone)),
+    )
+    db.commit()
+    db.close()
+
+
+def _get_conv_account(phone: str, org_id=1) -> str:
+    """Línea por la que escribió el contacto; si no se sabe, la principal."""
+    _ensure_line_column()
+    db = get_db()
+    row = db.execute(
+        "SELECT zernio_account_id FROM whatsapp_conversations WHERE org_id = ? AND phone = ?",
+        (org_id, zernio.to_e164(phone)),
+    ).fetchone()
+    db.close()
+    return (row['zernio_account_id'] if row else None) or zernio.default_account_id()
+
+
+def _accounts_by_phone(org_id=1) -> dict:
+    _ensure_line_column()
+    db = get_db()
+    rows = db.execute(
+        "SELECT phone, zernio_account_id FROM whatsapp_conversations WHERE org_id = ?", (org_id,)
+    ).fetchall()
+    db.close()
+    return {r['phone']: r['zernio_account_id'] for r in rows if r['zernio_account_id']}
+
+
 def _message_exists(wa_message_id: str) -> bool:
     if not wa_message_id:
         return False
@@ -417,6 +471,12 @@ def _tpl_context(client) -> dict:
         'pending': f"${pending:,.2f}" if pending > 0 else '',
     }
 def deliver(phone: str, message: str, org_id=1, template=None) -> str:
+    """Envía por la misma línea (305 / 786…) por la que escribió el contacto."""
+    with zernio.use_account(_get_conv_account(phone, org_id)):
+        return _deliver_line(phone, message, org_id, template)
+
+
+def _deliver_line(phone: str, message: str, org_id=1, template=None) -> str:
     """
     Envía un WhatsApp y devuelve el id del mensaje.
     template = {'name': ..., 'language': 'es', 'params': [...]} para primer contacto.
@@ -639,6 +699,13 @@ def _webp_to_png(data: bytes) -> bytes:
 
 def deliver_media(phone: str, data: bytes, mime: str, kind: str, filename: str = 'archivo',
                   voice: bool = False, org_id=1) -> str:
+    """Adjunto por la misma línea por la que escribió el contacto."""
+    with zernio.use_account(_get_conv_account(phone, org_id)):
+        return _deliver_media_line(phone, data, mime, kind, filename, voice, org_id)
+
+
+def _deliver_media_line(phone: str, data: bytes, mime: str, kind: str, filename: str = 'archivo',
+                        voice: bool = False, org_id=1) -> str:
     """Envía audio / sticker / imagen / archivo por Zernio. Devuelve el id del mensaje."""
     if _provider() != 'zernio':
         raise RuntimeError('El envío de audios y stickers requiere Zernio como proveedor de WhatsApp.')
@@ -862,6 +929,7 @@ def index():
 
     return render_template(
         'whatsapp/index.html',
+        wa_lines=zernio.lines(),
         conversations=conversations,
         conversations_data=conversations_to_dicts(conversations, org_id),
         active_phone=active_phone,
@@ -892,6 +960,8 @@ def _clients_by_digits(org_id=1):
 
 def conversations_to_dicts(rows, org_id=1):
     clients = _clients_by_digits(org_id)
+    accs = _accounts_by_phone(org_id)
+    multi = len(zernio.lines()) > 1
     out = []
     for r in rows:
         client_id, first, last = r['client_id'], r['first_name'], r['last_name']
@@ -909,6 +979,8 @@ def conversations_to_dicts(rows, org_id=1):
             'last_status':    r['last_status'],
             'last_at':    r['last_at'],
             'unread':     r['unread'] or 0,
+            'line_id': accs.get(r['phone']) or zernio.default_account_id(),
+            'line': zernio.line_label(accs.get(r['phone'])) if multi else '',
         })
     return out
 
@@ -983,6 +1055,7 @@ def zernio_webhook():
             if m_type and (not msg.get('text') or text.startswith('[')):
                 text = msg.get('text') or _media_label(m_type)
             _save_conv_id(phone, conv.get('id') or msg.get('conversationId'), org_id, inbound=True)
+            _set_conv_account(phone, account.get('accountId') or account.get('id'), org_id)
             name = (sender.get('name') or sender.get('displayName')
                     or conv.get('participantName') or conv.get('name') or '')
             # Número desconocido → se crea como cliente en "Nuevo Lead" (pipeline)
@@ -1001,6 +1074,7 @@ def zernio_webhook():
             phone = zernio.to_e164(conv.get('participantId') or '')
             if phone and not _message_exists(wa_id):
                 _save_conv_id(phone, conv.get('id'), org_id)
+                _set_conv_account(phone, account.get('accountId') or account.get('id'), org_id)
                 sent_media = _save_inbound_media(msg.get('attachments'))
                 _record_outbound(phone, msg.get('text') or _media_label(sent_media[1]) or '[mensaje]',
                                  wa_id, org_id, media=sent_media)

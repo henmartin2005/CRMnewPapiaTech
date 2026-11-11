@@ -15,6 +15,12 @@
   var saved = state.layout || {};
   var colors = state.colors || {};
 
+  // Diseño por defecto para clientes sin diseño propio (tomado del perfil de Henrry Test Cobrar).
+  var DEFAULT_LAYOUT = {"mantenimiento":{"x":0,"y":131,"w":4,"h":65},"contacto":{"x":0,"y":0,"w":4,"h":36},"financiero":{"x":0,"y":36,"w":4,"h":27},"cronograma":{"x":0,"y":63,"w":4,"h":20},"cuadro":{"x":0,"y":83,"w":4,"h":8},"vaultcard":{"x":0,"y":91,"w":4,"h":11},"etapa-del-pipeline":{"x":0,"y":102,"w":4,"h":29},"nueva-actividad":{"x":4,"y":0,"w":8,"h":13},"projstages":{"x":4,"y":13,"w":8,"h":7},"waconversation":{"x":4,"y":20,"w":8,"h":12},"historial":{"x":4,"y":32,"w":8,"h":60},"recordatorios":{"x":4,"y":92,"w":8,"h":17},"contratos":{"x":4,"y":109,"w":8,"h":12},"portalcliente":{"x":4,"y":121,"w":8,"h":17},"documentos":{"x":4,"y":138,"w":8,"h":24}};
+  // Cuadros que se pueden minimizar; empiezan minimizados.
+  var COLLAPSIBLE = { historial: true };
+  var skipSave = false;
+
   function slug(s) {
     return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'cuadro';
@@ -48,7 +54,7 @@
     var item = document.createElement('div');
     item.className = 'grid-stack-item';
     item.setAttribute('gs-id', key);
-    var s = saved[key];
+    var s = saved[key] || DEFAULT_LAYOUT[key];
     if (s) {
       item.setAttribute('gs-x', s.x); item.setAttribute('gs-y', s.y);
       item.setAttribute('gs-w', s.w); item.setAttribute('gs-h', s.h);
@@ -111,13 +117,61 @@
   grid.batchUpdate(false);
   setTimeout(function () { ready = true; }, 400);
 
+  // Cuadros minimizables (Historial): minimizados por defecto, con botón Desplegar / Minimizar.
+  (function () {
+    var st = document.createElement('style');
+    st.textContent =
+      '.pb-has-collapse .section-head{display:flex;align-items:center;gap:8px}' +
+      '.pb-has-collapse .section-head .section-head-label{margin-right:auto}' +
+      '.pb-collapse-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid var(--c-border);' +
+      'border-radius:999px;background:transparent;color:inherit;font-size:11.5px;font-weight:600;cursor:pointer;line-height:1.4}' +
+      '.pb-collapse-btn:hover{background:rgba(127,127,127,.12)}' +
+      '.section-card.pb-collapsed > :not(.section-head){display:none !important}' +
+      '.section-card.pb-collapsed .section-head{border-bottom:0}';
+    document.head.appendChild(st);
+  })();
+  items.forEach(function (it) {
+    if (!COLLAPSIBLE[it.key]) return;
+    var head = it.card.querySelector('.section-head');
+    if (!head) return;
+    var node = it.item.gridstackNode;
+    it.expandedH = (node && node.h) || fitHeight(it);
+    it.card.classList.add('pb-has-collapse');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pb-collapse-btn';
+    head.appendChild(btn);
+    function setCollapsed(c) {
+      it.collapsed = c;
+      it.card.classList.toggle('pb-collapsed', c);
+      btn.innerHTML = c ? '<i class="bi bi-chevron-down"></i> Desplegar' : '<i class="bi bi-chevron-up"></i> Minimizar';
+      btn.title = c ? 'Desplegar historial' : 'Minimizar historial';
+      btn.setAttribute('aria-expanded', c ? 'false' : 'true');
+      skipSave = true;
+      grid.update(it.item, { h: c ? fitHeight(it) : it.expandedH });
+      setTimeout(function () { skipSave = false; }, 0);
+    }
+    btn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+    btn.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      setCollapsed(!it.collapsed);
+    });
+    setCollapsed(true);
+  });
+
   var statusEl = bar.querySelector('.pb-status');
   var timer = null;
   function collect() {
     var layout = {};
     grid.engine.nodes.forEach(function (n) {
       var id = n.el && n.el.getAttribute('gs-id');
-      if (id) layout[id] = { x: n.x, y: n.y, w: n.w, h: n.h };
+      if (!id) return;
+      var h = n.h;
+      items.forEach(function (it) {
+        if (it.key !== id || !COLLAPSIBLE[id]) return;
+        if (it.collapsed) h = it.expandedH; else it.expandedH = n.h;
+      });
+      layout[id] = { x: n.x, y: n.y, w: n.w, h: h };
     });
     return layout;
   }
@@ -136,7 +190,7 @@
         .finally(function () { setTimeout(function () { statusEl.textContent = ''; }, 1500); });
     }, 500);
   }
-  grid.on('change', function () { save(false); });
+  grid.on('change', function () { if (!skipSave) save(false); });
 
   gridEl.addEventListener('click', function (e) {
     var btn = e.target.closest('.pb-color-btn');
@@ -190,6 +244,34 @@
     fetch(cfg.saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                          body: JSON.stringify({ reset: true }), credentials: 'same-origin' })
       .then(function () { location.reload(); });
+  });
+
+  // Cronograma de pagos: que "Agregar cuota" siempre se vea y que el cuadro crezca
+  // al abrir el formulario (vuelve a su altura al cerrarlo). No se guarda en el diseño.
+  document.querySelectorAll('details.sched-add').forEach(function (d) {
+    var it = items.find(function (x) { return x.card.contains(d); });
+    if (!it) return;
+    var baseH = null;
+    function currentH() { return it.item.gridstackNode ? it.item.gridstackNode.h : 0; }
+    function setH(h) {
+      skipSave = true;
+      grid.update(it.item, { h: h });
+      setTimeout(function () { skipSave = false; }, 0);
+    }
+    if (!it.card.classList.contains('pb-collapsed')) {
+      var need = fitHeight(it);
+      if (need > currentH()) setH(need);
+    }
+    d.addEventListener('toggle', function () {
+      if (d.open) {
+        baseH = currentH();
+        setH(Math.max(fitHeight(it), baseH));
+        var f = d.querySelector('input[name="label"]');
+        if (f) f.focus();
+      } else if (baseH) {
+        setH(baseH);
+      }
+    });
   });
 
   old.style.display = 'none';
