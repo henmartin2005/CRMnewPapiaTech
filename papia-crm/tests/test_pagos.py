@@ -37,6 +37,9 @@ def test_flow():
     from routes import payments as payments_mod
 
     flask_app = app_module.app
+    # app.py carga el .env real con override: neutralizar las claves en la prueba.
+    os.environ['STRIPE_WEBHOOK_SECRET'] = ''
+    os.environ['STRIPE_SECRET_KEY'] = 'sk_test_dummy'
     flask_app.config['TESTING'] = True
     c = flask_app.test_client()
     with c.session_transaction() as s:
