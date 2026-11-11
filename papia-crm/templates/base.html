@@ -111,6 +111,16 @@
       </a>
     </li>
 
+    {% if is_admin %}
+    <li>
+      <a href="{{ url_for('pagos.index') }}"
+         class="sb-link {% if request.blueprint == 'pagos' %}active{% endif %}">
+        <i class="bi bi-cash-coin" style="color:#16A34A;"></i>
+        <span class="sb-label">Pagos</span>
+      </a>
+    </li>
+    {% endif %}
+
     <li class="sb-section" style="margin-top:4px;">Operación</li>
 
     {% if is_admin %}

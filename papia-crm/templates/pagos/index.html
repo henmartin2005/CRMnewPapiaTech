@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+{% block title %}Pagos{% endblock %}
+
+{% block head %}
+<style>
+  .pg-month { display:flex; align-items:center; gap:4px; }
+  .pg-month a { width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--c-border);
+                border-radius:var(--radius-sm); color:var(--c-text-2); text-decoration:none; background:var(--c-surface); }
+  .pg-month span { min-width:130px; text-align:center; font-weight:600; font-size:13px; }
+  .pay-grid { display:grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr); gap:12px; margin-bottom:12px; }
+  @media (max-width: 1000px) { .pay-grid { grid-template-columns: 1fr; } .kpi-strip { flex-wrap:wrap; } .kpi-item { flex:1 1 45%; } }
+  .ptbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .ptbl th { font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--c-text-3);
+             padding:8px 12px; border-bottom:1px solid var(--c-border); text-align:left; white-space:nowrap; }
+  .ptbl td { padding:9px 12px; border-bottom:1px solid var(--c-border); vertical-align:middle; }
+  .ptbl tr:last-child td { border-bottom:none; }
+  .ptbl tr:hover td { background:var(--c-surface-2); }
+  .ptbl .r { text-align:right; }
+  .ptbl .num { font-family:'Geist Mono', monospace; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ptbl a.cl { color:var(--c-text); font-weight:600; text-decoration:none; }
+  .ptbl a.cl:hover { color:var(--c-accent); }
+  .ptbl .sub { font-size:11.5px; color:var(--c-text-3); }
+  .tbl-wrap { overflow-x:auto; }
+  .chip { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:99px;
+          border:1px solid var(--c-border); background:var(--c-bg); color:var(--c-text-2); white-space:nowrap; }
+  .chip.stripe { background:#EEF0FF; border-color:#C7CBFF; color:#635BFF; }
+  .chip.zelle { background:#F3E8FF; border-color:#E0C8FF; color:#6D1ED4; }
+  .chip.overdue { background:rgba(220,38,38,.08); border-color:rgba(220,38,38,.25); color:var(--c-danger); }
+  .chip.today { background:rgba(217,119,6,.08); border-color:rgba(217,119,6,.25); color:var(--c-warning); }
+  .chip.est { font-weight:500; font-size:10px; padding:1px 6px; }
+  .act { display:flex; gap:4px; justify-content:flex-end; }
+  .act .btn { white-space:nowrap; }
+  .calc { padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .calc-in { position:relative; }
+  .calc-in span { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--c-text-3); }
+  .calc-in input { padding-left:24px; font-size:18px; font-weight:600; }
+  .calc-row { display:flex; justify-content:space-between; align-items:baseline; font-size:13px; padding:6px 0;
+              border-bottom:1px dashed var(--c-border); }
+  .calc-row:last-child { border-bottom:none; }
+  .calc-row b { font-family:'Geist Mono', monospace; font-size:15px; }
+  .calc-note { font-size:11.5px; color:var(--c-text-3); line-height:1.45; }
+  .bal-row { padding:10px 16px; border-bottom:1px solid var(--c-border); }
+  .bal-row:last-child { border-bottom:none; }
+  .bal-top { display:flex; justify-content:space-between; gap:8px; font-size:13px; margin-bottom:6px; }
+  .bal-bar { height:6px; background:var(--c-border); border-radius:99px; overflow:hidden; }
+  .bal-bar div { height:100%; background:var(--c-success); border-radius:99px; }
+  .filters { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .filters select { width:auto; min-width:150px; font-size:12.5px; padding:4px 28px 4px 10px; height:30px; }
+  .empty-sm { padding:22px; text-align:center; color:var(--c-text-3); font-size:13px; }
+  details.cfg summary { cursor:pointer; list-style:none; }
+  details.cfg summary::-webkit-details-marker { display:none; }
+  .cfg-form { padding:14px 16px; display:grid; grid-template-columns:1fr 1fr; gap:10px; border-top:1px solid var(--c-border); }
+  .cfg-form .full { grid-column:1 / -1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">Pagos</h1>
+    <p class="pg-sub">Cobros recibidos, cuotas por cobrar y comisiones de Stripe</p>
+  </div>
+  <div class="pg-actions">
+    <div class="pg-month">
+      <a href="{{ url_for('pagos.index', mes=prev_month) }}" title="Mes anterior"><i class="bi bi-chevron-left"></i></a>
+      <span>{{ month_label }}</span>
+      <a href="{{ url_for('pagos.index', mes=next_month) }}" title="Mes siguiente"><i class="bi bi-chevron-right"></i></a>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openManual()"><i class="bi bi-plus"></i> Registrar pago</button>
+  </div>
+</div>
+
+<!-- ── KPIs ── -->
+<div class="kpi-strip">
+  <div class="kpi-item">
+    <div class="kpi-label">Recibido (neto)</div>
+    <div class="kpi-value" style="color:var(--c-success);">{{ kpi.received_net | currency }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:var(--c-success);"></span>{{ kpi.count }} pago(s) en {{ month_label | lower }}</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-label">Comisiones Stripe</div>
+    <div class="kpi-value" style="color:#635BFF;">{{ kpi.fees | currency }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:#635BFF;"></span>{{ kpi.stripe_count }} cobro(s) con tarjeta</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-label">Por cobrar este mes</div>
+    <div class="kpi-value">{{ kpi.due_month | currency }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:var(--c-accent);"></span>cuotas que vencen en {{ month_label | lower }}</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-label">Vencido</div>
+    <div class="kpi-value" style="color:{% if kpi.overdue_total > 0 %}var(--c-danger){% else %}var(--c-text){% endif %};">{{ kpi.overdue_total | currency }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:var(--c-danger);"></span>{{ kpi.overdue_count }} cuota(s) atrasada(s)</div>
+  </div>
+  <div class="kpi-item">
+    <div class="kpi-label">Saldo de contratos</div>
+    <div class="kpi-value">{{ kpi.contracts_pending | currency }}</div>
+    <div class="kpi-meta"><span class="kpi-dot" style="background:var(--c-warning);"></span>total − pagado de todos los clientes</div>
+  </div>
+</div>
+
+<div class="pay-grid">
+  <!-- ── Cuotas por cobrar ── -->
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-head-label"><i class="bi bi-hourglass-split" style="margin-right:5px;"></i>Cuotas por cobrar</span>
+      <span class="section-count">{{ pending | length }}</span>
+    </div>
+    {% if pending %}
+    <div class="tbl-wrap">
+    <table class="ptbl">
+      <thead><tr>
+        <th>Cliente / cuota</th><th>Vence</th>
+        <th class="r">Zelle</th><th class="r">Tarjeta</th><th class="r"></th>
+      </tr></thead>
+      <tbody>
+      {% for p in pending %}
+      <tr>
+        <td>
+          <a class="cl" href="{{ url_for('clients.detail', client_id=p.client_id) }}#cronograma">{{ p.client }}</a>
+          <div class="sub">{{ p.label }}</div>
+        </td>
+        <td class="num">
+          {{ p.due_date }}
+          {% if p.state == 'overdue' %}<div><span class="chip overdue">Vencida</span></div>
+          {% elif p.state == 'today' %}<div><span class="chip today">Hoy</span></div>{% endif %}
+        </td>
+        <td class="r num">{{ p.amount | currency }}</td>
+        <td class="r num" title="Comisión Stripe {{ p.quote.fee | currency }}">{{ p.quote.card | currency }}<div class="sub">+{{ p.quote.extra | currency }}</div></td>
+        <td>
+          <div class="act">
+            <button class="btn btn-ghost btn-xs" title="Registrar pago por Zelle u otro método"
+                    onclick='openManual({{ p.client_id }}, {{ p.id }}, {{ p.amount }}, {{ (p.client ~ " — " ~ p.label) | tojson }})'>
+              <i class="bi bi-check2-circle" style="color:var(--c-success);"></i> Pagó
+            </button>
+            <button class="btn btn-ghost btn-xs" title="Crear link de Stripe por {{ p.quote.card | currency }}"
+                    onclick='instLink({{ p.id }}, {{ p.client_id }}, {{ (p.phone or "") | tojson }}, {{ p.client | tojson }}, {{ p.amount }}, {{ p.quote.card }})'>
+              <i class="bi bi-credit-card" style="color:#635BFF;"></i> Link
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-sm"><i class="bi bi-check2-all"></i> No hay cuotas pendientes. Agrégalas desde el cronograma de cada cliente.</div>
+    {% endif %}
+  </div>
+
+  <!-- ── Calculadora + ajustes ── -->
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-head-label"><i class="bi bi-calculator" style="margin-right:5px;"></i>Calculadora Zelle vs. tarjeta</span>
+    </div>
+    <div class="calc" data-no-mask>
+      <div>
+        <label class="form-label" style="font-size:12px;">Quiero recibir</label>
+        <div class="calc-in"><span>$</span>
+          <input type="number" class="form-control" id="calcNet" value="250" min="0" step="0.01" oninput="calc()">
+        </div>
+      </div>
+      <div>
+        <div class="calc-row"><span>Precio por Zelle</span><b id="cZelle"></b></div>
+        <div class="calc-row"><span>Precio con tarjeta (Stripe)</span><b id="cCard" style="color:#635BFF;"></b></div>
+        <div class="calc-row"><span>Comisión de Stripe</span><b id="cFee" style="color:var(--c-danger);"></b></div>
+        <div class="calc-row"><span>Recibes en ambos casos</span><b id="cRecv" style="color:var(--c-success);"></b></div>
+      </div>
+      <div class="calc-note">
+        Precio dual: el precio con tarjeta incluye la comisión ({{ '%g' % cfg.fee_pct }}% + {{ cfg.fee_fixed | currency }})
+        y el pago por Zelle es el precio con descuento. Tarjetas internacionales cuestan 1.5% más; el CRM guarda la comisión real de cada cobro.
+      </div>
+    </div>
+    <details class="cfg">
+      <summary class="section-head" style="border-top:1px solid var(--c-border);border-bottom:none;">
+        <span class="section-head-label"><i class="bi bi-sliders" style="margin-right:5px;"></i>Ajustes de comisión</span>
+        <span class="chip">{% if cfg.pass_fees %}Cliente paga comisión{% else %}Tú absorbes la comisión{% endif %}</span>
+      </summary>
+      <form method="POST" action="{{ url_for('pagos.save_settings') }}" class="cfg-form">
+        <input type="hidden" name="mes" value="{{ month }}">
+        <div><label class="form-label" style="font-size:12px;">Comisión %</label>
+          <input type="number" name="fee_pct" class="form-control" step="0.01" min="0" max="15" value="{{ cfg.fee_pct }}"></div>
+        <div><label class="form-label" style="font-size:12px;">Cargo fijo $</label>
+          <input type="number" name="fee_fixed" class="form-control" step="0.01" min="0" max="5" value="{{ '%.2f' % cfg.fee_fixed }}"></div>
+        <div class="full"><label class="form-label" style="font-size:12px;">Email de Zelle (se muestra en el checkout)</label>
+          <input type="email" name="zelle_email" class="form-control" placeholder="henrry@papiatech.com" value="{{ cfg.zelle_email }}"></div>
+        <label class="full" style="font-size:13px;display:flex;gap:8px;align-items:center;">
+          <input type="checkbox" name="pass_fees" value="1" {% if cfg.pass_fees %}checked{% endif %}>
+          Los links de Stripe cobran el precio con tarjeta (el cliente cubre la comisión)
+        </label>
+        <div class="full"><button class="btn btn-primary btn-sm"><i class="bi bi-save"></i> Guardar</button></div>
+      </form>
+    </details>
+  </div>
+</div>
+
+<!-- ── Historial ── -->
+<div class="section-card" style="margin-bottom:12px;">
+  <div class="section-head" style="flex-wrap:wrap;gap:8px;">
+    <span class="section-head-label"><i class="bi bi-receipt" style="margin-right:5px;"></i>Pagos recibidos · {{ month_label }}</span>
+    <form class="filters" method="GET" action="{{ url_for('pagos.index') }}">
+      <input type="hidden" name="mes" value="{{ month }}">
+      <select name="metodo" class="form-select" onchange="this.form.submit()">
+        <option value="">Todos los métodos</option>
+        {% for k, v in methods %}<option value="{{ k }}" {% if f_method == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+        <option value="schedule" {% if f_method == 'schedule' %}selected{% endif %}>Marcado en cronograma</option>
+      </select>
+      <select name="cliente" class="form-select" onchange="this.form.submit()">
+        <option value="">Todos los clientes</option>
+        {% for c in clients %}<option value="{{ c.id }}" {% if f_client == c.id %}selected{% endif %}>{{ c.first_name }} {{ c.last_name }}</option>{% endfor %}
+      </select>
+      <button type="submit" formmethod="POST" formaction="{{ url_for('pagos.sync_fees') }}" class="btn btn-ghost btn-xs"
+              title="Traer de Stripe la comisión real de los cobros que aún no la tienen">
+        <i class="bi bi-arrow-repeat"></i> Comisiones reales
+      </button>
+    </form>
+  </div>
+  {% if history %}
+  <div class="tbl-wrap">
+  <table class="ptbl">
+    <thead><tr>
+      <th>Fecha</th><th>Cliente</th><th>Concepto</th><th>Método</th>
+      <th class="r">Cobrado</th><th class="r">Comisión</th><th class="r">Recibido</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in history %}
+    <tr>
+      <td class="num">{{ r.date }}</td>
+      <td><a class="cl" href="{{ url_for('clients.detail', client_id=r.client_id) }}">{{ r.client }}</a></td>
+      <td>{{ r.concept }}</td>
+      <td><span class="chip {{ r.method }}">{{ method_labels.get(r.method, r.method) }}</span></td>
+      <td class="r num">{{ r.gross | currency }}</td>
+      <td class="r num">
+        {% if r.fee %}{{ r.fee | currency }}{% if not r.fee_real %} <span class="chip est" title="Estimada; usa 'Comisiones reales'">est.</span>{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td class="r num" style="font-weight:600;color:var(--c-success);">{{ r.net | currency }}</td>
+      <td class="r">
+        {% if r.source == 'manual' %}
+        <form method="POST" action="{{ url_for('pagos.manual_delete', record_id=r.id) }}" style="margin:0;"
+              onsubmit="return confirm('¿Eliminar este pago? Se resta del monto pagado del cliente.');">
+          <button class="btn btn-ghost btn-icon-xs" title="Eliminar"><i class="bi bi-trash" style="color:var(--c-danger);"></i></button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr>
+      <td colspan="4" style="font-weight:600;">Total</td>
+      <td class="r num" style="font-weight:600;">{{ history | sum(attribute='gross') | currency }}</td>
+      <td class="r num" style="font-weight:600;">{{ history | map(attribute='fee') | map('float') | sum | currency }}</td>
+      <td class="r num" style="font-weight:700;color:var(--c-success);">{{ history | map(attribute='net') | map('float') | sum | currency }}</td>
+      <td></td>
+    </tr></tfoot>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-sm">No hay pagos registrados en {{ month_label | lower }}{% if f_method or f_client %} con estos filtros{% endif %}.</div>
+  {% endif %}
+</div>
+
+<!-- ── Saldos por cliente ── -->
+<div class="section-card">
+  <div class="section-head">
+    <span class="section-head-label"><i class="bi bi-people" style="margin-right:5px;"></i>Saldo por cliente</span>
+    <span class="section-count">{{ balances | length }}</span>
+  </div>
+  {% for b in balances %}
+  <div class="bal-row">
+    <div class="bal-top">
+      <a class="cl" style="font-weight:600;color:var(--c-text);text-decoration:none;" href="{{ url_for('clients.detail', client_id=b.id) }}">{{ b.client }}{% if b.company %} <span style="color:var(--c-text-3);font-weight:400;">· {{ b.company }}</span>{% endif %}</a>
+      <span class="num" style="font-family:'Geist Mono',monospace;font-size:12.5px;">
+        {{ b.amount_paid | currency }} / {{ b.total_cost | currency }}
+        {% if b.pending > 0 %}<span style="color:var(--c-danger);"> · debe {{ b.pending | currency }}</span>{% else %}<span style="color:var(--c-success);"> · al día</span>{% endif %}
+      </span>
+    </div>
+    <div class="bal-bar"><div style="width:{{ b.pct }}%;"></div></div>
+  </div>
+  {% else %}
+  <div class="empty-sm">Ningún cliente tiene costo total asignado.</div>
+  {% endfor %}
+</div>
+
+<!-- ── Modal: registrar pago directo ── -->
+<div class="modal fade" id="manualModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form class="modal-content" method="POST" action="{{ url_for('pagos.manual') }}">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cash-coin me-2" style="color:var(--c-success);"></i>Registrar pago</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+        <input type="hidden" name="installment_id" id="mInst">
+        <div id="mInstLabel" class="chip" style="display:none;align-self:flex-start;"></div>
+        <div id="mClientWrap">
+          <label class="form-label">Cliente</label>
+          <select name="client_id" id="mClient" class="form-select" required>
+            <option value="">Elige un cliente…</option>
+            {% for c in clients %}<option value="{{ c.id }}">{{ c.first_name }} {{ c.last_name }}{% if c.company %} · {{ c.company }}{% endif %}</option>{% endfor %}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;"><label class="form-label">Monto</label>
+            <input type="number" name="amount" id="mAmount" class="form-control" step="0.01" min="0.01" required></div>
+          <div style="flex:1;"><label class="form-label">Fecha</label>
+            <input type="date" name="paid_on" class="form-control" value="{{ today }}" required></div>
+        </div>
+        <div><label class="form-label">Método</label>
+          <select name="method" class="form-select">
+            {% for k, v in methods %}{% if k != 'stripe' %}<option value="{{ k }}">{{ v }}</option>{% endif %}{% endfor %}
+          </select></div>
+        <div><label class="form-label">Nota (opcional)</label>
+          <input type="text" name="note" class="form-control" maxlength="300" placeholder="Ej. confirmación Zelle #1234"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check2"></i> Registrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Modal: link de Stripe para una cuota ── -->
+<div class="modal fade" id="linkModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-credit-card me-2" style="color:#635BFF;"></i>Link de pago</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
+        <div id="lStatus" style="font-size:13px;color:var(--c-text-2);">Generando…</div>
+        <div id="lBox" style="display:none;">
+          <div style="display:flex;gap:6px;">
+            <input type="text" class="form-control num" id="lUrl" readonly style="font-size:12px;color:var(--c-accent);">
+            <button class="em-link-btn" onclick="copyLink()" title="Copiar"><i class="bi bi-clipboard"></i></button>
+          </div>
+          <button class="btn-wa" onclick="waLink()" style="margin-top:8px;border-color:#25D366;color:#25D366;">
+            <i class="bi bi-whatsapp"></i> Enviar por WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const FEE_PCT = {{ cfg.fee_pct }}, FEE_FIXED = {{ cfg.fee_fixed }};
+const fmt = n => '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const r2 = n => Math.round(n * 100) / 100;
+function feeFor(g) { return r2(r2(g * FEE_PCT / 100) + FEE_FIXED); }
+function cardAmount(net) {
+  if (!(net > 0)) return 0;
+  let g = Math.ceil(((net + FEE_FIXED) / (1 - FEE_PCT / 100)) * 100 - 1e-9) / 100;
+  while (r2(g - feeFor(g)) < net) g = r2(g + 0.01);
+  while (g > 0.01 && r2((g - 0.01) - feeFor(g - 0.01)) >= net) g = r2(g - 0.01);
+  return g;
+}
+function calc() {
+  const net = parseFloat(document.getElementById('calcNet').value) || 0;
+  const card = cardAmount(net), fee = card ? feeFor(card) : 0;
+  document.getElementById('cZelle').textContent = fmt(net);
+  document.getElementById('cCard').textContent = fmt(card);
+  document.getElementById('cFee').textContent = fmt(fee);
+  document.getElementById('cRecv').textContent = fmt(card - fee);
+}
+calc();
+
+function openManual(clientId, instId, amount, label) {
+  const sel = document.getElementById('mClient');
+  document.getElementById('mInst').value = instId || '';
+  document.getElementById('mAmount').value = amount ? Number(amount).toFixed(2) : '';
+  document.getElementById('mAmount').readOnly = !!instId;
+  const lbl = document.getElementById('mInstLabel');
+  if (instId) { lbl.textContent = label; lbl.style.display = 'inline-flex'; sel.value = clientId; }
+  else { lbl.style.display = 'none'; sel.value = ''; }
+  document.getElementById('mClientWrap').style.display = instId ? 'none' : '';
+  new bootstrap.Modal(document.getElementById('manualModal')).show();
+}
+
+let linkUrl = '', linkPhone = '', linkName = '';
+async function instLink(instId, clientId, phone, name, zelle, card) {
+  linkUrl = ''; linkPhone = phone; linkName = name;
+  document.getElementById('lStatus').textContent = 'Generando link de Stripe…';
+  document.getElementById('lBox').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('linkModal')).show();
+  try {
+    const res = await fetch(`/pagos/cuota/${instId}/link`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({client_id: clientId}),
+    });
+    const d = await res.json();
+    if (!d.success) { document.getElementById('lStatus').textContent = d.error || 'No se pudo crear el link.'; return; }
+    linkUrl = d.url;
+    document.getElementById('lUrl').value = linkUrl;
+    document.getElementById('lStatus').innerHTML = d.pass_fees
+      ? `Con tarjeta paga <b>${fmt(d.charge)}</b> (incluye comisión de ${fmt(d.fee_estimated)}). Por Zelle serían <b>${fmt(d.net_amount)}</b>. Al pagarse, la cuota se marca sola.`
+      : `Cobro de <b>${fmt(d.charge)}</b>; recibes aprox. ${fmt(d.net_amount)} después de la comisión.`;
+    document.getElementById('lBox').style.display = '';
+  } catch (e) {
+    document.getElementById('lStatus').textContent = 'Error de conexión.';
+  }
+}
+function copyLink() { if (linkUrl) navigator.clipboard.writeText(linkUrl); }
+function waLink() {
+  if (!linkUrl) return;
+  const msg = encodeURIComponent(`Hola ${linkName}, aquí está el link para realizar tu pago con tarjeta de forma segura:\n${linkUrl}`);
+  window.open(`https://wa.me/${(linkPhone || '').replace(/\D/g, '')}?text=${msg}`, '_blank');
+}
+</script>
+{% endblock %}

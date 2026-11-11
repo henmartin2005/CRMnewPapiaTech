@@ -33,6 +33,7 @@ from routes.proposals import proposals_bp
 from routes.admin import admin_bp
 from routes.super import super_bp
 from routes.payments import payments_bp
+from routes.pagos import pagos_bp
 from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
@@ -85,6 +86,7 @@ app.register_blueprint(proposals_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(super_bp)
 app.register_blueprint(payments_bp)
+app.register_blueprint(pagos_bp)
 app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
 app.register_blueprint(vault_bp)
