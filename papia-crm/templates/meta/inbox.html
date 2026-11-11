@@ -7,315 +7,544 @@
 {% block head %}
 <style>
 .main-content { padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-.meta-shell { display: flex; flex: 1; height: 100%; overflow: hidden; }
-.meta-left {
-  width: 320px; flex-shrink: 0; background: var(--c-surface);
-  border-right: 1px solid var(--c-border); display: flex; flex-direction: column;
+.omni {
+  --o-bg: #F4F6FA; --o-card: #FFFFFF; --o-line: #E6E9F0; --o-soft: #F7F8FB;
+  --o-text: #111827; --o-text-2: #4B5563; --o-text-3: #9CA3AF;
+  --o-accent: #2A5BFF; --o-accent-soft: #EAF0FF; --o-in: #F1F3F7; --o-out: #E7EEFF;
+  --o-ok: #16A34A; --o-ok-soft: #E8F7EE; --o-warn: #B45309; --o-warn-soft: #FEF3E2;
+  --o-ch: {{ channel_color }};
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px;
+  padding: 16px 18px 18px; background: var(--o-bg); color: var(--o-text);
 }
-.meta-left-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid var(--c-border);
-}
-.meta-left-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--c-text); }
-.meta-left-title i { color: {{ channel_color }}; font-size: 16px; }
-.meta-convos { flex: 1; overflow-y: auto; }
-.meta-convo-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  border-bottom: 1px solid var(--c-border); color: inherit; text-decoration: none;
-}
-.meta-convo-item:hover { background: var(--c-surface-2); }
-.meta-convo-item.active { background: rgba(42,91,255,.08); }
-.meta-avatar {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: {{ channel_color }}; color: #fff; font-size: 12px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.meta-convo-body { flex: 1; min-width: 0; }
-.meta-convo-name { font-size: 13px; font-weight: 650; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meta-convo-preview { font-size: 11.5px; color: var(--c-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meta-convo-preview.outbound::before { content: '↑ '; color: var(--c-accent); }
-.meta-convo-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.meta-convo-time { font-size: 10.5px; color: var(--c-text-3); font-family: 'Geist Mono', monospace; }
-.meta-unread-badge {
-  min-width: 18px; height: 18px; border-radius: 99px; padding: 0 5px;
-  display: flex; align-items: center; justify-content: center;
-  background: {{ channel_color }}; color: #fff; font-size: 10px; font-weight: 700;
-}
-.meta-empty {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; padding: 40px 20px; text-align: center; color: var(--c-text-3);
-}
-.meta-empty i { font-size: 32px; opacity: .28; }
-.meta-empty p { margin: 0; font-size: 12.5px; }
-.meta-right { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--c-bg); }
-.meta-chat-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 12px 20px; background: var(--c-surface); border-bottom: 1px solid var(--c-border);
-}
-.meta-chat-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.meta-chat-info { min-width: 0; }
-.meta-chat-name { font-size: 14px; font-weight: 700; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meta-chat-sub { font-size: 11.5px; color: var(--c-text-3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.meta-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
-.meta-date-sep {
-  display: flex; align-items: center; gap: 10px; margin: 10px 0 6px;
-  font-size: 11px; color: var(--c-text-3); font-family: 'Geist Mono', monospace;
-}
-.meta-date-sep::before, .meta-date-sep::after { content: ''; flex: 1; height: 1px; background: var(--c-border); }
-.meta-bubble-wrap { display: flex; max-width: 72%; flex-direction: column; }
-.meta-bubble-wrap.inbound { align-self: flex-start; align-items: flex-start; }
-.meta-bubble-wrap.outbound { align-self: flex-end; align-items: flex-end; }
-.meta-bubble {
-  padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45;
-  word-break: break-word;
-}
-.meta-bubble.inbound { background: var(--c-surface); border: 1px solid var(--c-border); border-bottom-left-radius: 3px; color: var(--c-text); }
-.meta-bubble.outbound { background: {{ channel_color }}; color: #fff; border-bottom-right-radius: 3px; }
-.meta-bubble-time { margin-top: 2px; font-size: 10px; color: var(--c-text-3); font-family: 'Geist Mono', monospace; }
-.meta-input-bar {
-  display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px;
-  background: var(--c-surface); border-top: 1px solid var(--c-border);
-}
-.meta-textarea {
-  flex: 1; min-height: 36px; max-height: 120px; resize: none; outline: none;
-  border: 1px solid var(--c-border); border-radius: 20px; padding: 8px 14px;
-  font-family: 'Geist', sans-serif; font-size: 13px; color: var(--c-text); background: var(--c-bg);
-}
-.meta-textarea:focus { border-color: {{ channel_color }}; }
-.meta-send-btn {
-  width: 36px; height: 36px; border-radius: 50%; border: none; background: {{ channel_color }};
-  color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
-}
-.meta-send-btn:disabled { opacity: .45; cursor: not-allowed; }
-.meta-new-lead-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 8px 20px; background: #FEF9C3; border-bottom: 1px solid #FDE68A;
-  font-size: 12.5px; color: #92400E; flex-shrink: 0;
-}
-.meta-new-lead-bar a { font-weight: 600; white-space: nowrap; }
-.meta-messages::-webkit-scrollbar, .meta-convos::-webkit-scrollbar { width: 4px; }
-.meta-messages::-webkit-scrollbar-thumb, .meta-convos::-webkit-scrollbar-thumb { background: var(--c-border-2); border-radius: 99px; }
-@media (max-width: 760px) {
-  .meta-left { width: 42%; min-width: 168px; }
-  .meta-bubble-wrap { max-width: 88%; }
+/* ── Top bar ── */
+.o-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.o-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.o-title .o-ch-ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--o-ch); color: #fff; font-size: 15px; }
+.o-tabs { display: flex; gap: 4px; margin-left: 8px; }
+.o-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--o-text-2); text-decoration: none; }
+.o-tab:hover { background: var(--o-card); color: var(--o-text); }
+.o-tab.on { background: var(--o-card); color: var(--o-accent); box-shadow: 0 1px 2px rgba(17,24,39,.06); }
+.o-tab .o-count { font-size: 10.5px; padding: 1px 6px; border-radius: 99px; background: var(--o-accent); color: #fff; }
+.o-top-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.o-ai-master { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 12px; background: var(--o-card); border: 1px solid var(--o-line); font-size: 12.5px; font-weight: 600; }
+.o-ai-master .o-ai-ico { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(135deg, #2A5BFF, #8B5CF6); color: #fff; font-size: 12px; }
+.o-ai-master small { display: block; font-weight: 500; color: var(--o-text-3); font-size: 11px; }
+.o-icon-btn { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--o-card); border: 1px solid var(--o-line); color: var(--o-text-2); text-decoration: none; }
+.o-icon-btn:hover { color: var(--o-accent); }
+/* Switch */
+.o-switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+.o-switch input { opacity: 0; width: 0; height: 0; }
+.o-switch span { position: absolute; inset: 0; border-radius: 99px; background: #D1D5DB; cursor: pointer; transition: background .15s; }
+.o-switch span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
+.o-switch input:checked + span { background: var(--o-accent); }
+.o-switch input:checked + span::after { transform: translateX(16px); }
+.o-switch input:disabled + span { opacity: .5; cursor: not-allowed; }
+/* ── Grid ── */
+.o-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 290px minmax(0, 1fr) 270px; gap: 14px; }
+.o-card { background: var(--o-card); border: 1px solid var(--o-line); border-radius: 16px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* List */
+.o-list-head { padding: 16px 16px 10px; }
+.o-list-head h2 { margin: 0 0 10px; font-size: 15px; font-weight: 700; }
+.o-search { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 10px; background: var(--o-soft); border: 1px solid var(--o-line); color: var(--o-text-3); }
+.o-search input { border: 0; outline: 0; background: transparent; font-size: 12.5px; width: 100%; color: var(--o-text); }
+.o-acct { display: flex; gap: 6px; padding: 0 16px 10px; overflow-x: auto; scrollbar-width: none; }
+.o-acct::-webkit-scrollbar { display: none; }
+.o-acct a { font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--o-line); color: var(--o-text-2); text-decoration: none; white-space: nowrap; }
+.o-acct a.on { background: var(--o-ch); border-color: transparent; color: #fff; }
+.o-convos { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+.o-convo { display: flex; align-items: center; gap: 11px; padding: 10px; border-radius: 12px; color: inherit; text-decoration: none; }
+.o-convo:hover { background: var(--o-soft); }
+.o-convo.active { background: var(--o-accent-soft); }
+.o-convo-body { flex: 1; min-width: 0; }
+.o-convo-row { display: flex; align-items: baseline; gap: 6px; }
+.o-convo-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.o-convo-time { font-size: 10.5px; color: var(--o-text-3); flex-shrink: 0; }
+.o-convo-prev { font-size: 12px; color: var(--o-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.o-convo.unread .o-convo-prev { color: var(--o-text); font-weight: 600; }
+.o-convo-acct { font-size: 10.5px; color: var(--o-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.o-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: var(--o-accent); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.o-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px 20px; text-align: center; color: var(--o-text-3); }
+.o-empty i { font-size: 34px; opacity: .3; }
+.o-empty p { margin: 0; font-size: 12.5px; }
+/* Avatar */
+.o-av { position: relative; width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: grid; place-items: center; background: var(--o-ch); color: #fff; font-size: 13px; font-weight: 700; }
+.o-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; }
+.o-av.sm { width: 30px; height: 30px; font-size: 11px; }
+.o-av.lg { width: 72px; height: 72px; font-size: 22px; }
+.o-av-wrap { position: relative; flex-shrink: 0; }
+.o-av-ch { position: absolute; right: -2px; bottom: -2px; width: 16px; height: 16px; border-radius: 50%; background: var(--o-ch); color: #fff; font-size: 9px; display: grid; place-items: center; border: 2px solid var(--o-card); }
+/* Chat */
+.o-chat-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--o-line); }
+.o-chat-name { font-size: 14px; font-weight: 700; }
+.o-chat-sub { font-size: 11.5px; color: var(--o-text-3); }
+.o-chat-head .o-pill { margin-left: auto; }
+.o-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 650; }
+.o-pill.ok { background: var(--o-ok-soft); color: var(--o-ok); }
+.o-pill.warn { background: var(--o-warn-soft); color: var(--o-warn); }
+.o-pill.off { background: var(--o-soft); color: var(--o-text-3); }
+.o-msgs { flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; background: var(--o-card); }
+.o-date { align-self: center; font-size: 11px; color: var(--o-text-3); padding: 2px 10px; margin: 6px 0; position: relative; }
+.o-row { display: flex; align-items: flex-end; gap: 8px; max-width: 78%; }
+.o-row.outbound { align-self: flex-end; flex-direction: row-reverse; }
+.o-bubble-col { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.o-row.outbound .o-bubble-col { align-items: flex-end; }
+.o-bubble { padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
+.o-row.inbound .o-bubble { background: var(--o-in); color: var(--o-text); border-bottom-left-radius: 4px; }
+.o-row.outbound .o-bubble { background: var(--o-out); color: #1E2A4A; border-bottom-right-radius: 4px; }
+.o-meta { font-size: 10.5px; color: var(--o-text-3); display: flex; align-items: center; gap: 6px; }
+.o-ai-tag { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 99px; background: linear-gradient(135deg, #EAF0FF, #F1EAFF); color: #5B4BDB; font-weight: 700; font-size: 9.5px; }
+.o-compose { display: flex; align-items: flex-end; gap: 10px; margin: 0 14px 14px; padding: 8px 8px 8px 14px; border: 1px solid var(--o-line); border-radius: 14px; background: var(--o-soft); }
+.o-compose textarea { flex: 1; border: 0; outline: 0; resize: none; background: transparent; font-size: 13px; line-height: 1.45; max-height: 120px; padding: 6px 0; color: var(--o-text); font-family: inherit; }
+.o-send { width: 36px; height: 36px; border-radius: 10px; border: 0; background: var(--o-accent); color: #fff; display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
+.o-send:disabled { opacity: .5; }
+.o-compose-hint { margin: -8px 16px 10px; font-size: 10.5px; color: var(--o-text-3); }
+/* Details */
+.o-details { overflow-y: auto; }
+.o-sec { padding: 16px 18px; border-bottom: 1px solid var(--o-line); }
+.o-sec:last-child { border-bottom: 0; }
+.o-sec h3 { margin: 0 0 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--o-text-3); }
+.o-profile { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.o-profile .o-pname { font-size: 15px; font-weight: 700; margin-top: 4px; }
+.o-profile .o-phandle { font-size: 12px; color: var(--o-text-3); }
+.o-kv { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 6px 0; }
+.o-kv i { color: var(--o-text-3); width: 16px; text-align: center; }
+.o-kv span { color: var(--o-text-3); flex: 1; }
+.o-kv b { font-weight: 600; text-align: right; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 600; text-decoration: none; border: 1px solid var(--o-line); color: var(--o-text); background: var(--o-card); }
+.o-btn:hover { border-color: var(--o-accent); color: var(--o-accent); }
+.o-btn.primary { background: var(--o-accent); border-color: var(--o-accent); color: #fff; }
+.o-ai-row { display: flex; align-items: center; gap: 10px; }
+.o-ai-row div { flex: 1; font-size: 12.5px; font-weight: 600; }
+.o-ai-row small { display: block; font-weight: 500; color: var(--o-text-3); font-size: 11px; margin-top: 2px; }
+.o-note { font-size: 11px; color: var(--o-text-3); line-height: 1.45; margin: 10px 0 0; }
+.o-warnbox { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--o-warn-soft); color: var(--o-warn); font-size: 11.5px; }
+.o-back { display: none; }
+/* Modal instrucciones */
+.o-modal { --o-card: #FFFFFF; --o-line: #E6E9F0; --o-soft: #F7F8FB; --o-text: #111827; --o-text-2: #4B5563; --o-text-3: #9CA3AF; --o-accent: #2A5BFF; --o-ok: #16A34A; position: fixed; inset: 0; z-index: 1050; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(17,24,39,.45); }
+.o-modal.open { display: flex; }
+.o-modal-card { width: 100%; max-width: 620px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--o-card); border-radius: 18px; box-shadow: 0 24px 60px rgba(17,24,39,.25); overflow: hidden; }
+.o-modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--o-line); }
+.o-modal-head h3 { margin: 0; font-size: 15px; font-weight: 700; flex: 1; }
+.o-modal-body { padding: 16px 20px; overflow-y: auto; }
+.o-modal-body p { font-size: 12px; color: var(--o-text-2); line-height: 1.5; margin: 0 0 10px; }
+.o-modal-body textarea { width: 100%; min-height: 260px; resize: vertical; border: 1px solid var(--o-line); border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.5; font-family: inherit; background: var(--o-soft); color: var(--o-text); outline: none; }
+.o-modal-body textarea:focus { border-color: var(--o-accent); background: #fff; }
+.o-modal-foot { display: flex; align-items: center; gap: 10px; padding: 12px 20px 16px; }
+.o-modal-foot small { flex: 1; font-size: 11px; color: var(--o-text-3); }
+.o-modal-foot .o-btn { width: auto; }
+.o-ins-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 10px; background: var(--o-card); border: 1px solid var(--o-line); color: var(--o-text-2); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.o-ins-btn:hover { color: var(--o-accent); border-color: var(--o-accent); }
+.o-ins-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--o-ok); }
+/* Responsive */
+@media (max-width: 1100px) { .o-grid { grid-template-columns: 280px minmax(0, 1fr); } .o-details { display: none; } }
+@media (max-width: 860px) {
+  .omni { padding: 10px; gap: 10px; }
+  .o-tabs { margin-left: 0; order: 3; width: 100%; }
+  .o-ai-master small { display: none; }
+  .o-grid { grid-template-columns: 1fr; }
+  .o-grid.has-active .o-list { display: none; }
+  .o-grid:not(.has-active) .o-chat { display: none; }
+  .o-back { display: grid; }
+  .o-row { max-width: 88%; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="meta-shell">
-  <div class="meta-left">
-    <div class="meta-left-header">
-      <div class="meta-left-title">
-        <i class="bi {{ channel_icon }}"></i> {{ channel_label }}
-      </div>
-      <a href="{{ url_for('admin.settings') }}" class="btn btn-ghost btn-icon-xs" title="Configurar canal">
-        <i class="bi bi-sliders" style="font-size:13px;"></i>
+{% set qs_account = active_account or None %}
+<div class="omni">
+  <div class="o-top">
+    <div class="o-title">
+      <span class="o-ch-ico"><i class="bi {{ channel_icon }}"></i></span>
+      Inbox de {{ channel_label }}
+    </div>
+    <div class="o-tabs">
+      <a class="o-tab {% if view != 'unread' %}on{% endif %}" href="{{ url_for('meta_webhook.inbox', channel=channel, account=qs_account) }}">
+        <i class="bi bi-chat-dots"></i> Todos
+      </a>
+      <a class="o-tab {% if view == 'unread' %}on{% endif %}" href="{{ url_for('meta_webhook.inbox', channel=channel, account=qs_account, view='unread') }}">
+        <i class="bi bi-envelope"></i> Sin leer {% if unread_total %}<span class="o-count">{{ unread_total }}</span>{% endif %}
       </a>
     </div>
-
-    <div class="meta-convos">
-      {% if conversations %}
-        {% for conv in conversations %}
-          {% set display_name = (conv.first_name ~ ' ' ~ conv.last_name) if conv.first_name else conv.sender_id %}
-          {% set initials = (conv.first_name[0] ~ conv.last_name[0]) | upper if conv.first_name else conv.sender_id[-2:] | upper %}
-          <a href="{{ url_for('meta_webhook.inbox', channel=channel, sender_id=conv.sender_id) }}"
-             class="meta-convo-item {% if active_sender == conv.sender_id %}active{% endif %}">
-            <div class="meta-avatar">{{ initials }}</div>
-            <div class="meta-convo-body">
-              <div class="meta-convo-name">{{ display_name }}</div>
-              <div class="meta-convo-preview {{ conv.last_direction }}">
-                {{ conv.last_message[:44] }}{% if conv.last_message | length > 44 %}...{% endif %}
-              </div>
-            </div>
-            <div class="meta-convo-meta">
-              <span class="meta-convo-time">{{ conv.last_at[11:16] if conv.last_at else '' }}</span>
-              {% if conv.unread > 0 %}
-                <span class="meta-unread-badge">{{ conv.unread }}</span>
-              {% endif %}
-            </div>
-          </a>
-        {% endfor %}
-      {% else %}
-        <div class="meta-empty">
-          <i class="bi {{ channel_icon }}"></i>
-          <p>Sin mensajes de {{ channel_label }}</p>
-          <p style="font-size:11px;">Cuando Meta envíe mensajes al webhook, aparecerán aquí.</p>
-        </div>
-      {% endif %}
+    <div class="o-top-right">
+      <label class="o-ai-master" title="Encender o apagar el asistente IA para {{ channel_label }}">
+        <span class="o-ai-ico"><i class="bi bi-stars"></i></span>
+        <span>Asistente IA
+          <small id="aiMasterLabel">{% if not ai_ready %}Falta la API de Anthropic{% elif ai_channel_enabled %}Responde automáticamente{% else %}Apagado{% endif %}</small>
+        </span>
+        <span class="o-switch">
+          <input type="checkbox" id="aiMaster" {% if ai_channel_enabled %}checked{% endif %} {% if not ai_ready %}disabled{% endif %}>
+          <span></span>
+        </span>
+      </label>
+      <button type="button" class="o-ins-btn" id="aiInsOpen" title="Instrucciones de la IA para {{ channel_label }}">
+        <i class="bi bi-journal-text"></i> Instrucciones{% if ai_instructions %} <span class="dot" id="aiInsDot"></span>{% endif %}
+      </button>
+      <a href="{{ url_for('admin.settings') }}" class="o-icon-btn" title="Configurar canal"><i class="bi bi-sliders"></i></a>
     </div>
   </div>
 
-  <div class="meta-right">
-    {% if active_sender %}
-      {% set display_name = (active_client.first_name ~ ' ' ~ active_client.last_name) if active_client else active_sender %}
-      <div class="meta-chat-header">
-        <div class="meta-chat-main">
-          <div class="meta-avatar" style="width:34px;height:34px;font-size:11px;">
-            {% if active_client %}{{ active_client.first_name[0] | upper }}{{ active_client.last_name[0] | upper }}{% else %}{{ active_sender[-2:] | upper }}{% endif %}
-          </div>
-          <div class="meta-chat-info">
-            <div class="meta-chat-name">{{ display_name }}</div>
-            <div class="meta-chat-sub">
-              <span class="num">{{ active_sender }}</span>
-              {% if active_conversation and active_conversation.page_name %}
-                <span style="color:var(--c-border-2);">/</span>
-                <span>{{ active_conversation.page_name }}</span>
-              {% endif %}
-              {% if active_client %}
-                <span style="color:var(--c-border-2);">/</span>
-                <a href="{{ url_for('clients.detail', client_id=active_client.id) }}" style="font-size:11.5px;">Ver perfil</a>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        {% if active_client %}
-          <a href="{{ url_for('clients.detail', client_id=active_client.id) }}" class="btn btn-ghost btn-xs">
-            <i class="bi bi-person"></i> Perfil
-          </a>
-        {% endif %}
+  <div class="o-grid {% if active_sender %}has-active{% endif %}">
+    {# ── Lista de conversaciones ── #}
+    <section class="o-card o-list">
+      <div class="o-list-head">
+        <h2>Tu inbox</h2>
+        <label class="o-search"><i class="bi bi-search"></i><input type="search" id="convoSearch" placeholder="Buscar conversación"></label>
       </div>
-
-      {% if not active_client %}
-        <div class="meta-new-lead-bar">
-          <span><i class="bi bi-info-circle me-1"></i>Este contacto no está asociado a un cliente.</span>
-          <a href="{{ url_for('clients.new_client') }}?source={{ channel | urlencode }}">
-            <i class="bi bi-person-plus me-1"></i>Crear lead
-          </a>
+      {% if accounts and accounts | length > 1 %}
+        <div class="o-acct">
+          <a href="{{ url_for('meta_webhook.inbox', channel=channel, view=view or None) }}" class="{% if not active_account %}on{% endif %}">Todas</a>
+          {% for a in accounts %}
+            <a href="{{ url_for('meta_webhook.inbox', channel=channel, account=a.page_id, view=view or None) }}" class="{% if active_account == a.page_id %}on{% endif %}">@{{ a.page_name or a.page_id }}</a>
+          {% endfor %}
         </div>
       {% endif %}
-
-      <div class="meta-messages" id="messagesArea">
-        {% set ns = namespace(last_date='') %}
-        {% for msg in active_msgs %}
-          {% set msg_date = msg.created_at[:10] %}
-          {% if msg_date != ns.last_date %}
-            {% set ns.last_date = msg_date %}
-            <div class="meta-date-sep">{{ msg_date }}</div>
-          {% endif %}
-          <div class="meta-bubble-wrap {{ msg.direction }}" data-msg-id="{{ msg.id }}">
-            <div class="meta-bubble {{ msg.direction }}">{{ msg.message }}</div>
-            <div class="meta-bubble-time">{{ msg.created_at[11:16] }}</div>
+      <div class="o-convos" id="convoList">
+        {% if conversations %}
+          {% for conv in conversations %}
+            {% set display_name = (conv.first_name ~ ' ' ~ conv.last_name) if conv.first_name else (('@' ~ conv.username) if conv.username else (conv.contact_name or conv.sender_id)) %}
+            {% set initials = (conv.first_name[0] ~ (conv.last_name[0] if conv.last_name else '')) | upper if conv.first_name else (conv.username or conv.contact_name or conv.sender_id[-2:])[:2] | upper %}
+            <a href="{{ url_for('meta_webhook.inbox', channel=channel, sender_id=conv.sender_id, account=qs_account, view=view or None) }}"
+               class="o-convo {% if active_sender == conv.sender_id %}active{% endif %} {% if conv.unread > 0 %}unread{% endif %}"
+               data-search="{{ (display_name ~ ' ' ~ (conv.username or '') ~ ' ' ~ (conv.contact_name or '') ~ ' ' ~ (conv.last_message or '')) | lower }}">
+              <span class="o-av-wrap">
+                <span class="o-av">{{ initials }}{% if conv.profile_pic %}<img src="{{ conv.profile_pic }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span>
+                <span class="o-av-ch"><i class="bi {{ channel_icon }}"></i></span>
+              </span>
+              <span class="o-convo-body">
+                <span class="o-convo-row">
+                  <span class="o-convo-name">{{ display_name }}</span>
+                  <span class="o-convo-time">{{ conv.last_at[11:16] if conv.last_at else '' }}</span>
+                </span>
+                {% if conv.page_name %}<span class="o-convo-acct" style="display:block"><i class="bi bi-arrow-return-right"></i> @{{ conv.page_name }}</span>{% endif %}
+                <span class="o-convo-row">
+                  <span class="o-convo-prev" style="flex:1">{% if conv.last_direction == 'outbound' %}Tú: {% endif %}{{ conv.last_message[:60] }}</span>
+                  {% if conv.unread > 0 %}<span class="o-badge">{{ conv.unread }}</span>{% endif %}
+                </span>
+              </span>
+            </a>
+          {% endfor %}
+        {% else %}
+          <div class="o-empty">
+            <i class="bi {{ channel_icon }}"></i>
+            <p>{% if view == 'unread' %}No tienes mensajes sin leer{% else %}Sin mensajes de {{ channel_label }}{% endif %}</p>
+            <p style="font-size:11px">Los mensajes nuevos aparecen aquí en cuanto Meta los envía.</p>
           </div>
-        {% endfor %}
+        {% endif %}
       </div>
+    </section>
 
-      <div class="meta-input-bar">
-        <textarea class="meta-textarea" id="msgInput" placeholder="Responder por {{ channel_label }}..." rows="1"></textarea>
-        <button class="meta-send-btn" id="sendBtn" title="Enviar">
-          <i class="bi bi-send-fill"></i>
-        </button>
-      </div>
-    {% else %}
-      <div class="meta-empty">
-        <i class="bi {{ channel_icon }}"></i>
-        <p>Selecciona una conversación</p>
-      </div>
-    {% endif %}
+    {# ── Chat ── #}
+    <section class="o-card o-chat">
+      {% if active_sender %}
+        {% set ac = active_conversation %}
+        {% set display_name = (active_client.first_name ~ ' ' ~ active_client.last_name) if active_client else (('@' ~ ac.username) if ac and ac.username else ((ac.contact_name if ac else None) or active_sender)) %}
+        {% set initials = (active_client.first_name[0] ~ (active_client.last_name[0] if active_client.last_name else '')) | upper if active_client else ((ac.username or ac.contact_name or active_sender[-2:])[:2] | upper if ac else active_sender[-2:] | upper) %}
+        <div class="o-chat-head">
+          <a class="o-icon-btn o-back" href="{{ url_for('meta_webhook.inbox', channel=channel, account=qs_account, view=view or None) }}" title="Volver"><i class="bi bi-arrow-left"></i></a>
+          <span class="o-av sm">{{ initials }}{% if ac and ac.profile_pic %}<img src="{{ ac.profile_pic }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span>
+          <div>
+            <div class="o-chat-name">{{ display_name }}</div>
+            <div class="o-chat-sub">{% if ac and ac.page_name %}Recibido en @{{ ac.page_name }}{% else %}{{ channel_label }}{% endif %}</div>
+          </div>
+          <span class="o-pill" id="aiPill"></span>
+        </div>
+
+        <div class="o-msgs" id="messagesArea">
+          {% set ns = namespace(last_date='') %}
+          {% for msg in active_msgs %}
+            {% set msg_date = msg.created_at[:10] %}
+            {% if msg_date != ns.last_date %}
+              {% set ns.last_date = msg_date %}
+              <div class="o-date">{{ msg_date }}</div>
+            {% endif %}
+            <div class="o-row {{ msg.direction }}" data-msg-id="{{ msg.id }}">
+              {% if msg.direction == 'inbound' %}
+                <span class="o-av sm">{{ initials }}{% if ac and ac.profile_pic %}<img src="{{ ac.profile_pic }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span>
+              {% endif %}
+              <div class="o-bubble-col">
+                <div class="o-bubble">{{ msg.message }}</div>
+                <div class="o-meta">{{ msg.created_at[11:16] }}{% if msg.sent_by == 'ai' %}<span class="o-ai-tag"><i class="bi bi-stars"></i> IA</span>{% endif %}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="o-compose">
+          <textarea id="msgInput" rows="1" placeholder="Escribe un mensaje por {{ channel_label }}..."></textarea>
+          <button class="o-send" id="sendBtn" title="Enviar"><i class="bi bi-send-fill"></i></button>
+        </div>
+        <div class="o-compose-hint">Enter para enviar · Shift+Enter para salto de línea{% if ai_channel_enabled %} · Si respondes tú, la IA se pausa en este chat{% endif %}</div>
+      {% else %}
+        <div class="o-empty">
+          <i class="bi {{ channel_icon }}"></i>
+          <p>Selecciona una conversación</p>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ── Detalles ── #}
+    <aside class="o-card o-details">
+      {% if active_sender %}
+        <div class="o-sec">
+          <div class="o-profile">
+            <span class="o-av lg">{{ initials }}{% if ac and ac.profile_pic %}<img src="{{ ac.profile_pic }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span>
+            <div class="o-pname">{{ (ac.contact_name if ac and ac.contact_name else display_name) }}</div>
+            {% if ac and ac.username %}<div class="o-phandle">@{{ ac.username }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="o-sec">
+          <h3>Información</h3>
+          <div class="o-kv"><i class="bi {{ channel_icon }}"></i><span>Canal</span><b>{{ channel_label }}</b></div>
+          {% if ac and ac.page_name %}<div class="o-kv"><i class="bi bi-inbox"></i><span>Cuenta</span><b>@{{ ac.page_name }}</b></div>{% endif %}
+          <div class="o-kv"><i class="bi bi-chat-text"></i><span>Mensajes</span><b>{{ active_msgs | length }}</b></div>
+          {% if active_msgs %}<div class="o-kv"><i class="bi bi-calendar3"></i><span>Primer contacto</span><b>{{ active_msgs[0].created_at[:10] }}</b></div>{% endif %}
+          {% if active_client %}
+            {% if active_client.email %}<div class="o-kv"><i class="bi bi-envelope"></i><span>Email</span><b>{{ active_client.email }}</b></div>{% endif %}
+            {% if active_client.phone %}<div class="o-kv"><i class="bi bi-telephone"></i><span>Teléfono</span><b>{{ active_client.phone }}</b></div>{% endif %}
+          {% endif %}
+        </div>
+        <div class="o-sec">
+          <h3>Cliente</h3>
+          {% if active_client %}
+            <div class="o-kv"><i class="bi bi-person"></i><span>Ficha</span><b>{{ active_client.first_name }} {{ active_client.last_name }}</b></div>
+            <a class="o-btn" href="{{ url_for('clients.detail', client_id=active_client.id) }}" style="margin-top:8px"><i class="bi bi-box-arrow-up-right"></i> Ver perfil</a>
+          {% else %}
+            <p class="o-note" style="margin:0 0 10px">Este contacto todavía no tiene ficha. La IA lo crea como lead cuando responde.</p>
+            <a class="o-btn primary" href="{{ url_for('clients.new_client') }}?source={{ channel | urlencode }}"><i class="bi bi-person-plus"></i> Crear lead</a>
+          {% endif %}
+        </div>
+        <div class="o-sec">
+          <h3>Asistente IA</h3>
+          <label class="o-ai-row">
+            <div>Respuestas automáticas<small id="aiContactLabel"></small></div>
+            <span class="o-switch">
+              <input type="checkbox" id="aiContact" {% if not ai_contact.disabled %}checked{% endif %}>
+              <span></span>
+            </span>
+          </label>
+          {% if not ai_channel_enabled %}
+            <div class="o-warnbox" id="aiChannelOffBox"><i class="bi bi-info-circle"></i> El asistente de {{ channel_label }} está apagado. Enciéndelo arriba para que responda.</div>
+          {% endif %}
+          <p class="o-note">Usa la misma información del negocio y las mismas reglas que el bot de WhatsApp: capta nombre, email y servicio, ofrece agendar una llamada y nunca da precios.</p>
+        </div>
+      {% else %}
+        <div class="o-empty">
+          <i class="bi bi-person-badge"></i>
+          <p>Aquí verás los datos del contacto</p>
+        </div>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+
+<div class="o-modal" id="aiInsModal" aria-hidden="true">
+  <div class="o-modal-card" role="dialog" aria-labelledby="aiInsTitle">
+    <div class="o-modal-head">
+      <span class="o-ai-ico" style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,#2A5BFF,#8B5CF6);color:#fff"><i class="bi bi-stars"></i></span>
+      <h3 id="aiInsTitle">Instrucciones de la IA para {{ channel_label }}</h3>
+      <button type="button" class="o-icon-btn" id="aiInsClose" title="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="o-modal-body">
+      <p>Estas instrucciones solo aplican a la IA de {{ channel_label }}. Se suman a la información del negocio del bot de WhatsApp y <b>tienen prioridad</b> si algo choca. Las reglas de seguridad y la de no dar precios siempre se mantienen.</p>
+      <p>Ejemplos: el tono para este público, qué servicios promocionar, a qué link mandar, qué preguntar primero, qué no responder.</p>
+      <textarea id="aiInsText" maxlength="4000" placeholder="Ej: En Instagram la mayoría llega por los reels de páginas web. Saluda breve, pregunta qué tipo de negocio tienen y si ya tienen página. Ofrece la consulta gratis de 15 minutos...">{{ ai_instructions }}</textarea>
+    </div>
+    <div class="o-modal-foot">
+      <small id="aiInsCount"></small>
+      <button type="button" class="o-btn" id="aiInsCancel">Cancelar</button>
+      <button type="button" class="o-btn primary" id="aiInsSave"><i class="bi bi-check2"></i> Guardar</button>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-{% if active_sender %}
 <script>
-const ACTIVE_SENDER = {{ active_sender | tojson }};
-const ACTIVE_CHANNEL = {{ channel | tojson }};
-const ACTIVE_PAGE_ID = {{ (active_conversation.page_id if active_conversation else '') | tojson }};
-const ACTIVE_CLIENT_ID = {{ (active_client.id if active_client else None) | tojson }};
-const SEND_URL = '/meta/send';
-const POLL_URL = `/meta/${ACTIVE_CHANNEL}/conversation/${encodeURIComponent(ACTIVE_SENDER)}`;
-const msgArea = document.getElementById('messagesArea');
-const msgInput = document.getElementById('msgInput');
-const sendBtn = document.getElementById('sendBtn');
-let lastMsgId = {{ (active_msgs[-1].id if active_msgs else 0) }};
-let polling = true;
+(function () {
+  const CHANNEL = {{ channel | tojson }};
+  const AI_TOGGLE_CHANNEL_URL = '/meta/ai/channel';
+  const AI_TOGGLE_CONTACT_URL = '/meta/ai/contact';
+  let aiChannelOn = {{ ai_channel_enabled | tojson }};
+  const aiReady = {{ ai_ready | tojson }};
 
-function scrollBottom() { msgArea.scrollTop = msgArea.scrollHeight; }
-scrollBottom();
-
-msgInput.addEventListener('input', function () {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-});
-
-msgInput.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-});
-sendBtn.addEventListener('click', sendMessage);
-
-function sendMessage() {
-  const text = msgInput.value.trim();
-  if (!text) return;
-  if (!ACTIVE_PAGE_ID) {
-    alert('No se encontró el Page/IG ID de esta conversación.');
-    return;
-  }
-
-  sendBtn.disabled = true;
-  appendBubble({id: 'tmp', direction: 'outbound', message: text, created_at: new Date().toISOString()});
-  scrollBottom();
-  msgInput.value = '';
-  msgInput.style.height = 'auto';
-
-  fetch(SEND_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      channel: ACTIVE_CHANNEL,
-      sender_id: ACTIVE_SENDER,
-      page_id: ACTIVE_PAGE_ID,
-      client_id: ACTIVE_CLIENT_ID,
-      message: text,
-    }),
-  })
-  .then(r => r.json())
-  .then(data => {
-    sendBtn.disabled = false;
-    if (!data.success) alert('Error al enviar: ' + (data.error || 'desconocido'));
-    poll(true);
-  })
-  .catch(() => {
-    sendBtn.disabled = false;
-    alert('Error de conexión al enviar.');
+  // Búsqueda en la lista
+  const search = document.getElementById('convoSearch');
+  if (search) search.addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('#convoList .o-convo').forEach(el => {
+      el.style.display = !q || (el.dataset.search || '').includes(q) ? '' : 'none';
+    });
   });
-}
 
-function appendBubble(msg) {
-  const wrap = document.createElement('div');
-  wrap.className = `meta-bubble-wrap ${msg.direction}`;
-  wrap.dataset.msgId = msg.id;
-  wrap.innerHTML = `
-    <div class="meta-bubble ${msg.direction}">${escapeHtml(msg.message)}</div>
-    <div class="meta-bubble-time">${(msg.created_at || '').slice(11, 16)}</div>`;
-  msgArea.appendChild(wrap);
-}
+  function postJSON(url, body) {
+    return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+      .then(r => r.json());
+  }
 
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-}
+  // Instrucciones propias del canal
+  const insModal = document.getElementById('aiInsModal');
+  const insText = document.getElementById('aiInsText');
+  const insCount = document.getElementById('aiInsCount');
+  const insSave = document.getElementById('aiInsSave');
+  let insSaved = insText ? insText.value : '';
+  function insUpdateCount() { if (insCount) insCount.textContent = insText.value.length + ' / 4000'; }
+  function insOpen() { insText.value = insSaved; insUpdateCount(); insModal.classList.add('open'); insModal.setAttribute('aria-hidden', 'false'); setTimeout(() => insText.focus(), 50); }
+  function insClose() { insModal.classList.remove('open'); insModal.setAttribute('aria-hidden', 'true'); }
+  const insOpenBtn = document.getElementById('aiInsOpen');
+  if (insOpenBtn) insOpenBtn.addEventListener('click', insOpen);
+  ['aiInsClose', 'aiInsCancel'].forEach(id => { const b = document.getElementById(id); if (b) b.addEventListener('click', insClose); });
+  if (insModal) insModal.addEventListener('click', e => { if (e.target === insModal) insClose(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && insModal.classList.contains('open')) insClose(); });
+  if (insText) insText.addEventListener('input', insUpdateCount);
+  if (insSave) insSave.addEventListener('click', function () {
+    insSave.disabled = true;
+    postJSON('/meta/ai/instructions', {channel: CHANNEL, instructions: insText.value})
+      .then(d => {
+        if (!d.success) throw new Error(d.error || 'error');
+        insSaved = d.instructions;
+        let dot = document.getElementById('aiInsDot');
+        if (insSaved && !dot) { dot = document.createElement('span'); dot.className = 'dot'; dot.id = 'aiInsDot'; insOpenBtn.appendChild(dot); }
+        if (!insSaved && dot) dot.remove();
+        insClose();
+      })
+      .catch(() => alert('No se pudieron guardar las instrucciones.'))
+      .finally(() => { insSave.disabled = false; });
+  });
 
-function poll(force) {
-  fetch(POLL_URL + '?_t=' + Date.now())
-    .then(r => r.json())
-    .then(data => {
-      const msgs = data.messages || [];
-      if (force) document.querySelectorAll('.meta-bubble-wrap[data-msg-id="tmp"]').forEach(el => el.remove());
-      const newMsgs = msgs.filter(m => m.id > lastMsgId);
-      newMsgs.forEach(m => {
-        if (!document.querySelector(`.meta-bubble-wrap[data-msg-id="${m.id}"]`)) appendBubble(m);
-        lastMsgId = Math.max(lastMsgId, m.id);
-      });
-      if (newMsgs.length || force) scrollBottom();
-    })
-    .catch(() => {});
-}
+  // Switch general del canal
+  const master = document.getElementById('aiMaster');
+  const masterLabel = document.getElementById('aiMasterLabel');
+  if (master) master.addEventListener('change', function () {
+    const want = this.checked;
+    this.disabled = true;
+    postJSON(AI_TOGGLE_CHANNEL_URL, {channel: CHANNEL, enabled: want})
+      .then(d => {
+        if (!d.success) throw new Error(d.error || 'error');
+        aiChannelOn = d.enabled;
+        master.checked = d.enabled;
+        masterLabel.textContent = d.enabled ? 'Responde automáticamente' : 'Apagado';
+        const box = document.getElementById('aiChannelOffBox');
+        if (box) box.style.display = d.enabled ? 'none' : '';
+        window.renderAiState && window.renderAiState();
+      })
+      .catch(() => { master.checked = !want; alert('No se pudo cambiar el asistente.'); })
+      .finally(() => { master.disabled = !aiReady; });
+  });
 
-const pollInterval = setInterval(() => { if (polling) poll(false); }, 10000);
-window.addEventListener('beforeunload', () => { polling = false; clearInterval(pollInterval); });
+  {% if active_sender %}
+  const ACTIVE_SENDER = {{ active_sender | tojson }};
+  const ACTIVE_PAGE_ID = {{ (active_conversation.page_id if active_conversation else '') | tojson }};
+  const ACTIVE_CLIENT_ID = {{ (active_client.id if active_client else None) | tojson }};
+  const headAv = document.querySelector('.o-chat-head .o-av');
+  const INITIALS = headAv ? (headAv.firstChild && headAv.firstChild.nodeType === 3 ? headAv.firstChild.textContent.trim() : '') : '';
+  const AVATAR = {{ (active_conversation.profile_pic if active_conversation and active_conversation.profile_pic else '') | tojson }};
+  const POLL_URL = '/meta/' + CHANNEL + '/conversation/' + encodeURIComponent(ACTIVE_SENDER);
+  let aiContact = {{ ai_contact | tojson }};
+  const msgArea = document.getElementById('messagesArea');
+  const msgInput = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const pill = document.getElementById('aiPill');
+  const contactSwitch = document.getElementById('aiContact');
+  const contactLabel = document.getElementById('aiContactLabel');
+  let lastMsgId = {{ (active_msgs[-1].id if active_msgs else 0) }};
+  let polling = true;
+
+  function fmtPause(ts) {
+    if (!ts) return '';
+    const d = new Date(ts.replace(' ', 'T') + 'Z');
+    return isNaN(d) ? ts : d.toLocaleString([], {weekday: 'short', hour: '2-digit', minute: '2-digit'});
+  }
+
+  window.renderAiState = function () {
+    let cls = 'off', txt = 'IA apagada', sub = '';
+    if (!aiChannelOn) { cls = 'off'; txt = 'IA apagada'; sub = 'El asistente del canal está apagado'; }
+    else if (aiContact.disabled) { cls = 'off'; txt = 'IA desactivada'; sub = 'Desactivada para este contacto'; }
+    else if (aiContact.paused) { cls = 'warn'; txt = 'IA en pausa'; sub = 'Pausada hasta ' + fmtPause(aiContact.paused_until) + ' porque respondiste tú'; }
+    else { cls = 'ok'; txt = 'IA respondiendo'; sub = 'Contesta automáticamente'; }
+    pill.className = 'o-pill ' + cls;
+    pill.innerHTML = '<i class="bi bi-stars"></i> ' + txt;
+    if (contactLabel) contactLabel.textContent = sub;
+    if (contactSwitch) contactSwitch.checked = !aiContact.disabled && !aiContact.paused;
+  };
+  window.renderAiState();
+
+  if (contactSwitch) contactSwitch.addEventListener('change', function () {
+    const want = this.checked;
+    this.disabled = true;
+    postJSON(AI_TOGGLE_CONTACT_URL, {channel: CHANNEL, sender_id: ACTIVE_SENDER, enabled: want})
+      .then(d => { if (!d.success) throw new Error(d.error || 'error'); aiContact = d.state; window.renderAiState(); })
+      .catch(() => { contactSwitch.checked = !want; alert('No se pudo cambiar la IA para este contacto.'); })
+      .finally(() => { contactSwitch.disabled = false; });
+  });
+
+  function scrollBottom() { msgArea.scrollTop = msgArea.scrollHeight; }
+  scrollBottom();
+
+  msgInput.addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+  msgInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  sendBtn.addEventListener('click', sendMessage);
+
+  function sendMessage() {
+    const text = msgInput.value.trim();
+    if (!text) return;
+    if (!ACTIVE_PAGE_ID) { alert('No se encontró la cuenta de esta conversación.'); return; }
+    sendBtn.disabled = true;
+    appendBubble({id: 'tmp', direction: 'outbound', message: text, created_at: new Date().toISOString()});
+    scrollBottom();
+    msgInput.value = '';
+    msgInput.style.height = 'auto';
+    postJSON('/meta/send', {channel: CHANNEL, sender_id: ACTIVE_SENDER, page_id: ACTIVE_PAGE_ID, client_id: ACTIVE_CLIENT_ID, message: text})
+      .then(data => {
+        sendBtn.disabled = false;
+        if (!data.success) alert('Error al enviar: ' + (data.error || 'desconocido'));
+        if (data.ai_state) { aiContact = data.ai_state; window.renderAiState(); }
+        poll(true);
+      })
+      .catch(() => { sendBtn.disabled = false; alert('Error de conexión al enviar.'); });
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function appendBubble(msg) {
+    const row = document.createElement('div');
+    row.className = 'o-row ' + msg.direction;
+    row.dataset.msgId = msg.id;
+    const av = msg.direction === 'inbound'
+      ? '<span class="o-av sm">' + escapeHtml(INITIALS) + (AVATAR ? '<img src="' + escapeHtml(AVATAR) + '" alt="" referrerpolicy="no-referrer" onerror="this.remove()">' : '') + '</span>' : '';
+    const ai = msg.sent_by === 'ai' ? '<span class="o-ai-tag"><i class="bi bi-stars"></i> IA</span>' : '';
+    row.innerHTML = av + '<div class="o-bubble-col"><div class="o-bubble">' + escapeHtml(msg.message) + '</div>'
+      + '<div class="o-meta">' + (msg.created_at || '').slice(11, 16) + ai + '</div></div>';
+    msgArea.appendChild(row);
+  }
+
+  function poll(force) {
+    fetch(POLL_URL + '?_t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        const msgs = data.messages || [];
+        if (force) document.querySelectorAll('.o-row[data-msg-id="tmp"]').forEach(el => el.remove());
+        const fresh = msgs.filter(m => m.id > lastMsgId);
+        fresh.forEach(m => {
+          if (!document.querySelector('.o-row[data-msg-id="' + m.id + '"]')) appendBubble(m);
+          lastMsgId = Math.max(lastMsgId, m.id);
+        });
+        if (data.ai_state) { aiContact = data.ai_state; window.renderAiState(); }
+        if (fresh.length || force) scrollBottom();
+      })
+      .catch(() => {});
+  }
+
+  const pollInterval = setInterval(() => { if (polling) poll(false); }, 8000);
+  window.addEventListener('beforeunload', () => { polling = false; clearInterval(pollInterval); });
+  {% endif %}
+})();
 </script>
-{% endif %}
 {% endblock %}

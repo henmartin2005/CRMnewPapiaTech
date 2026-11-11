@@ -5,7 +5,7 @@ from models.client import (
     get_all_clients, get_client, create_client, update_client,
     delete_client, get_client_notes, add_note, get_client_followups,
     add_followup, PIPELINE_STAGES, PROJECT_TYPES, NOTE_TYPES,
-    FOLLOW_UP_METHODS, STAGE_COLORS
+    FOLLOW_UP_METHODS, STAGE_COLORS, get_org_pipeline_stages
 )
 
 from database import get_db
@@ -26,7 +26,7 @@ SCHED_TZ = ZoneInfo(os.getenv('APP_TIMEZONE', 'America/New_York'))
 from models.client_document import (
     ACCEPT_ATTR, ALLOWED_EXTS, MAX_FILE_BYTES, add_file_document, add_link_document,
     client_dir, delete_client_files, delete_document, file_path, get_document,
-    list_documents,
+    list_documents, mark_client_uploads_seen,
 )
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/clients')
@@ -60,7 +60,7 @@ def list_clients():
         'clients/list.html',
         clients=clients,
         search=search,
-        stage_labels=dict(PIPELINE_STAGES),
+        stage_labels=dict(get_org_pipeline_stages(org_id)),
         stage_colors=STAGE_COLORS,
         project_labels=dict(PROJECT_TYPES),
     )
@@ -77,7 +77,7 @@ def new_client():
             return render_template(
                 'clients/form.html',
                 client=request.form,
-                pipeline_stages=PIPELINE_STAGES,
+                pipeline_stages=get_org_pipeline_stages(org_id),
                 project_types=PROJECT_TYPES,
                 is_edit=False,
             )
@@ -88,10 +88,18 @@ def new_client():
     return render_template(
         'clients/form.html',
         client={},
-        pipeline_stages=PIPELINE_STAGES,
+        pipeline_stages=get_org_pipeline_stages(org_id),
         project_types=PROJECT_TYPES,
         is_edit=False,
     )
+
+
+def _onboarding_summary(client_id, org_id):
+    try:
+        from models.onboarding import summary
+        return summary(client_id, org_id)
+    except Exception:
+        return None
 
 
 @clients_bp.route('/<int:client_id>')
@@ -105,7 +113,26 @@ def detail(client_id):
     notes = get_client_notes(client_id)
     followups = get_client_followups(client_id)
     documents = list_documents(client_id, org_id)
+    client_uploads = [d for d in documents if d.get('from_client')]
+    new_uploads = sum(1 for d in client_uploads if not d.get('admin_seen'))
+    if new_uploads:
+        mark_client_uploads_seen(client_id, org_id)
+    try:
+        from models.contract import list_envelopes
+        contracts = list_envelopes(org_id, client_id=client_id, limit=20)
+    except Exception:
+        contracts = []
     schedule = list_installments(client_id, org_id, today=datetime.now(SCHED_TZ).strftime('%Y-%m-%d'))
+    try:
+        from database import get_db as _wa_db
+        _wdb = _wa_db()
+        wa_messages = _wdb.execute(
+            "SELECT direction, message, created_at, status, phone FROM whatsapp_messages "
+            "WHERE client_id = ? AND org_id = ? ORDER BY id ASC", (client_id, org_id)
+        ).fetchall()
+        _wdb.close()
+    except Exception:
+        wa_messages = []
 
     return render_template(
         'clients/detail.html',
@@ -113,15 +140,20 @@ def detail(client_id):
         notes=notes,
         followups=followups,
         documents=documents,
+        client_uploads=client_uploads,
+        onboarding=_onboarding_summary(client_id, org_id),
+        new_uploads=new_uploads,
+        contracts=contracts,
         schedule=schedule,
+        wa_messages=wa_messages,
         profile_layout=get_layout(client_id, org_id),
         docs_accept=ACCEPT_ATTR,
         docs_max_mb=MAX_FILE_BYTES // (1024 * 1024),
-        pipeline_stages=PIPELINE_STAGES,
+        pipeline_stages=get_org_pipeline_stages(org_id),
         project_types=PROJECT_TYPES,
         note_types=NOTE_TYPES,
         followup_methods=FOLLOW_UP_METHODS,
-        stage_labels=dict(PIPELINE_STAGES),
+        stage_labels=dict(get_org_pipeline_stages(org_id)),
         stage_colors=STAGE_COLORS,
         project_labels=dict(PROJECT_TYPES),
         now_str=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -144,7 +176,7 @@ def edit_client(client_id):
             return render_template(
                 'clients/form.html',
                 client=request.form,
-                pipeline_stages=PIPELINE_STAGES,
+                pipeline_stages=get_org_pipeline_stages(org_id),
                 project_types=PROJECT_TYPES,
                 is_edit=True,
                 client_id=client_id,
@@ -156,7 +188,7 @@ def edit_client(client_id):
     return render_template(
         'clients/form.html',
         client=client,
-        pipeline_stages=PIPELINE_STAGES,
+        pipeline_stages=get_org_pipeline_stages(org_id),
         project_types=PROJECT_TYPES,
         is_edit=True,
         client_id=client_id,
@@ -214,7 +246,7 @@ def update_stage(client_id):
     from models.client import update_pipeline_stage
     org_id = g.org_id if hasattr(g, 'org_id') else 1
     stage = request.form.get('stage')
-    valid_stages = [s for s, _ in PIPELINE_STAGES]
+    valid_stages = [s for s, _ in get_org_pipeline_stages(org_id)]
     if stage in valid_stages:
         update_pipeline_stage(client_id, stage, org_id=org_id)
         return jsonify({'ok': True})

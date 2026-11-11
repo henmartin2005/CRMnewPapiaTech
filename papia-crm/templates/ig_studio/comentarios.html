@@ -1,0 +1,119 @@
+{% extends 'ig_studio/_layout.html' %}
+{% block subtitle %}El agente responde comentarios y convierte a quien pregunta en conversación{% endblock %}
+
+{% block studio %}
+<section class="igs-kpis igs-kpis-sm" aria-label="Resumen de hoy">
+  <div class="igs-card igs-kpi"><span class="igs-kpi-label">Comentarios hoy</span><strong>{{ stats.total }}</strong></div>
+  <div class="igs-card igs-kpi"><span class="igs-kpi-label">Respondidos por IA</span><strong>{{ stats.replied }}</strong></div>
+  <div class="igs-card igs-kpi"><span class="igs-kpi-label">DMs enviados</span><strong>{{ stats.dms }}</strong></div>
+  <div class="igs-card igs-kpi"><span class="igs-kpi-label">Leads creados</span><strong>{{ stats.leads }}</strong></div>
+</section>
+
+<div class="igs-row">
+  <section class="igs-card igs-feed" aria-label="Comentarios">
+    <div class="igs-pills igs-feed-filters">
+      {% set filters = [('', 'Todos'), ('replied_dm', 'Respondió + DM'), ('replied', 'Respondió'), ('review', 'Revisar'), ('ignored', 'Ignorados'), ('error', 'Errores')] %}
+      {% for key, label in filters %}
+      <a href="?{% if key %}status={{ key }}{% endif %}{% if acct %}&acct={{ acct }}{% endif %}" class="{% if status == key %}is-on{% endif %}">{{ label }}{% if key == 'review' and stats.review %} · {{ stats.review }}{% endif %}</a>
+      {% endfor %}
+    </div>
+
+    {% for c in comments %}
+    <article class="igs-comment" data-comment="{{ c.comment_id }}">
+      <span class="igs-avatar" aria-hidden="true">{{ (c.from_username or '?')[:2]|upper }}</span>
+      <div class="igs-comment-body">
+        <div class="igs-comment-meta">
+          <strong>@{{ c.from_username or 'usuario' }}</strong>
+          <span>en {% if c.permalink %}<a href="{{ c.permalink }}" target="_blank" rel="noopener">«{{ c.post_title }}»</a>{% else %}«{{ c.post_title }}»{% endif %}{% if c.account %} · @{{ c.account }}{% endif %}</span>
+          <time>{{ c.received_at|localdatetime }}</time>
+        </div>
+        <p class="igs-comment-text">{{ c.text }}</p>
+        <div class="igs-badges">
+          <span class="igs-badge s-{{ c.status }}">{{ c.status_label }}</span>
+          {% if c.category %}<span class="igs-badge s-cat">{{ c.category|replace('_', ' ') }}</span>{% endif %}
+          {% if c.client_id %}<a class="igs-badge s-lead" href="{{ url_for('clients.detail', client_id=c.client_id) }}">Lead creado · Pipeline</a>{% endif %}
+        </div>
+        {% if c.reply_text %}
+        <div class="igs-reply"><span>RESPUESTA PÚBLICA</span>{{ c.reply_text }}</div>
+        {% endif %}
+        {% if c.dm_text %}
+        <div class="igs-reply"><span>DM ENVIADO</span>{{ c.dm_text }}</div>
+        {% endif %}
+        {% if c.status == 'error' and c.error %}<p class="igs-err-text">{{ c.error }}</p>{% endif %}
+
+        <form class="igs-reply-form" data-igs-reply hidden>
+          <label class="visually-hidden" for="r-{{ c.comment_id }}">Respuesta</label>
+          <textarea id="r-{{ c.comment_id }}" rows="2" maxlength="2200">{{ c.draft_text }}</textarea>
+          <div class="igs-actions">
+            <button type="submit" class="btn btn-primary btn-sm" data-mode="{{ 'approve' if c.status == 'review' else 'reply' }}">Publicar respuesta</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-igs-cancel>Cancelar</button>
+          </div>
+        </form>
+        {% if c.status == 'review' and c.draft_text %}
+        <div class="igs-reply is-draft"><span>BORRADOR SUGERIDO · NO ENVIADO</span>{{ c.draft_text }}</div>
+        {% endif %}
+
+        <div class="igs-actions" data-igs-row-actions>
+          {% if c.status == 'review' %}
+          <button type="button" class="btn btn-primary btn-sm" data-igs-open-reply>Revisar y publicar</button>
+          {% else %}
+          <button type="button" class="btn btn-ghost btn-sm" data-igs-open-reply>Responder yo</button>
+          {% endif %}
+          {% if c.status in ('error', 'off', 'pending') %}
+          <button type="button" class="btn btn-ghost btn-sm" data-igs-action="retry">Que lo intente el agente</button>
+          {% endif %}
+          {% if c.status not in ('ignored',) %}
+          <button type="button" class="btn btn-ghost btn-sm" data-igs-action="ignore">Ignorar</button>
+          {% endif %}
+          {% if 'instagram' in enabled_modules %}
+          <a class="igs-link" href="{{ url_for('meta_webhook.inbox', channel='instagram', sender_id=c.from_id) }}">Abrir en Inbox</a>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+    {% else %}
+    <p class="igs-empty igs-pad">No hay comentarios {% if status %}con este filtro{% else %}todavía. Llegan por el webhook de Meta en cuanto alguien comenta.{% endif %}</p>
+    {% endfor %}
+  </section>
+
+  <aside class="igs-side-col">
+    <section class="igs-card">
+      <div class="igs-card-head">
+        <div><h2>Agente por defecto</h2><p>Para publicaciones sin agente asignado</p></div>
+        {% if default_agent %}
+        <button type="button" role="switch" aria-checked="{{ 'true' if default_agent.enabled else 'false' }}" aria-label="Agente activo"
+                class="igs-switch" data-igs-toggle-agent="{{ default_agent.id }}"></button>
+        {% endif %}
+      </div>
+      {% if default_agent %}
+      <p class="igs-agent-name"><i class="bi bi-robot"></i> {{ default_agent.name }}</p>
+      <p class="muted">Los leads entran al Pipeline como <b>Nuevo Lead</b>. {% if default_agent.business_hours %}Responde solo en horario laboral.{% else %}Responde 24/7 con {{ default_agent.reply_delay }} s de retraso.{% endif %}</p>
+      <a class="igs-link" href="{{ url_for('ig_studio.agente', id=default_agent.id) }}">Editar agente</a>
+      {% else %}
+      <p class="muted">No hay agente de comentarios por defecto. Créalo en Agente IA.</p>
+      {% endif %}
+    </section>
+
+    <section class="igs-card">
+      <div><h2>Agente por publicación</h2><p class="muted">Incluye anuncios detectados por el webhook</p></div>
+      <div class="igs-media-grid">
+        {% for m in media %}
+        <div class="igs-media">
+          <a href="{{ m.permalink or '#' }}" target="_blank" rel="noopener" class="igs-media-thumb">
+            {% if m.thumb_url %}<img src="{{ m.thumb_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+            <span>{{ m.badge }}</span>
+          </a>
+          <span class="igs-media-title">{{ m.title }}</span>
+          <label class="visually-hidden" for="ag-{{ m.media_id }}">Agente de esta publicación</label>
+          <select id="ag-{{ m.media_id }}" data-igs-media-agent="{{ m.media_id }}">
+            <option value="" {% if not m.agent_id and not m.agent_off %}selected{% endif %}>Por defecto</option>
+            {% for a in agents %}<option value="{{ a.id }}" {% if m.agent_id == a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+            <option value="off" {% if m.agent_off %}selected{% endif %}>Sin agente</option>
+          </select>
+        </div>
+        {% else %}<p class="igs-empty">Sincroniza para ver tus publicaciones.</p>{% endfor %}
+      </div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

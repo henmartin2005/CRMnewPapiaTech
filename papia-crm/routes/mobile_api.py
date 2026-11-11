@@ -1,14 +1,22 @@
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 import hashlib
+import logging
+import re
+import secrets
+import urllib.parse
 
 import jwt
-from flask import Blueprint, current_app, g, jsonify, request
+import os
+
+from flask import Blueprint, abort, current_app, g, jsonify, redirect, request, send_file, session
 from werkzeug.security import check_password_hash
 
 from database import get_db
 from models.client import (
+    NOTE_TYPES,
     FOLLOW_UP_METHODS,
+    add_note,
     PIPELINE_STAGES,
     PROJECT_TYPES,
     add_followup,
@@ -25,13 +33,28 @@ from models.client import (
     update_client,
     update_pipeline_stage,
 )
+from models import payment_schedule
 from routes.whatsapp import (
+    MAX_MEDIA_BYTES,
+    MEDIA_DIR,
+    _clean_mime,
+    _ensure_media_columns,
+    _media_kind,
+    _media_label,
+    _prepare_audio,
+    _record_outbound,
+    _store_media,
+    deliver,
+    deliver_media,
     get_conversation,
     get_conversations,
     get_unread_count as get_whatsapp_unread_count,
     mark_read as mark_whatsapp_read,
     messages_to_dicts,
 )
+from services import ai_agent, push, zernio
+
+log = logging.getLogger(__name__)
 
 mobile_api_bp = Blueprint("mobile_api", __name__, url_prefix="/api/mobile")
 
@@ -132,6 +155,10 @@ def login():
     if not user or not check_password_hash(user["password_hash"], password):
         return _json_error("Invalid credentials", 401)
 
+    return _login_response(user)
+
+
+def _login_response(user):
     return jsonify({
         "ok": True,
         "token": _issue_token(user),
@@ -143,6 +170,117 @@ def login():
             "org_id": user["org_id"] if "org_id" in user.keys() else 1,
         },
     })
+
+
+# ── Login con Google desde la app ────────────────────────────────────────────
+# La app abre /api/mobile/login/google en el navegador del sistema. Se reutiliza
+# el login con Google de la web (mismo cliente OAuth y misma URL de retorno);
+# al terminar, el callback de auth.py llama a mobile_google_finish(), que vuelve
+# a la app con un código de un solo uso que la app cambia por el token.
+
+# Solo se vuelve al esquema de la app o al de Expo Go (desarrollo)
+_APP_REDIRECT_RE = re.compile(r"^(papiacrmmobile|papiacrm|exp|exps)://", re.IGNORECASE)
+_CODE_TTL_SECONDS = 120
+
+
+def _with_params(url, params):
+    return url + ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
+
+
+def _ensure_login_codes(db):
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS mobile_login_codes (
+            code       TEXT PRIMARY KEY,
+            user_id    INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL
+        )
+    """)
+
+
+@mobile_api_bp.route("/login/google")
+def google_login_start():
+    from routes import auth
+    redirect_to = (request.args.get("redirect_uri") or "").strip()
+    if not _APP_REDIRECT_RE.match(redirect_to):
+        return _json_error("Invalid redirect_uri")
+    client_id, _ = auth._google_creds()
+    if not client_id:
+        return redirect(_with_params(redirect_to, {"error": "Login con Google no está configurado."}))
+    state = secrets.token_urlsafe(24)
+    session["google_oauth_state"] = state
+    session["google_oauth_next"] = ""
+    session["google_oauth_mode"] = "mobile"
+    session["google_oauth_mobile_redirect"] = redirect_to
+    params = {
+        "client_id": client_id,
+        "redirect_uri": auth._google_redirect_uri(),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    }
+    return redirect(auth.GOOGLE_AUTH_URL + "?" + urllib.parse.urlencode(params))
+
+
+def mobile_google_fail(message):
+    redirect_to = session.pop("google_oauth_mobile_redirect", "")
+    if not _APP_REDIRECT_RE.match(redirect_to or ""):
+        return _json_error(message)
+    return redirect(_with_params(redirect_to, {"error": message}))
+
+
+def mobile_google_finish(email):
+    from routes import auth
+    redirect_to = session.get("google_oauth_mobile_redirect", "")
+    db = get_db()
+    try:
+        auth._ensure_google_column(db)
+        user = db.execute(
+            "SELECT id FROM users WHERE lower(google_email) = ? AND is_active = 1", (email,)
+        ).fetchone()
+        if not user:
+            db.close()
+            return mobile_google_fail("Esta cuenta de Google no tiene acceso al CRM.")
+        code = secrets.token_urlsafe(32)
+        now = int(datetime.now(timezone.utc).timestamp())
+        _ensure_login_codes(db)
+        db.execute("DELETE FROM mobile_login_codes WHERE expires_at < ?", (now,))
+        db.execute("INSERT INTO mobile_login_codes (code, user_id, expires_at) VALUES (?, ?, ?)",
+                   (code, user["id"], now + _CODE_TTL_SECONDS))
+        db.commit()
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+    session.pop("google_oauth_mobile_redirect", None)
+    return redirect(_with_params(redirect_to, {"code": code}))
+
+
+@mobile_api_bp.route("/login/google/exchange", methods=["POST"])
+def google_login_exchange():
+    code = ((request.get_json(silent=True) or {}).get("code") or "").strip()
+    if not code:
+        return _json_error("code is required")
+    now = int(datetime.now(timezone.utc).timestamp())
+    db = get_db()
+    try:
+        _ensure_login_codes(db)
+        row = db.execute("SELECT user_id, expires_at FROM mobile_login_codes WHERE code = ?", (code,)).fetchone()
+        # Un solo uso: se borra aunque esté vencido
+        db.execute("DELETE FROM mobile_login_codes WHERE code = ?", (code,))
+        db.commit()
+        if not row or row["expires_at"] < now:
+            return _json_error("Invalid or expired code", 401)
+        user = db.execute(
+            "SELECT id, username, display_name, role, is_active, org_id FROM users WHERE id = ? AND is_active = 1",
+            (row["user_id"],),
+        ).fetchone()
+    finally:
+        db.close()
+    if not user:
+        return _json_error("Inactive user", 401)
+    return _login_response(user)
 
 
 @mobile_api_bp.route("/me")
@@ -170,6 +308,7 @@ def metadata():
         "default_pipeline_stages": [{"key": key, "label": label} for key, label in PIPELINE_STAGES],
         "project_types": [{"key": key, "label": label} for key, label in PROJECT_TYPES],
         "follow_up_methods": [{"key": key, "label": label} for key, label in FOLLOW_UP_METHODS],
+        "note_types": [{"key": key, "label": label} for key, label in NOTE_TYPES],
     })
 
 
@@ -209,6 +348,7 @@ def client_detail(client_id):
         "client": _client_payload(client),
         "notes": [_row_dict(row) for row in get_client_notes(client_id)],
         "followups": [_task_payload(row) for row in get_client_followups(client_id)],
+        "installments": payment_schedule.list_installments(client_id, g.org_id),
     })
 
 
@@ -305,6 +445,12 @@ def whatsapp_messages():
     if not phone:
         return _json_error("phone is required")
     rows = get_conversation(phone, g.org_id)
+    if not rows:
+        # La app puede mandar el teléfono con otro formato: se prueba en E.164
+        e164 = zernio.to_e164(phone)
+        if e164 and e164 != phone:
+            phone = e164
+            rows = get_conversation(phone, g.org_id)
     if request.args.get("mark_read") == "1":
         mark_whatsapp_read(phone, g.org_id)
     return jsonify({
@@ -339,6 +485,212 @@ def complete_task(followup_id):
     if not row:
         return _json_error("Task not found", 404)
     complete_followup(followup_id)
+    return jsonify({"ok": True})
+
+
+# ── WhatsApp: enviar y bot por contacto ──────────────────────────────────────
+
+@mobile_api_bp.route("/whatsapp/send", methods=["POST"])
+@mobile_login_required
+def whatsapp_send():
+    """Igual que /whatsapp/send de la web: envía, registra y pausa el bot (intervención humana)."""
+    data = request.get_json(silent=True) or {}
+    phone = (data.get("phone") or "").strip()
+    message = (data.get("message") or "").strip()
+    client_id = data.get("client_id")
+    if not phone or not message:
+        return _json_error("phone and message are required")
+    try:
+        wa_id = deliver(phone, message, g.org_id)
+        _record_outbound(phone, message, wa_id, g.org_id, client_id)
+        try:
+            ai_agent.pause(zernio.to_e164(phone), g.org_id)
+        except Exception:
+            log.exception("No se pudo pausar el bot")
+        return jsonify({"ok": True, "id": wa_id})
+    except zernio.TemplateRequired as exc:
+        return jsonify({"ok": False, "template_required": True, "error": str(exc)}), 409
+    except Exception as exc:
+        log.exception("Error enviando WhatsApp desde la app")
+        return _json_error(str(exc), 500)
+
+
+@mobile_api_bp.route("/whatsapp/bot", methods=["GET"])
+@mobile_login_required
+def whatsapp_bot_state():
+    phone = (request.args.get("phone") or "").strip()
+    if not phone:
+        return _json_error("phone is required")
+    state = ai_agent.contact_bot_state(zernio.to_e164(phone) or phone, g.org_id)
+    return jsonify({"ok": True, "state": state})
+
+
+@mobile_api_bp.route("/whatsapp/bot", methods=["POST"])
+@mobile_login_required
+def whatsapp_bot_toggle():
+    data = request.get_json(silent=True) or {}
+    raw = (data.get("phone") or "").strip()
+    if not raw:
+        return _json_error("phone is required")
+    phone = zernio.to_e164(raw) or raw
+    ai_agent.set_contact_enabled(phone, bool(data.get("enabled")), g.org_id)
+    return jsonify({"ok": True, "state": ai_agent.contact_bot_state(phone, g.org_id)})
+
+
+# ── WhatsApp: adjuntos (fotos, audios, archivos) ─────────────────────────────
+
+@mobile_api_bp.route("/whatsapp/media/<int:msg_id>")
+@mobile_login_required
+def whatsapp_media(msg_id):
+    """Igual que /whatsapp/media/<id> de la web, pero con el token de la app."""
+    _ensure_media_columns()
+    db = get_db()
+    row = db.execute("SELECT media_path, media_mime FROM whatsapp_messages WHERE id = ? AND org_id = ?",
+                     (msg_id, g.org_id)).fetchone()
+    db.close()
+    if not row or not row["media_path"]:
+        abort(404)
+    path = os.path.join(MEDIA_DIR, os.path.basename(row["media_path"]))
+    if not os.path.exists(path):
+        abort(404)
+    return send_file(path, mimetype=row["media_mime"] or None, conditional=True, max_age=86400)
+
+
+@mobile_api_bp.route("/whatsapp/send-media", methods=["POST"])
+@mobile_login_required
+def whatsapp_send_media():
+    """Envía una foto, audio o archivo (multipart: phone, file, kind opcional, client_id opcional)."""
+    _ensure_media_columns()
+    phone = (request.form.get("phone") or "").strip()
+    client_id = request.form.get("client_id") or None
+    kind = (request.form.get("kind") or "").strip().lower()
+    f = request.files.get("file")
+    if not phone or not f:
+        return _json_error("phone and file are required")
+    data = f.read()
+    mime = _clean_mime(f.mimetype)
+    filename = os.path.basename(f.filename or "archivo")
+    if not kind:
+        kind = _media_kind("", mime)
+    if kind not in ("image", "audio", "video", "file"):
+        return _json_error("Invalid kind")
+    if not data:
+        return _json_error("Empty file")
+    if len(data) > MAX_MEDIA_BYTES:
+        return _json_error("File too large (max 16 MB)", 413)
+
+    voice = False
+    try:
+        if kind == "audio":
+            data, mime, voice = _prepare_audio(data, mime)
+        wa_id = deliver_media(phone, data, mime, kind, filename, voice, g.org_id)
+    except zernio.TemplateRequired as exc:
+        return jsonify({"ok": False, "template_required": True, "error": str(exc)}), 409
+    except Exception as exc:
+        log.exception("Error enviando adjunto desde la app")
+        return _json_error(str(exc), 500)
+
+    media_path = _store_media(data, mime)
+    _record_outbound(phone, _media_label(kind), wa_id, g.org_id, client_id, media=(media_path, kind, mime))
+    try:
+        ai_agent.pause(zernio.to_e164(phone), g.org_id)
+    except Exception:
+        log.exception("No se pudo pausar el bot")
+    return jsonify({"ok": True, "id": wa_id})
+
+
+# ── Notas del cliente ────────────────────────────────────────────────────────
+
+@mobile_api_bp.route("/clients/<int:client_id>/notes", methods=["POST"])
+@mobile_login_required
+def create_mobile_note(client_id):
+    if not get_client(client_id, g.org_id):
+        return _json_error("Client not found", 404)
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+    note_type = (data.get("note_type") or "note").strip()
+    if not content:
+        return _json_error("content is required")
+    if note_type not in [key for key, _ in NOTE_TYPES]:
+        return _json_error("Invalid note_type")
+    add_note(client_id, note_type, content)
+    return jsonify({"ok": True, "notes": [_row_dict(row) for row in get_client_notes(client_id)]}), 201
+
+
+# ── Pagos (cronograma de cuotas) ─────────────────────────────────────────────
+
+def _installment_state(row, today):
+    if row["status"] == "paid":
+        return "paid"
+    if row["due_date"] < today:
+        return "overdue"
+    if row["due_date"] == today:
+        return "today"
+    return "pending"
+
+
+@mobile_api_bp.route("/payments")
+@mobile_login_required
+def payments():
+    today = datetime.now().strftime("%Y-%m-%d")
+    db = payment_schedule._db()
+    try:
+        rows = db.execute("""
+            SELECT s.*, c.first_name, c.last_name, c.company, c.phone
+            FROM payment_schedule s
+            JOIN clients c ON c.id = s.client_id
+            WHERE s.org_id = ? AND c.org_id = ?
+            ORDER BY s.due_date, s.id
+        """, (g.org_id, g.org_id)).fetchall()
+    finally:
+        db.close()
+    items = []
+    for r in rows:
+        d = dict(r)
+        d["state"] = _installment_state(r, today)
+        d["client_name"] = f"{d.get('first_name') or ''} {d.get('last_name') or ''}".strip()
+        items.append(d)
+    return jsonify({"ok": True, "payments": items})
+
+
+@mobile_api_bp.route("/payments/<int:inst_id>/paid", methods=["POST"])
+@mobile_login_required
+def payment_mark_paid(inst_id):
+    db = payment_schedule._db()
+    try:
+        row = db.execute("SELECT client_id FROM payment_schedule WHERE id = ? AND org_id = ?",
+                         (inst_id, g.org_id)).fetchone()
+    finally:
+        db.close()
+    if not row:
+        return _json_error("Payment not found", 404)
+    # Suma el monto a amount_paid del cliente, completa el recordatorio y deja nota (igual que la web)
+    inst = payment_schedule.mark_paid(inst_id, row["client_id"], g.org_id)
+    if inst is None:
+        return _json_error("Payment already paid", 409)
+    return jsonify({"ok": True, "client": _client_payload(get_client(row["client_id"], g.org_id))})
+
+
+# ── Notificaciones push ──────────────────────────────────────────────────────
+
+@mobile_api_bp.route("/push-token", methods=["POST"])
+@mobile_login_required
+def push_token_register():
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    if not push.is_valid_token(token):
+        return _json_error("Invalid Expo push token")
+    push.register(token, g.mobile_user["id"], g.org_id, (data.get("platform") or "").strip())
+    return jsonify({"ok": True})
+
+
+@mobile_api_bp.route("/push-token", methods=["DELETE"])
+@mobile_login_required
+def push_token_unregister():
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    if token:
+        push.unregister(token)
     return jsonify({"ok": True})
 
 

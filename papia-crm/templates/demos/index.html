@@ -39,12 +39,12 @@
       <div class="demo-card-body">
         <strong>{{ d.nombre }}</strong>
         <a href="{{ d.url }}" target="_blank" rel="noopener" class="demo-muted demo-url">{{ d.url|replace('https://', '') }}</a>
-        <span class="demo-muted">{{ d.enlaces }} código{{ '' if d.enlaces == 1 else 's' }}{% if not d.activo %} · pausado{% endif %}</span>
+        <span class="demo-muted">{{ d.enlaces }} código{{ '' if d.enlaces == 1 else 's' }}{% if d.modo == 'redireccion' %} · vía datos.papiatech{% endif %}{% if not d.activo %} · pausado{% endif %}</span>
       </div>
       <div class="demo-card-actions">
         <a class="btn btn-ghost btn-xs" href="{{ url_for('demos.index', demo=d.id) }}">Ver códigos</a>
         <button class="btn btn-ghost btn-xs" data-bs-toggle="modal" data-bs-target="#demoModal"
-                data-demo='{{ {"id": d.id, "nombre": d.nombre, "slug": d.slug, "url": d.url, "color": d.color, "mensaje": d.mensaje, "activo": d.activo}|tojson|forceescape }}'>
+                data-demo='{{ {"id": d.id, "nombre": d.nombre, "slug": d.slug, "url": d.url, "color": d.color, "mensaje": d.mensaje, "modo": d.modo, "activo": d.activo}|tojson|forceescape }}'>
           Editar
         </button>
       </div>
@@ -205,6 +205,13 @@
         </div>
         <label class="form-label">Enlace del demo publicado
           <input class="form-control" name="url" type="url" required placeholder="https://demo.papiatech.com">
+        </label>
+        <label class="form-label">Cómo se cuenta el acceso
+          <select class="form-select" name="modo">
+            <option value="codigo">El demo pide el código (Lovable con /d/CÓDIGO)</option>
+            <option value="redireccion">Redirección: el CRM cuenta la visita y abre el enlace (no toca la app)</option>
+          </select>
+          <span class="demo-muted">Usa Redirección para apps que no quieres modificar (p. ej. un CRM en PythonAnywhere).</span>
         </label>
         <label class="form-label">Color por defecto
           <input class="form-control form-control-color" type="color" name="color" value="#2A5BFF">

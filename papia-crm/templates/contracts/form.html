@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar sobre' if env else 'Nuevo sobre' }}{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='css/contracts.css') }}?v=1" rel="stylesheet" />{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <a href="{{ url_for('contracts.index') }}" style="font-size:12px;color:var(--c-text-3);"><i class="bi bi-arrow-left"></i> Contratos</a>
+    <h1 class="pg-title">{{ 'Editar sobre' if env else 'Nuevo sobre' }}</h1>
+    <p class="pg-sub">Paso 1 de 2 · Documento y destinatarios. Después colocas los campos de firma.</p>
+  </div>
+</div>
+
+<form method="POST" enctype="multipart/form-data" id="envForm"
+      action="{{ url_for('contracts.edit', env_id=env.id) if env else url_for('contracts.new') }}">
+  <input type="hidden" name="recipients_json" id="recipientsJson" />
+
+  <div class="section-card" style="margin-bottom:16px;">
+    <div class="section-head"><span class="section-head-label"><i class="bi bi-file-earmark-pdf" style="margin-right:5px;"></i>Documento</span></div>
+    <div class="card-body ct-form-grid">
+      {% if not env %}
+      <div class="span-2">
+        <label class="ct-drop" id="dropZone" for="docInput">
+          <i class="bi bi-cloud-arrow-up"></i>
+          <div style="font-weight:650;margin-top:6px;" id="dropLabel">Arrastra el PDF aquí o haz clic para elegirlo</div>
+          <div style="font-size:12px;color:var(--c-text-3);">Solo PDF · máx. 20 MB · exporta tu Word o Google Doc como PDF</div>
+        </label>
+        <input type="file" name="document" id="docInput" accept="application/pdf,.pdf" hidden />
+      </div>
+      {% else %}
+      <div class="span-2" style="font-size:13px;">
+        <i class="bi bi-file-earmark-pdf" style="color:#DC2626;"></i> <b>{{ env.original_name }}</b>
+        · {{ env.page_count }} página{{ 's' if env.page_count != 1 }}
+        · <a href="{{ url_for('contracts.document', env_id=env.id) }}" target="_blank" rel="noopener">ver</a>
+      </div>
+      {% endif %}
+      <div>
+        <label class="form-label" for="title">Título del sobre</label>
+        <input type="text" class="form-control" id="title" name="title" maxlength="200"
+               value="{{ env.title if env else '' }}" placeholder="Ej. Acuerdo de servicios — Sitio web + CRM" />
+      </div>
+      <div>
+        <label class="form-label" for="clientSel">Cliente del CRM</label>
+        <select class="form-select" id="clientSel" name="client_id">
+          <option value="">— Sin vincular —</option>
+          {% for c in clients %}
+            <option value="{{ c.id }}"
+              data-name="{{ (c.first_name ~ ' ' ~ (c.last_name or ''))|trim }}" data-email="{{ c.email or '' }}" data-phone="{{ c.phone or '' }}"
+              {% if (env and env.client_id == c.id) or (pre_client and pre_client.id == c.id) %}selected{% endif %}>
+              {{ c.first_name }} {{ c.last_name or '' }}{% if c.company %} · {{ c.company }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="span-2">
+        <label class="form-label" for="message">Mensaje para los firmantes <span style="color:var(--c-text-3);font-weight:400;">(opcional)</span></label>
+        <textarea class="form-control" id="message" name="message" rows="2" maxlength="2000"
+                  placeholder="Hola, te comparto el acuerdo para tu revisión y firma.">{{ env.message if env else '' }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card" style="margin-bottom:16px;">
+    <div class="section-head">
+      <span class="section-head-label"><i class="bi bi-people" style="margin-right:5px;"></i>Destinatarios</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-ghost btn-xs" id="addClient"><i class="bi bi-person-badge"></i> Agregar al cliente</button>
+        <button type="button" class="btn btn-ghost btn-xs" id="addMe"><i class="bi bi-person-check"></i> Agregarme</button>
+        <button type="button" class="btn btn-ghost btn-xs" id="addRow"><i class="bi bi-plus"></i> Destinatario</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div style="font-size:12px;color:var(--c-text-3);margin-bottom:10px;">
+        El <b>orden</b> define quién firma primero; los que tienen el mismo número firman al mismo tiempo.
+        Un <b>CC</b> no firma: recibe la copia final.
+      </div>
+      <div id="rcptList"></div>
+    </div>
+  </div>
+
+  <div class="section-card" style="margin-bottom:16px;">
+    <div class="section-head"><span class="section-head-label"><i class="bi bi-shield-lock" style="margin-right:5px;"></i>Seguridad y vencimiento</span></div>
+    <div class="card-body ct-form-grid">
+      <label class="span-2" style="display:flex;gap:10px;align-items:flex-start;font-size:13px;cursor:pointer;">
+        <input type="checkbox" name="require_otp" value="1" style="width:17px;height:17px;margin-top:2px;"
+               {% if not env or env.require_otp %}checked{% endif %} />
+        <span><b>Pedir código de verificación</b> antes de abrir el documento (por email; por WhatsApp si no tiene email).
+          <br><span style="color:var(--c-text-3);">Recomendado: es la evidencia más fuerte de identidad.</span></span>
+      </label>
+      <div>
+        <label class="form-label" for="expires">Vence en (días)</label>
+        <input type="number" class="form-control" id="expires" name="expires_days" min="1" max="120" value="{{ env.expires_days if env else 14 }}" />
+      </div>
+      <div>
+        <label class="form-label" for="remind">Recordatorio automático cada (días, 0 = no)</label>
+        <input type="number" class="form-control" id="remind" name="reminder_days" min="0" max="30" value="{{ env.reminder_days if env else 3 }}" />
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:8px;">
+    <a href="{{ url_for('contracts.index') }}" class="btn btn-ghost btn-md">Cancelar</a>
+    <button type="submit" class="btn btn-accent btn-md" id="submitBtn">Siguiente: colocar campos <i class="bi bi-arrow-right"></i></button>
+  </div>
+</form>
+
+<template id="rowTpl">
+  <div class="ct-rcpt-row">
+    <input class="form-control ct-order" type="number" min="1" max="20" aria-label="Orden de firma" data-k="routing_order" />
+    <span class="ct-swatch"></span>
+    <input class="form-control" placeholder="Nombre completo" aria-label="Nombre" data-k="name" maxlength="120" />
+    <input class="form-control" type="email" placeholder="email@ejemplo.com" aria-label="Email" data-k="email" maxlength="200" />
+    <input class="form-control" type="tel" placeholder="+1 305…" aria-label="Teléfono / WhatsApp" data-k="phone" maxlength="40" />
+    <select class="form-select" aria-label="Rol" data-k="role"><option value="signer">Firma</option><option value="cc">CC (copia)</option></select>
+    <div class="ct-rcpt-chan">
+      <label><input type="checkbox" data-k="notify_email" checked /> Email</label>
+      <label><input type="checkbox" data-k="notify_whatsapp" /> WhatsApp</label>
+    </div>
+    <button type="button" class="btn btn-ghost btn-icon-sm" aria-label="Quitar destinatario" data-remove><i class="bi bi-x-lg"></i></button>
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var COLORS = {{ colors|tojson }};
+  var ME = {name: {{ me[0]|tojson }}, email: {{ me[1]|tojson }}};
+  var list = document.getElementById('rcptList');
+  var tpl = document.getElementById('rowTpl');
+
+  function recolor() {
+    var signerIdx = 0;
+    list.querySelectorAll('.ct-rcpt-row').forEach(function (row, i) {
+      var isCc = row.querySelector('[data-k=role]').value === 'cc';
+      row.querySelector('.ct-swatch').style.background = isCc ? '#CBD5E1' : COLORS[i % COLORS.length];
+      row.querySelector('.ct-order').disabled = isCc;
+    });
+  }
+  function addRow(d) {
+    d = d || {};
+    var node = tpl.content.firstElementChild.cloneNode(true);
+    var count = list.querySelectorAll('.ct-rcpt-row').length;
+    if (d.id) node.dataset.id = d.id;
+    node.querySelector('[data-k=routing_order]').value = d.routing_order || (count + 1);
+    node.querySelector('[data-k=name]').value = d.name || '';
+    node.querySelector('[data-k=email]').value = d.email || '';
+    node.querySelector('[data-k=phone]').value = d.phone || '';
+    node.querySelector('[data-k=role]').value = d.role || 'signer';
+    node.querySelector('[data-k=notify_email]').checked = d.notify_email === undefined ? true : !!d.notify_email;
+    node.querySelector('[data-k=notify_whatsapp]').checked = !!d.notify_whatsapp;
+    node.querySelector('[data-remove]').addEventListener('click', function () { node.remove(); recolor(); });
+    node.querySelector('[data-k=role]').addEventListener('change', recolor);
+    list.appendChild(node);
+    recolor();
+    if (!d.name) node.querySelector('[data-k=name]').focus();
+  }
+  function collect() {
+    return Array.prototype.map.call(list.querySelectorAll('.ct-rcpt-row'), function (row) {
+      var o = {id: row.dataset.id || null};
+      row.querySelectorAll('[data-k]').forEach(function (el) {
+        o[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value.trim();
+      });
+      return o;
+    }).filter(function (o) { return o.name; });
+  }
+  function clientData() {
+    var opt = document.getElementById('clientSel').selectedOptions[0];
+    return opt && opt.value ? {name: opt.dataset.name, email: opt.dataset.email, phone: opt.dataset.phone} : null;
+  }
+
+  document.getElementById('addRow').addEventListener('click', function () { addRow(); });
+  document.getElementById('addMe').addEventListener('click', function () {
+    addRow({name: ME.name, email: ME.email, routing_order: 1});
+  });
+  document.getElementById('addClient').addEventListener('click', function () {
+    var c = clientData();
+    if (!c) { alert('Primero elige el cliente del CRM.'); return; }
+    addRow({name: c.name, email: c.email, phone: c.phone, notify_whatsapp: !!c.phone && !c.email});
+  });
+
+  var initial = {{ recipients_json|safe }};
+  if (initial.length) { initial.forEach(addRow); }
+  else {
+    var c = clientData();
+    addRow({name: ME.name, email: ME.email, routing_order: 1});
+    if (c) addRow({name: c.name, email: c.email, phone: c.phone, routing_order: 2});
+  }
+
+  document.getElementById('envForm').addEventListener('submit', function (ev) {
+    var data = collect();
+    var docIn = document.getElementById('docInput');
+    if (docIn && !docIn.files.length) { ev.preventDefault(); alert('Sube el documento en PDF.'); return; }
+    if (!data.some(function (r) { return r.role !== 'cc'; })) {
+      ev.preventDefault(); alert('Agrega al menos un firmante.'); return;
+    }
+    document.getElementById('recipientsJson').value = JSON.stringify(data);
+    document.getElementById('submitBtn').disabled = true;
+  });
+
+  var input = document.getElementById('docInput'), drop = document.getElementById('dropZone');
+  if (input && drop) {
+    function show() {
+      if (input.files[0]) {
+        document.getElementById('dropLabel').textContent = input.files[0].name;
+        var t = document.getElementById('title');
+        if (!t.value) t.value = input.files[0].name.replace(/\.pdf$/i, '');
+      }
+    }
+    input.addEventListener('change', show);
+    ['dragenter', 'dragover'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.add('drag'); }); });
+    ['dragleave', 'drop'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.remove('drag'); }); });
+    drop.addEventListener('drop', function (e) {
+      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); }
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -80,6 +80,10 @@ def get_client(client_id, org_id):
 
 
 def create_client(data, org_id=1):
+    valid = dict(get_org_pipeline_stages(org_id))
+    stage = data.get('pipeline_stage', 'new_lead')
+    if stage not in valid:
+        stage = next(iter(valid))
     db = get_db()
     cursor = db.execute("""
         INSERT INTO clients
@@ -90,7 +94,7 @@ def create_client(data, org_id=1):
         data['first_name'], data['last_name'], data['email'],
         data.get('phone', ''), data.get('company', ''),
         data['project_type'], data.get('project_details', ''),
-        data.get('pipeline_stage', 'new_lead'),
+        stage,
         float(data.get('total_cost', 0)),
         float(data.get('amount_paid', 0)),
         org_id,
@@ -102,6 +106,10 @@ def create_client(data, org_id=1):
 
 
 def update_client(client_id, data, org_id):
+    valid = dict(get_org_pipeline_stages(org_id))
+    stage = data.get('pipeline_stage', 'new_lead')
+    if stage not in valid:
+        stage = next(iter(valid))
     db = get_db()
     db.execute("""
         UPDATE clients SET
@@ -114,7 +122,7 @@ def update_client(client_id, data, org_id):
         data['first_name'], data['last_name'], data['email'],
         data.get('phone', ''), data.get('company', ''),
         data['project_type'], data.get('project_details', ''),
-        data.get('pipeline_stage', 'new_lead'),
+        stage,
         float(data.get('total_cost', 0)),
         float(data.get('amount_paid', 0)),
         1 if data.get('brochure_sent') else 0,
@@ -363,11 +371,12 @@ def get_clients_by_stage(org_id):
     """, (org_id,)).fetchall()
     db.close()
 
-    stages = {stage: [] for stage, _ in PIPELINE_STAGES}
+    stages = {stage: [] for stage, _ in get_org_pipeline_stages(org_id)}
     for row in rows:
         stage = row['pipeline_stage']
-        if stage in stages:
-            stages[stage].append(row)
+        if stage not in stages:
+            stage = next(iter(stages))
+        stages[stage].append(row)
     return stages
 
 
@@ -392,13 +401,15 @@ def get_org_pipeline_stages(org_id):
     finally:
         db.close()
     custom = {r[0]: (r[1], r[2]) for r in rows}
-    default_pos = {k: i for i, (k, _) in enumerate(PIPELINE_STAGES)}
+    defaults = dict(PIPELINE_STAGES)
+    keys = list(defaults) + [k for k in custom if k not in defaults]
     stages = []
-    for key, name in PIPELINE_STAGES:
+    for i, key in enumerate(keys):
         label, pos = custom.get(key, (None, None))
-        label = (label or '').strip() or name
-        stages.append((key, label, pos if pos is not None else default_pos[key]))
-    stages.sort(key=lambda s: (s[2], default_pos[s[0]]))
+        if pos == -1:
+            continue
+        stages.append((key, (label or '').strip() or defaults.get(key, key), pos if pos is not None else i))
+    stages.sort(key=lambda s: s[2])
     return [(k, n) for k, n, _ in stages]
 
 
@@ -425,5 +436,49 @@ def set_stage_order(org_id, order):
             db.execute("UPDATE pipeline_stage_settings SET position = ? WHERE org_id = ? AND stage_key = ?",
                        (i, org_id, key))
         db.commit()
+    finally:
+        db.close()
+
+
+def add_pipeline_stage(org_id, label):
+    from uuid import uuid4
+    db = get_db()
+    try:
+        _ensure_stage_settings(db)
+        db.execute('BEGIN IMMEDIATE')
+        rows = db.execute('SELECT label FROM pipeline_stage_settings WHERE org_id=? AND position != -1', (org_id,)).fetchall()
+        names = [r[0] for r in rows] + [n for _, n in PIPELINE_STAGES]
+        if label.casefold() in [(n or '').casefold() for n in names]:
+            raise ValueError('Ya existe una columna con ese nombre.')
+        key = 'custom_' + uuid4().hex
+        pos = db.execute('SELECT COALESCE(MAX(position), 5) + 1 FROM pipeline_stage_settings WHERE org_id=?', (org_id,)).fetchone()[0]
+        db.execute('INSERT INTO pipeline_stage_settings (org_id, stage_key, label, position) VALUES (?, ?, ?, ?)', (org_id, key, label, pos))
+        db.commit()
+        return key
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def remove_pipeline_stage(org_id, stage, target):
+    db = get_db()
+    try:
+        _ensure_stage_settings(db)
+        db.execute('BEGIN IMMEDIATE')
+        rows = db.execute('SELECT stage_key, position FROM pipeline_stage_settings WHERE org_id=?', (org_id,)).fetchall()
+        settings = {r[0]: r[1] for r in rows}
+        valid = {k for k, _ in PIPELINE_STAGES} | set(settings)
+        valid = {k for k in valid if settings.get(k) != -1}
+        if len(valid) <= 1 or stage not in valid or target not in valid or stage == target:
+            raise ValueError('Selecciona otra columna de destino. Debe quedar al menos una columna.')
+        db.execute('UPDATE clients SET pipeline_stage=?, updated_at=CURRENT_TIMESTAMP WHERE org_id=? AND pipeline_stage=?', (target, org_id, stage))
+        db.execute('INSERT OR IGNORE INTO pipeline_stage_settings (org_id, stage_key) VALUES (?, ?)', (org_id, stage))
+        db.execute('UPDATE pipeline_stage_settings SET position=-1 WHERE org_id=? AND stage_key=?', (org_id, stage))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

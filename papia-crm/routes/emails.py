@@ -614,7 +614,7 @@ def send():
         html_body = _build_html_email(body, settings)
         # send_email guarda siempre la copia en Enviados y la nota en el cliente
         gmail_id, _ = send_email(
-            org_id, to_email, subject, html_body, text=body,
+            org_id, to_email, subject, html_body, text=(data.get('text') or '').strip() or body,
             client_id=int(client_id) if client_id else None,
             note=f"Email enviado: {subject}",
         )

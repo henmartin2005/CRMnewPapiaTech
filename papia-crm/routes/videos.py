@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 import requests
 from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from database import get_db
-from routes.emails import _client_config, _load_creds
+from routes.emails import _client_config
 from services import video_drive as drive
 
 videos_bp = Blueprint('videos', __name__, url_prefix='/videos')
@@ -178,11 +178,13 @@ def callback():
         if drive.DRIVE_SCOPE not in new_info.get('scope', '').split():
             raise ValueError('Falta el permiso de Drive.')
         old_row = query('SELECT * FROM gmail_tokens WHERE org_id=?', (g.org_id,), True)
-        old = _load_creds(g.org_id) if old_row else None
-        if old_row and not old:
-            raise ValueError('Reconecta primero la cuenta de Google existente desde Emails y vuelve a conectar Drive.')
-        if old:
-            old_info = drive.token_info(old.token)
+        if old_row:
+            try:
+                old, old_info = drive.verified_credentials(g.org_id)
+            except drive.DriveError as exc:
+                if exc.reconnect:
+                    raise ValueError('Reconecta primero la cuenta de Google existente desde Emails y vuelve a conectar Drive.')
+                raise
             old_user = old_info.get('sub') or old_info.get('user_id')
             new_user = new_info.get('sub') or new_info.get('user_id')
             if not old_user or old_user != new_user:
@@ -226,8 +228,9 @@ def upload_session():
         size = int(data.get('size', 0))
     except (ValueError, TypeError):
         raise ValueError('Tamaño inválido.')
-    if not name or not re.fullmatch(r'video/[a-zA-Z0-9.+_-]+', mime) or not 0 < size <= 10 * 1024**3:
-        raise ValueError('Selecciona un video válido de hasta 10 GB.')
+    media_type = re.fullmatch(r'video/[a-zA-Z0-9.+_-]+', mime) or mime in {'image/jpeg','image/png','image/webp','image/heic','image/heif'}
+    if not name or not media_type or not 0 < size <= 10 * 1024**3:
+        raise ValueError('Selecciona un video o una foto válida de hasta 10 GB.')
     customer = client(data.get('cliente_id'))
     creds, _ = drive.credentials()
     folder = drive.ensure_folder(creds, customer)

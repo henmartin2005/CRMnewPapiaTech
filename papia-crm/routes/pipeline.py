@@ -3,6 +3,7 @@ from models.client import (
     get_clients_by_stage, update_pipeline_stage,
     PIPELINE_STAGES, PROJECT_TYPES, STAGE_COLORS,
     get_org_pipeline_stages, set_stage_label, set_stage_order,
+    add_pipeline_stage, remove_pipeline_stage,
 )
 
 pipeline_bp = Blueprint('pipeline', __name__, url_prefix='/pipeline')
@@ -27,7 +28,7 @@ def move_card():
     data = request.get_json()
     client_id = data.get('client_id')
     new_stage = data.get('stage')
-    valid_stages = [s for s, _ in PIPELINE_STAGES]
+    valid_stages = [s for s, _ in get_org_pipeline_stages(org_id)]
     if client_id and new_stage in valid_stages:
         update_pipeline_stage(client_id, new_stage, org_id=org_id)
         return jsonify({'ok': True})
@@ -40,7 +41,7 @@ def rename_stage():
     data = request.get_json(silent=True) or {}
     stage = data.get('stage')
     label = ' '.join((data.get('label') or '').split())[:40]
-    if stage not in [s for s, _ in PIPELINE_STAGES] or not label:
+    if stage not in [s for s, _ in get_org_pipeline_stages(org_id)] or not label:
         return jsonify({'ok': False, 'error': 'Invalid data'}), 400
     set_stage_label(org_id, stage, label)
     return jsonify({'ok': True, 'label': label})
@@ -51,8 +52,37 @@ def reorder_stages():
     org_id = g.org_id if hasattr(g, 'org_id') else 1
     data = request.get_json(silent=True) or {}
     order = data.get('order') or []
-    valid = [s for s, _ in PIPELINE_STAGES]
+    valid = [s for s, _ in get_org_pipeline_stages(org_id)]
     if not isinstance(order, list) or sorted(order) != sorted(valid):
         return jsonify({'ok': False, 'error': 'Invalid data'}), 400
     set_stage_order(org_id, order)
     return jsonify({'ok': True})
+
+
+@pipeline_bp.route('/stages', methods=['POST'])
+def create_stage():
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or not isinstance(data.get('label'), str):
+        return jsonify(ok=False, error='Escribe un nombre válido.'), 400
+    label = ' '.join(data['label'].split())
+    if not label or len(label) > 40:
+        return jsonify(ok=False, error='El nombre debe tener entre 1 y 40 caracteres.'), 400
+    try:
+        key = add_pipeline_stage(org_id, label)
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+    return jsonify(ok=True, stage=key, label=label)
+
+
+@pipeline_bp.route('/stages/delete', methods=['POST'])
+def delete_stage():
+    org_id = g.org_id if hasattr(g, 'org_id') else 1
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or not isinstance(data.get('stage'), str) or not isinstance(data.get('target'), str):
+        return jsonify(ok=False, error='Selecciona una columna y un destino válidos.'), 400
+    try:
+        remove_pipeline_stage(org_id, data['stage'], data['target'])
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+    return jsonify(ok=True)

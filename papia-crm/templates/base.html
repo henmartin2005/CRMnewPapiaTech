@@ -111,6 +111,16 @@
       </a>
     </li>
 
+    {% if is_admin %}
+    <li>
+      <a href="{{ url_for('pagos.index') }}"
+         class="sb-link {% if request.blueprint == 'pagos' %}active{% endif %}">
+        <i class="bi bi-cash-coin" style="color:#16A34A;"></i>
+        <span class="sb-label">Pagos</span>
+      </a>
+    </li>
+    {% endif %}
+
     <li class="sb-section" style="margin-top:4px;">Operación</li>
 
     {% if is_admin %}
@@ -174,12 +184,30 @@
     </li>
     {% endif %}
 
+    <li>
+      <a href="{{ url_for('boards.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('boards.') %}active{% endif %}">
+        <i class="bi bi-easel2"></i>
+        <span class="sb-label">Pizarra</span>
+      </a>
+    </li>
+
     {% if 'proposals' in enabled_modules %}
     <li>
       <a href="{{ url_for('proposals.index') }}"
          class="sb-link {% if request.endpoint and request.endpoint.startswith('proposals.') %}active{% endif %}">
         <i class="bi bi-file-earmark-text"></i>
         <span class="sb-label">Propuestas</span>
+      </a>
+    </li>
+    {% endif %}
+
+    {% if 'contracts' in enabled_modules %}
+    <li>
+      <a href="{{ url_for('contracts.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('contracts.') %}active{% endif %}">
+        <i class="bi bi-pen"></i>
+        <span class="sb-label">Contratos</span>
       </a>
     </li>
     {% endif %}
@@ -219,6 +247,16 @@
         {% if instagram_unread > 0 %}
           <span class="sb-wa-badge" style="background:#E1306C;">{{ instagram_unread }}</span>
         {% endif %}
+
+    {% if is_admin %}
+    <li>
+      <a href="{{ url_for('ig_studio.analitica') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('ig_studio.') %}active{% endif %}">
+        <i class="bi bi-graph-up-arrow" style="color:#E1306C;"></i>
+        <span class="sb-label">Instagram Studio</span>
+      </a>
+    </li>
+    {% endif %}
       </a>
     </li>
     {% endif %}

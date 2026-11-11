@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Preparar · {{ env.title }}{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='css/contracts.css') }}?v=1" rel="stylesheet" />{% endblock %}
+
+{% block content %}
+<div class="pg-header" style="margin-bottom:12px;">
+  <div>
+    <a href="{{ url_for('contracts.edit', env_id=env.id) }}" style="font-size:12px;color:var(--c-text-3);"><i class="bi bi-arrow-left"></i> Documento y destinatarios</a>
+    <h1 class="pg-title" style="font-size:20px;">{{ env.title }}</h1>
+    <p class="pg-sub">Paso 2 de 2 · Elige un firmante, arrastra los campos sobre el documento y envía.</p>
+  </div>
+  <div class="pg-actions">
+    <span class="ct-savebar" id="saveState" role="status" aria-live="polite"></span>
+    <form method="POST" action="{{ url_for('contracts.delete', env_id=env.id) }}" onsubmit="return confirm('¿Eliminar este borrador?');" style="margin:0;">
+      <button type="submit" class="btn btn-ghost btn-sm" title="Eliminar borrador"><i class="bi bi-trash"></i></button>
+    </form>
+    <button type="button" class="btn btn-accent btn-sm" id="sendBtn"><i class="bi bi-send"></i> Enviar para firma</button>
+  </div>
+</div>
+
+<div class="ct-editor">
+  <aside class="ct-palette" aria-label="Campos disponibles">
+    <h4>Campos para</h4>
+    <div id="activeSignerLbl" style="font-size:13px;font-weight:650;display:flex;align-items:center;gap:7px;"></div>
+    <h4>Firma</h4>
+    <button type="button" class="ct-tool" draggable="true" data-type="signature"><i class="bi bi-pen"></i>Firma</button>
+    <button type="button" class="ct-tool" draggable="true" data-type="initials"><i class="bi bi-type"></i>Iniciales</button>
+    <button type="button" class="ct-tool" draggable="true" data-type="date_signed"><i class="bi bi-calendar-event"></i>Fecha de firma</button>
+    <h4>Datos</h4>
+    <button type="button" class="ct-tool" draggable="true" data-type="full_name"><i class="bi bi-person"></i>Nombre completo</button>
+    <button type="button" class="ct-tool" draggable="true" data-type="email"><i class="bi bi-envelope"></i>Email</button>
+    <button type="button" class="ct-tool" draggable="true" data-type="text"><i class="bi bi-input-cursor-text"></i>Texto libre</button>
+    <button type="button" class="ct-tool" draggable="true" data-type="checkbox"><i class="bi bi-check2-square"></i>Casilla</button>
+    <div style="margin-top:auto;font-size:11.5px;color:var(--c-text-3);line-height:1.5;">
+      Arrastra un campo al documento, o haz clic en él y luego en la página.
+      <b>Supr</b> borra el campo seleccionado.
+    </div>
+  </aside>
+
+  <section class="ct-stage" id="stage" aria-label="Documento">
+    <div id="loading" style="color:var(--c-text-3);font-size:13px;padding:40px;">Cargando documento…</div>
+  </section>
+
+  <aside class="ct-side" aria-label="Firmantes y propiedades">
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <h4>Firmantes · orden</h4>
+      <div id="signerList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      {% set ccs = env.recipients|selectattr('role', 'equalto', 'cc')|list %}
+      {% for r in ccs %}
+        <div style="font-size:12px;color:var(--c-text-3);"><i class="bi bi-envelope-paper"></i> CC: {{ r.name }}</div>
+      {% endfor %}
+    </div>
+    <div style="height:1px;background:var(--c-border);"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <h4>Campo seleccionado</h4>
+      <div id="props"><div class="ct-empty-props">Haz clic en un campo del documento para editarlo.</div></div>
+    </div>
+    <div style="height:1px;background:var(--c-border);"></div>
+    <div style="font-size:12px;color:var(--c-text-2);line-height:1.6;">
+      <div><i class="bi bi-shield-lock"></i> Código de verificación: <b>{{ 'Sí' if env.require_otp else 'No' }}</b></div>
+      <div><i class="bi bi-hourglass-split"></i> Vence en {{ env.expires_days }} días</div>
+      <div><i class="bi bi-bell"></i> Recordatorio: {{ ('cada ' ~ env.reminder_days ~ ' días') if env.reminder_days else 'no' }}</div>
+      <a href="{{ url_for('contracts.edit', env_id=env.id) }}" style="font-size:12px;">Cambiar</a>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>window.PSIGN_PREPARE = {{ payload|tojson }};</script>
+<script src="{{ url_for('static', filename='js/contracts_prepare.js') }}?v=1"></script>
+{% endblock %}

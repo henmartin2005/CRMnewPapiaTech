@@ -74,3 +74,8 @@
   .pb-lock { padding:8px 14px; font-size:14px; }
   .pb-hint { min-width:0; flex-basis:100%; order:3; }
 }
+
+/* Scroll visible dentro de los cuadros (antes casi no se veía y ocultaba contenido) */
+.profile-board .section-card { scrollbar-width: thin; scrollbar-color: var(--c-border-2, #c7c2ba) transparent; }
+.profile-board .section-card::-webkit-scrollbar { width: 6px; }
+.profile-board .section-card::-webkit-scrollbar-thumb { background: var(--c-border-2, #c7c2ba); border-radius: 3px; }

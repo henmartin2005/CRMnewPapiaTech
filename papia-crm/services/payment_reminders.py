@@ -39,8 +39,25 @@ def build_reminder(r):
         fecha_pago=fecha,
         whatsapp_texto=(f"Hola, envío el comprobante de mi {r['label']} (${monto}) "
                         f"a {company.replace(' LLC', '')}."),
+        **_card_option(r),
     )
     return subject, html
+
+
+def _card_option(r):
+    """Link permanente /pagar/<token> y precio con tarjeta para el email."""
+    try:
+        from routes.pagar import pay_url
+        from services import stripe_fees
+        url = pay_url(r['id'])
+        if not url:
+            return {}
+        cfg = stripe_fees.get_settings(r.get('org_id') or 1)
+        card = stripe_fees.quote(r['amount'], cfg['fee_pct'], cfg['fee_fixed'])['card'] \
+            if cfg['pass_fees'] else float(r['amount'])
+        return {'pago_url': url, 'monto_tarjeta': f"{card:,.2f}"}
+    except Exception:
+        return {}
 
 
 def send_reminder(r):

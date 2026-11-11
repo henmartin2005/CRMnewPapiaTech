@@ -23,6 +23,13 @@
 .ai-days th:first-child, .ai-days td:first-child { text-align:left; }
 .dash-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 @media (max-width:760px) { .ai-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .ai-kpi strong { font-size:19px; } }
+.wa-cost .wa-cost-tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:12px; font-variant-numeric:tabular-nums; }
+.wa-cost .wa-cost-tbl th, .wa-cost .wa-cost-tbl td { padding:6px 4px; border-top:1px solid var(--c-border,#e5e7eb); text-align:right; white-space:nowrap; }
+.wa-cost .wa-cost-tbl th:first-child, .wa-cost .wa-cost-tbl td:first-child { text-align:left; }
+.wa-cost-setup { font-size:13px; line-height:1.55; color:var(--c-text-2,#374151); }
+.wa-cost-setup code { font-size:12px; background:var(--c-bg-2,#f3f4f6); padding:1px 5px; border-radius:4px; }
+.wa-cost-err { font-size:13px; color:#b42318; }
+.wa-cost-refresh { border:none; background:none; color:var(--c-accent,#2563eb); font-size:12.5px; font-weight:600; cursor:pointer; padding:0; }
 </style>
 {% endblock %}
 
@@ -172,6 +179,77 @@
     {% endif %}
   </div>
 </div>
+{% endif %}
+
+<!-- ── COSTO WHATSAPP (Meta) ── -->
+{% if session.get('user_role') in ('admin', 'superadmin') and 'whatsapp' in enabled_modules %}
+<div class="section-card ai-usage wa-cost" id="waCost">
+  <div class="section-head">
+    <span class="section-head-label"><i class="bi bi-whatsapp" style="color:#25D366;"></i> Costo de WhatsApp · Meta</span>
+    <button type="button" class="wa-cost-refresh" id="waCostRefresh"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+  </div>
+  <div class="ai-usage-body" id="waCostBody"><div class="ai-hint">Consultando a Meta…</div></div>
+</div>
+<script>
+(function () {
+  const URL = {{ url_for('whatsapp.meta_costs_json') | tojson }};
+  const body = document.getElementById('waCostBody');
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let CUR = 'USD';
+  const money = v => {
+    const n = Number(v || 0);
+    try { return n.toLocaleString('en-US', { style: 'currency', currency: CUR, minimumFractionDigits: n < 1 && n > 0 ? 3 : 2 }); }
+    catch (e) { return '$' + n.toFixed(2); }
+  };
+  function setup() {
+    body.innerHTML = `<div class="wa-cost-setup">
+      No hay conexión para leer los costos: revisa que <code>ZERNIO_API_KEY</code> y <code>ZERNIO_WA_ACCOUNT_ID</code>
+      estén en el <code>.env</code> del CRM (o, como alternativa, <code>META_WA_TOKEN</code> y <code>META_WABA_ID</code>).</div>`;
+  }
+  function zernioHtml(d) {
+    const z = d.zernio;
+    if (!z) return '';
+    if (z.error) return `<div class="ai-hint" style="margin-top:10px;">Zernio: ${esc(z.error)}</div>`;
+    const items = (z.items || []).map(i => `<tr><td>${esc(i.name)}</td><td>${money(i.usd)}</td></tr>`).join('');
+    return `<div class="ai-kpis" style="margin-top:12px;">
+        <div class="ai-kpi"><span>Zernio · ciclo actual</span><strong>${money(z.cycle)}</strong><em>dato real de su facturación</em></div>
+        <div class="ai-kpi"><span>Zernio · últimos 30 días</span><strong>${money(z.last30)}</strong></div>
+        <div class="ai-kpi accent"><span>Total WhatsApp del mes</span><strong>${money((d.month || 0) + (z.cycle || 0))}</strong><em>Meta${d.estimated ? ' (estimado)' : ''} + Zernio</em></div>
+      </div>${items ? `<div class="ai-table-wrap"><table class="wa-cost-tbl"><tr><th>Cargos de Zernio (ciclo actual)</th><th>Monto</th></tr>${items}</table></div>` : ''}`;
+  }
+  function render(d) {
+    if (!d || d.configured === false) return setup();
+    if (d.error) { body.innerHTML = `<div class="wa-cost-err"><i class="bi bi-exclamation-triangle"></i> Meta respondió: ${esc(d.error)}</div>`; return; }
+    CUR = d.currency || 'USD';
+    const cats = (d.by_category || []).map(c =>
+      `<tr><td>${esc(c.label)}</td><td>${c.msgs}</td><td>${c.free}</td><td>${money(c.cost)}</td></tr>`).join('');
+    const days = (d.days || []).map(x =>
+      `<tr><td>${esc(x.day)}</td><td>${x.msgs}</td><td>${x.free}</td><td>${money(x.cost)}</td></tr>`).join('');
+    body.innerHTML = `
+      <div class="ai-kpis">
+        <div class="ai-kpi"><span>Hoy</span><strong>${money(d.today)}</strong><em>ayer ${money(d.yesterday)}</em></div>
+        <div class="ai-kpi"><span>Mes (${esc(d.month_label)})</span><strong>${money(d.month)}</strong><em>${d.month_paid_msgs} cobrados · ${d.month_free_msgs} gratis</em></div>
+        <div class="ai-kpi"><span>Últimos 30 días</span><strong>${money(d.last30)}</strong></div>
+        <div class="ai-kpi accent"><span>Estimado del mes</span><strong>${money(d.projection)}</strong><em>al ritmo actual</em></div>
+      </div>
+      ${zernioHtml(d)}
+      ${cats ? `<div class="ai-table-wrap"><table class="wa-cost-tbl">
+        <tr><th>Categoría (este mes)</th><th>Mensajes</th><th>Gratis</th><th>Costo</th></tr>${cats}</table></div>`
+        : '<div class="ai-hint" style="margin-top:10px;">Este mes Meta no ha registrado mensajes cobrables.</div>'}
+      ${days ? `<details class="ai-days"><summary>Detalle por día (últimos 14)</summary><div class="ai-table-wrap"><table>
+        <tr><th>Día</th><th>Mensajes</th><th>Gratis</th><th>Costo</th></tr>${days}</table></div></details>` : ''}
+      <div class="ai-hint" style="margin-top:10px;">${d.estimated ? '<b>Costo estimado</b>: Meta no entrega el costo exacto a cuentas que pagan vía partner; se calcula con la tarifa por mensaje (Utilidad $' + d.rates.UTILITY + ', Marketing $' + d.rates.MARKETING + ')' : 'Costos de Meta'} vía ${d.source === 'zernio' ? 'Zernio' : 'Meta'} (${esc(CUR)}, días en UTC) · actualizado ${esc(d.updated_at)} · Meta los publica con algunas horas de retraso.</div>`;
+  }
+  function load(force) {
+    if (force) body.innerHTML = '<div class="ai-hint">Consultando a Meta…</div>';
+    fetch(URL + (force ? '?refresh=1' : ''), { cache: 'no-store' })
+      .then(r => r.json()).then(render)
+      .catch(() => { body.innerHTML = '<div class="wa-cost-err">No se pudo consultar a Meta.</div>'; });
+  }
+  document.getElementById('waCostRefresh').addEventListener('click', () => load(true));
+  load(false);
+})();
+</script>
 {% endif %}
 
 <!-- ── TODAY'S REMINDERS ── -->

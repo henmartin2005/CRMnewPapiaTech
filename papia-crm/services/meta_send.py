@@ -8,6 +8,7 @@ Regla de negocio: solo puedes responder libremente dentro de la ventana de
 import requests
 
 GRAPH = "https://graph.facebook.com/v21.0"
+GRAPH_IG = "https://graph.instagram.com/v21.0"   # tokens de Instagram Login (empiezan con "IG")
 
 
 def send_message(page_access_token: str, recipient_id: str, text: str) -> dict:
@@ -16,7 +17,8 @@ def send_message(page_access_token: str, recipient_id: str, text: str) -> dict:
     recipient_id:      PSID (Messenger) o IGSID (Instagram).
     Mismo endpoint sirve para ambos canales.
     """
-    url = f"{GRAPH}/me/messages"
+    base = GRAPH_IG if (page_access_token or "").startswith("IG") else GRAPH
+    url = f"{base}/me/messages"
     payload = {
         "recipient": {"id": recipient_id},
         "messaging_type": "RESPONSE",

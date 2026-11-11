@@ -1,0 +1,134 @@
+{% extends 'ig_studio/_layout.html' %}
+{% macro num(v) %}{% if v is none %}—{% elif v >= 10000 %}{{ '%.1f'|format(v / 1000) }}K{% else %}{{ '{:,}'.format(v|int) }}{% endif %}{% endmacro %}
+{% macro delta(v, suffix='', decimals=0) %}{% if v is not none %}<span class="igs-delta {% if v < 0 %}is-down{% endif %}">{% if v >= 0 %}+{% endif %}{{ ('%.' ~ decimals ~ 'f')|format(v) }}{{ suffix }}</span>{% endif %}{% endmacro %}
+
+{% block head_actions %}
+<div class="igs-seg" role="group" aria-label="Periodo">
+  {% for d in (7, 30, 90) %}
+  <a href="?days={{ d }}{% if acct %}&acct={{ acct }}{% endif %}" class="{% if days == d %}is-on{% endif %}">{{ d }} días</a>
+  {% endfor %}
+</div>
+{% if accounts %}
+<button type="button" class="btn btn-ghost btn-sm" data-igs-sync {% if sync_running %}disabled{% endif %}>
+  <i class="bi bi-arrow-repeat"></i> {% if sync_running %}Sincronizando…{% else %}Sincronizar{% endif %}
+</button>
+<a class="btn btn-ghost btn-sm" href="{{ url_for('ig_studio.conectar') }}" title="Conectar otra cuenta"><i class="bi bi-plus-lg"></i> Cuenta</a>
+{% endif %}
+{% endblock %}
+
+{% block studio %}
+{% if accounts %}
+<p class="igs-sync-line">
+  {% for a in accounts %}
+    <span><span class="igs-dot {% if a.last_error %}is-err{% endif %}"></span>@{{ a.username }} ·
+    {% if a.last_error %}<span class="igs-err-text">{{ a.last_error }}</span>
+    {% elif a.last_sync_at %}sincronizado {{ a.last_sync_at|localdatetime }}{% else %}sin sincronizar{% endif %}</span>
+  {% endfor %}
+</p>
+
+<section class="igs-kpis" aria-label="Indicadores">
+  <div class="igs-card igs-kpi">
+    <span class="igs-kpi-label">Seguidores{% if not acct and accounts|length > 1 %} (ambas cuentas){% endif %}</span>
+    <div class="igs-kpi-row"><strong>{{ num(ov.followers) }}</strong>{{ delta(ov.followers_delta) }}</div>
+    <span class="igs-kpi-foot">{% if ov.followers_delta is none %}El crecimiento aparece tras unos días de snapshots{% else %}vs. hace {{ days }} días{% endif %}</span>
+  </div>
+  <div class="igs-card igs-kpi">
+    <span class="igs-kpi-label">Alcance de publicaciones</span>
+    <div class="igs-kpi-row"><strong>{{ num(ov.reach) }}</strong>{{ delta(ov.reach_delta_pct, '%') }}</div>
+    <span class="igs-kpi-foot">{{ ov.posts }} publicaciones en el periodo</span>
+  </div>
+  <div class="igs-card igs-kpi">
+    <span class="igs-kpi-label">Tasa de engagement</span>
+    <div class="igs-kpi-row"><strong>{% if ov.er is none %}—{% else %}{{ '%.1f'|format(ov.er) }}%{% endif %}</strong>{{ delta(ov.er_delta, ' pts', 1) }}</div>
+    <span class="igs-kpi-foot">Interacciones / alcance</span>
+  </div>
+  <div class="igs-card igs-kpi">
+    <span class="igs-kpi-label">Comentarios atendidos por IA</span>
+    <div class="igs-kpi-row"><strong>{{ ov.ai_handled }}</strong>{% if ov.ai_handled_pct is not none %}<span class="igs-delta is-accent">{{ '%.0f'|format(ov.ai_handled_pct) }}%</span>{% endif %}</div>
+    <span class="igs-kpi-foot">Resueltos sin que entres tú</span>
+  </div>
+</section>
+
+<section class="igs-row">
+  <div class="igs-card igs-chart-card">
+    <div class="igs-card-head">
+      <div><h2>Crecimiento de seguidores</h2><p>{% if chart.relative %}Seguidores ganados en el periodo · snapshot diario del CRM{% else %}Snapshot diario guardado por el CRM{% endif %}</p></div>
+      <div class="igs-legend">
+        {% for l in chart.lines %}<span><i class="igs-swatch igs-c{{ loop.index0 % 3 }}"></i>@{{ l.username }} · {{ num(l.last) }}{% if l.gained is not none %} <b class="igs-good">{{ '%+d'|format(l.gained) }}</b>{% endif %}</span>{% endfor %}
+      </div>
+    </div>
+    {% if chart.lines and chart.labels|length > 1 %}
+    <div class="igs-chart">
+      <div class="igs-chart-y">{% for t in chart.ticks %}<span>{% if chart.relative and t > 0 %}+{% endif %}{{ num(t) }}</span>{% endfor %}</div>
+      <div class="igs-chart-plot">
+        <svg viewBox="0 0 800 240" preserveAspectRatio="none" role="img" aria-label="Seguidores por día">
+          {% for y in (1, 80, 160, 239) %}<line x1="0" y1="{{ y }}" x2="800" y2="{{ y }}" class="igs-grid" vector-effect="non-scaling-stroke"/>{% endfor %}
+          {% for l in chart.lines %}<polyline points="{{ l.points }}" class="igs-line igs-c{{ loop.index0 % 3 }}" vector-effect="non-scaling-stroke"/>{% endfor %}
+        </svg>
+        <div class="igs-chart-x">{% for d in chart.labels %}<span>{{ d[8:10] }}/{{ d[5:7] }}</span>{% endfor %}</div>
+      </div>
+    </div>
+    {% else %}
+    <p class="igs-empty">La gráfica se llena con un snapshot por día. Con dos días de datos ya verás la línea.</p>
+    {% endif %}
+  </div>
+
+  <div class="igs-card igs-side">
+    <h2>Formato que más rinde</h2>
+    {% for f in formats %}
+    <div class="igs-bar-row">
+      <div><span>{{ f.name }} <small>· {{ f.posts }}</small></span><strong>{{ '%.1f'|format(f.rate) }}%</strong></div>
+      <div class="igs-bar"><span style="width: {{ f.pct }}%"></span></div>
+    </div>
+    {% else %}<p class="igs-empty">Aún no hay publicaciones con insights.</p>{% endfor %}
+
+    <h2 class="igs-mt">Mejores horarios</h2>
+    {% for s in slots %}
+    <div class="igs-slot"><strong>{{ s.when }}</strong><span>{{ s.why }}</span></div>
+    {% else %}<p class="igs-empty">Se calculan con tus publicaciones de los últimos 90 días.</p>{% endfor %}
+  </div>
+</section>
+
+<section class="igs-card">
+  <div class="igs-card-head">
+    <h2>Top publicaciones</h2>
+    <div class="igs-pills">
+      {% for key, label in (('er', 'Engagement'), ('views', 'Views'), ('saved', 'Guardados')) %}
+      <a href="?order={{ key }}&days={{ days }}{% if acct %}&acct={{ acct }}{% endif %}" class="{% if order == key %}is-on{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="igs-table-wrap">
+    <table class="igs-table">
+      <thead><tr><th>Publicación</th><th>Cuenta</th><th class="r">Views</th><th class="r">Alcance</th><th class="r">Guardados</th><th class="r">Compartidos</th><th class="r">Engagement</th></tr></thead>
+      <tbody>
+      {% for p in posts %}
+        <tr>
+          <td><a class="igs-post" href="{{ p.permalink }}" target="_blank" rel="noopener">
+            {% if p.thumb_url %}<img src="{{ p.thumb_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="igs-thumb-ph"></span>{% endif %}
+            <span><strong>{{ p.title }}</strong><small>{{ p.format }}{% if p.posted_at %} · {{ p.posted_at|localdatetime }}{% endif %}</small></span></a></td>
+          <td class="muted">@{{ p.username }}</td>
+          <td class="r">{{ num(p.views) }}</td>
+          <td class="r">{{ num(p.reach) }}</td>
+          <td class="r">{{ num(p.saved) }}</td>
+          <td class="r">{{ num(p.shares) }}</td>
+          <td class="r igs-good">{% if p.er is not none %}{{ '%.1f'|format(p.er) }}%{% else %}—{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="igs-empty">Sin publicaciones todavía. Pulsa Sincronizar.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="igs-insights">
+  <div>
+    <span class="igs-eyebrow">Lo que Claude detectó esta semana</span>
+    {% for i in insights %}<p><b>{{ loop.index }}</b>{{ i }}</p>
+    {% else %}<p>El primer reporte se genera el lunes a las 8:00 AM, o ahora desde Estrategia semanal.</p>{% endfor %}
+  </div>
+  <a class="igs-btn-accent" href="{{ url_for('ig_studio.estrategia') }}">Ver estrategia semanal</a>
+</section>
+{% endif %}
+{% endblock %}

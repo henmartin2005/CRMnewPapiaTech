@@ -90,6 +90,26 @@
             </tr>
           </table>
 
+          {% if pago_url %}
+          <!-- Opción: pagar con tarjeta -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5ff;border:1px solid #d9d7ff;border-radius:12px;margin-bottom:24px;">
+            <tr><td style="padding:18px 20px;">
+              <div style="font-size:15px;font-weight:700;margin-bottom:4px;color:#1e1b4b;">¿Prefiere pagar con tarjeta?</div>
+              <div style="font-size:14px;color:#6b7280;line-height:1.6;margin-bottom:14px;">
+                {% if monto_tarjeta and monto_tarjeta != monto %}Precio con tarjeta: <strong style="color:#1e1b4b;">${{ monto_tarjeta }}</strong> (por Zelle el monto es ${{ monto }}).{% else %}Pague ${{ monto }} de forma segura con tarjeta de crédito o débito.{% endif %}
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr><td bgcolor="#635bff" style="border-radius:10px;background:#635bff;">
+                  <a href="{{ pago_url }}" target="_blank"
+                     style="display:inline-block;padding:13px 24px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;">
+                    &#128179;&nbsp; Pagar con tarjeta
+                  </a>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+          {% endif %}
+
           <!-- Aviso -->
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ecfdf5;border-left:4px solid #10b981;border-radius:8px;">
             <tr><td style="padding:14px 16px;font-size:14px;color:#065f46;">

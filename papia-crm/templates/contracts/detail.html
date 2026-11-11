@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{{ env.title }}{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='css/contracts.css') }}?v=1" rel="stylesheet" />{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <a href="{{ url_for('contracts.index') }}" style="font-size:12px;color:var(--c-text-3);"><i class="bi bi-arrow-left"></i> Contratos</a>
+    <h1 class="pg-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      {{ env.title }} <span class="ct-badge ct-{{ env.status }}">{{ env.status_label }}</span>
+    </h1>
+    <p class="pg-sub">
+      {% if env.client_id %}<a href="{{ url_for('clients.detail', client_id=env.client_id) }}">{{ env.client_name }}</a> · {% endif %}
+      ID {{ env.uid }}
+    </p>
+  </div>
+  <div class="pg-actions" style="flex-wrap:wrap;">
+    {% if env.status == 'draft' %}
+      <a href="{{ url_for('contracts.prepare', env_id=env.id) }}" class="btn btn-accent btn-sm"><i class="bi bi-pencil"></i> Continuar preparando</a>
+    {% endif %}
+    {% if final_ready %}
+      <a href="{{ url_for('contracts.final', env_id=env.id) }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm"><i class="bi bi-eye"></i> Ver PDF firmado</a>
+      <a href="{{ url_for('contracts.final', env_id=env.id, dl=1) }}" class="btn btn-accent btn-sm"><i class="bi bi-download"></i> Descargar PDF firmado</a>
+    {% else %}
+      <a href="{{ url_for('contracts.document', env_id=env.id) }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm"><i class="bi bi-file-earmark-pdf"></i> Ver original</a>
+    {% endif %}
+    {% if env.status == 'sent' %}
+      <button type="button" class="btn btn-ghost btn-sm" data-bs-toggle="modal" data-bs-target="#voidModal" style="color:var(--c-danger);"><i class="bi bi-x-octagon"></i> Anular</button>
+    {% endif %}
+  </div>
+</div>
+
+{% if pending_finalize %}
+<div class="flash-msg danger" style="margin-bottom:14px;">
+  <i class="bi bi-exclamation-triangle"></i> Todos firmaron, pero el PDF final no se generó.
+  <form method="POST" action="{{ url_for('contracts.retry_finalize', env_id=env.id) }}" style="display:inline;margin-left:8px;">
+    <button class="btn btn-primary btn-xs" type="submit">Generar ahora</button>
+  </form>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(340px, 1fr));gap:16px;align-items:start;">
+
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-head-label"><i class="bi bi-people" style="margin-right:5px;"></i>Destinatarios</span>
+      <span class="section-count">{{ env.recipients|length }}</span>
+    </div>
+    {% for r in env.recipients %}
+    <div class="ct-r-card">
+      <div class="ct-r-avatar" style="background:{{ '#E2E8F0' if r.role == 'cc' else colors[r.color_idx % colors|length] }};">{{ r.initials_txt }}</div>
+      <div class="ct-r-main">
+        <b>{{ r.name }}</b>
+        <div>{{ 'CC · copia final' if r.role == 'cc' else 'Firmante · orden ' ~ r.routing_order }}
+             · {{ r.email or r.phone }}</div>
+        {% if r.role == 'signer' %}
+        <div>
+          {% if r.status == 'completed' %}<span style="color:#15803D;"><i class="bi bi-check-circle-fill"></i> Firmó {{ fmt_local(r.signed_at) }}</span>
+          {% elif r.status == 'declined' %}<span style="color:#B91C1C;"><i class="bi bi-x-circle-fill"></i> Rechazó: {{ r.decline_reason }}</span>
+          {% elif r.status == 'viewed' %}<span style="color:#00707A;"><i class="bi bi-eye"></i> Abrió {{ fmt_local(r.viewed_at) }}</span>
+          {% elif r.status == 'sent' %}<span style="color:#00707A;"><i class="bi bi-send"></i> Enviado {{ fmt_local(r.sent_at) }}</span>
+          {% else %}<span>En cola · espera su turno</span>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% if env.status == 'sent' and r.role == 'signer' and r.status in ('sent', 'viewed') %}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <form method="POST" action="{{ url_for('contracts.resend', env_id=env.id, rid=r.id) }}" style="margin:0;">
+          <button class="btn btn-ghost btn-xs" type="submit"><i class="bi bi-arrow-repeat"></i> Reenviar</button>
+        </form>
+        <form method="POST" action="{{ url_for('contracts.in_person', env_id=env.id, rid=r.id) }}" style="margin:0;"
+              onsubmit="return confirm('Se abrirá la firma en este dispositivo y el enlace enviado a {{ r.name|e }} dejará de funcionar. ¿Continuar?');">
+          <button class="btn btn-primary btn-xs" type="submit"><i class="bi bi-pen"></i> Firmar aquí</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="section-card">
+    <div class="section-head"><span class="section-head-label"><i class="bi bi-info-circle" style="margin-right:5px;"></i>Sobre</span></div>
+    <div class="card-body" style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;">
+      <span style="color:var(--c-text-3);">Documento</span><span>{{ env.original_name }} · {{ env.page_count }} pág.</span>
+      <span style="color:var(--c-text-3);">Creado</span><span>{{ fmt_local(env.created_at) }} · {{ env.created_by_name }}</span>
+      {% if env.sent_at %}<span style="color:var(--c-text-3);">Enviado</span><span>{{ fmt_local(env.sent_at) }}</span>{% endif %}
+      {% if env.expires_at and env.status == 'sent' %}<span style="color:var(--c-text-3);">Vence</span><span>{{ fmt_local(env.expires_at) }}</span>{% endif %}
+      {% if env.completed_at %}<span style="color:var(--c-text-3);">Completado</span><span>{{ fmt_local(env.completed_at) }}</span>{% endif %}
+      <span style="color:var(--c-text-3);">Verificación</span><span>{{ 'Código por email/WhatsApp' if env.require_otp else 'Solo enlace' }}</span>
+      <span style="color:var(--c-text-3);">SHA-256 original</span><span class="ct-hash">{{ env.original_sha256 }}</span>
+      {% if env.final_sha256 %}<span style="color:var(--c-text-3);">SHA-256 final</span><span class="ct-hash">{{ env.final_sha256 }}</span>{% endif %}
+      {% if env.void_reason %}<span style="color:var(--c-text-3);">Motivo anulación</span><span>{{ env.void_reason }}</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="section-card" style="grid-column:1 / -1;">
+    <div class="section-head">
+      <span class="section-head-label"><i class="bi bi-clock-history" style="margin-right:5px;"></i>Historial (audit trail)</span>
+      <span class="section-count">{{ env.events|length }}</span>
+    </div>
+    <ul class="ct-timeline">
+      {% for e in env.events|reverse %}
+      <li class="{{ 'bad' if e.event in ('notify_failed', 'otp_failed', 'declined') else '' }}">
+        <span class="when">{{ fmt_local(e.created_at) }}</span>
+        <span>
+          <span class="what"><b>{{ e.label }}</b>{% if e.actor %} · {{ e.actor }}{% endif %}</span>
+          {% if e.detail %}<div class="meta">{{ e.detail }}</div>{% endif %}
+          {% if e.ip or e.device %}<div class="meta">{{ e.ip }}{% if e.device %} · {{ e.device }}{% endif %}</div>{% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+{% if env.status == 'sent' %}
+<div class="modal fade" id="voidModal" tabindex="-1" aria-labelledby="voidTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="POST" action="{{ url_for('contracts.void', env_id=env.id) }}">
+      <div class="modal-header"><h5 class="modal-title" id="voidTitle">Anular sobre</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+      <div class="modal-body">
+        <p style="font-size:13px;">Los enlaces de firma dejarán de funcionar. Esta acción no se puede deshacer.</p>
+        <label class="form-label" for="voidReason">Motivo</label>
+        <input class="form-control" id="voidReason" name="reason" maxlength="500" required placeholder="Ej. Se corrigió el precio; enviaré una versión nueva" />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-danger btn-sm">Anular sobre</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

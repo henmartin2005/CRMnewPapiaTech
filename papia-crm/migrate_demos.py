@@ -5,6 +5,11 @@ Tablas:
 - demo_links    código de acceso por prospecto (NEGOCIO-XXXX).
 - demo_logs     entradas, secciones vistas, salidas y bloqueos.
 - demo_rate     intentos de validación por IP (anti fuerza bruta).
+
+demos.modo:
+- 'codigo'      el demo (Lovable) pide el código y llama a /api/demos/validar.
+- 'redireccion' el demo no se toca: el enlace es datos.papiatech.com/d/CODIGO,
+                el CRM cuenta la visita y redirige a la URL del demo.
 """
 from database import get_db
 
@@ -70,6 +75,9 @@ def migrate():
         );
         CREATE INDEX IF NOT EXISTS demo_rate_ip ON demo_rate(ip_hash, creado_el);
         """)
+        cols = {r[1] for r in db.execute('PRAGMA table_info(demos)').fetchall()}
+        if 'modo' not in cols:
+            db.execute("ALTER TABLE demos ADD COLUMN modo TEXT NOT NULL DEFAULT 'codigo'")
         for org_id, slug, nombre, url, color in SEED_DEMOS:
             if db.execute('SELECT 1 FROM organizations WHERE id=?', (org_id,)).fetchone():
                 db.execute(

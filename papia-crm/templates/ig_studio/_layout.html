@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Instagram Studio{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/ig-studio.css') }}?v=1">{% endblock %}
+{% block content %}
+<div class="igs" data-csrf="{{ csrf }}">
+  <header class="igs-head">
+    <div class="igs-brand">
+      <span class="igs-logo" aria-hidden="true"><i class="bi bi-instagram"></i></span>
+      <div>
+        <h1>Instagram Studio</h1>
+        <p>{% block subtitle %}Analítica, comentarios y agente IA de tus cuentas{% endblock %}</p>
+      </div>
+    </div>
+    <div class="igs-head-actions">
+      {% if accounts|length > 1 and active_tab in ('analitica', 'comentarios') %}
+      <div class="igs-seg" role="group" aria-label="Cuenta">
+        <a href="{{ request.path }}" class="{% if not acct %}is-on{% endif %}">Ambas</a>
+        {% for a in accounts %}
+        <a href="?acct={{ a.ig_user_id }}" class="{% if acct == a.ig_user_id %}is-on{% endif %}">@{{ a.username }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% block head_actions %}{% endblock %}
+    </div>
+  </header>
+
+  <nav class="igs-tabs" aria-label="Secciones de Instagram Studio">
+    {% if 'instagram' in enabled_modules %}
+    <a href="{{ url_for('meta_webhook.inbox', channel='instagram') }}">Inbox</a>
+    {% endif %}
+    <a href="{{ url_for('ig_studio.analitica', acct=acct or None) }}" {% if active_tab == 'analitica' %}aria-current="page"{% endif %}>Analítica</a>
+    <a href="{{ url_for('ig_studio.comentarios', acct=acct or None) }}" {% if active_tab == 'comentarios' %}aria-current="page"{% endif %}>Comentarios</a>
+    <a href="{{ url_for('ig_studio.agente') }}" {% if active_tab == 'agente' %}aria-current="page"{% endif %}>Agente IA</a>
+    <a href="{{ url_for('ig_studio.estrategia') }}" {% if active_tab == 'estrategia' %}aria-current="page"{% endif %}>Estrategia semanal</a>
+  </nav>
+
+  <div id="igs-toast" class="igs-toast" role="status" aria-live="polite" hidden></div>
+
+  {% if not accounts %}
+  <section class="igs-card igs-connect">
+    <div>
+      <h2>Conecta tus cuentas de Instagram</h2>
+      <p>Conecta @henmartin14 y @papiatech con Instagram Login para leer insights, recibir comentarios y que el agente responda. Repite el botón una vez por cuenta.</p>
+      {% if not configured %}<p class="igs-warn">Falta configurar <code>IG_APP_ID</code> y <code>IG_APP_SECRET</code> en el servidor.</p>{% endif %}
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('ig_studio.conectar') }}"><i class="bi bi-instagram"></i> Conectar cuenta</a>
+  </section>
+  {% endif %}
+
+  {% block studio %}{% endblock %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/ig-studio.js') }}?v=1"></script>{% endblock %}

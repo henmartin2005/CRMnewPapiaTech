@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{% block title %}Portal del cliente{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+:root{
+  --bg:#0b0f1a; --bg2:#111729; --card:#141b2f; --card2:#182141; --line:#25304f;
+  --text:#e8ecf6; --muted:#8b96b3; --accent:#5b8cff; --accent2:#22d3ee;
+  --ok:#22c55e; --warn:#f59e0b; --radius:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:radial-gradient(1200px 600px at 80% -10%,rgba(91,140,255,.18),transparent 60%),
+     radial-gradient(900px 500px at -10% 10%,rgba(34,211,238,.10),transparent 60%),var(--bg);
+     color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;
+     -webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px 60px}
+.card{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);
+      border-radius:var(--radius);padding:22px}
+.muted{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card2);
+     color:var(--text);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#7c5cff);border-color:transparent;color:#fff}
+{% block style %}{% endblock %}
+</style>
+</head>
+<body>
+{% block body %}{% endblock %}
+</body>
+</html>

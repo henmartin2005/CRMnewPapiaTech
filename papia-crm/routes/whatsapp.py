@@ -11,6 +11,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from database import get_db
 from services import zernio
 from services import ai_agent
+from services import push
 
 log = logging.getLogger(__name__)
 
@@ -195,6 +196,17 @@ def mark_read(phone: str, org_id=1):
     db.close()
 
 
+def _push_inbound(phone, client_id, name, text, org_id):
+    """Avisa a la app móvil. Usa el nombre del cliente del CRM si existe."""
+    try:
+        client = find_client_by_phone(phone, org_id)
+        if client:
+            name = f"{client['first_name'] or ''} {client['last_name'] or ''}".strip() or name
+        push.notify_whatsapp(org_id, phone, client_id, name, text, badge=get_unread_count(org_id))
+    except Exception:
+        log.exception('Push: no se pudo avisar del mensaje entrante')
+
+
 def get_unread_count(org_id=None) -> int:
     db = get_db()
     if org_id is not None:
@@ -268,6 +280,8 @@ def messages_to_dicts(rows):
             'status':       r['status'],
             'wa_message_id': r['wa_message_id'],
             'created_at':   r['created_at'],
+            'error_code': r['error_code'] if 'error_code' in r.keys() else None,
+            'error_text': r['error_text'] if 'error_text' in r.keys() else None,
         }
         for r in rows
     ]
@@ -313,6 +327,60 @@ def _save_conv_id(phone: str, conversation_id: str, org_id=1, inbound=False):
     db.close()
 
 
+_LINE_COL_OK = False
+
+
+def _ensure_line_column():
+    """Columna con la línea (accountId de Zernio) por la que va cada conversación."""
+    global _LINE_COL_OK
+    if _LINE_COL_OK:
+        return
+    db = get_db()
+    try:
+        cols = {r[1] for r in db.execute('PRAGMA table_info(whatsapp_conversations)').fetchall()}
+        if 'zernio_account_id' not in cols:
+            db.execute('ALTER TABLE whatsapp_conversations ADD COLUMN zernio_account_id TEXT')
+            db.commit()
+        _LINE_COL_OK = True
+    finally:
+        db.close()
+
+
+def _set_conv_account(phone: str, acc_id, org_id=1):
+    if not phone or not acc_id:
+        return
+    _ensure_line_column()
+    db = get_db()
+    db.execute(
+        "UPDATE whatsapp_conversations SET zernio_account_id = ? WHERE org_id = ? AND phone = ?",
+        (acc_id, org_id, zernio.to_e164(phone)),
+    )
+    db.commit()
+    db.close()
+
+
+def _get_conv_account(phone: str, org_id=1) -> str:
+    """Línea por la que escribió el contacto; si no se sabe, la principal."""
+    _ensure_line_column()
+    db = get_db()
+    row = db.execute(
+        "SELECT zernio_account_id FROM whatsapp_conversations WHERE org_id = ? AND phone = ?",
+        (org_id, zernio.to_e164(phone)),
+    ).fetchone()
+    db.close()
+    return (row['zernio_account_id'] if row else None) or zernio.default_account_id()
+
+
+def _accounts_by_phone(org_id=1) -> dict:
+    _ensure_line_column()
+    db = get_db()
+    rows = db.execute(
+        "SELECT phone, zernio_account_id FROM whatsapp_conversations WHERE org_id = ?", (org_id,)
+    ).fetchall()
+    db.close()
+    return {r['phone']: r['zernio_account_id'] for r in rows if r['zernio_account_id']}
+
+
 def _message_exists(wa_message_id: str) -> bool:
     if not wa_message_id:
         return False
@@ -337,7 +405,78 @@ def _update_status(wa_message_id: str, status: str):
     db.close()
 
 
+WINDOW_HOURS = 24
+_WINDOW_MSG = ('Pasaron más de 24 horas desde el último mensaje de este contacto. '
+               'WhatsApp solo permite enviarle una plantilla aprobada.')
+
+
+def _last_inbound_at(phone: str, org_id=1):
+    """Fecha (UTC) del último mensaje que nos escribió este contacto."""
+    digits = re.sub(r'\D', '', phone or '')[-10:]
+    if not digits:
+        return None
+    db = get_db()
+    row = db.execute(
+        "SELECT MAX(created_at) AS t FROM whatsapp_messages "
+        "WHERE org_id = ? AND direction = 'inbound' AND phone LIKE ?",
+        (org_id, '%' + digits)).fetchone()
+    db.close()
+    return _parse_ts(row['t']) if row and row['t'] else None
+
+
+def window_state(phone: str, org_id=1) -> dict:
+    """Ventana de 24 h de WhatsApp: fuera de ella solo se aceptan plantillas."""
+    from datetime import datetime, timedelta, timezone
+    last = _last_inbound_at(phone, org_id)
+    if not last:
+        return {'open': False, 'last_inbound_at': None, 'expires_at': None}
+    expires = last + timedelta(hours=WINDOW_HOURS)
+    return {'open': datetime.now(timezone.utc) < expires - timedelta(minutes=5),
+            'last_inbound_at': last.isoformat(), 'expires_at': expires.isoformat()}
+
+
+def _save_error(wa_message_id: str, error):
+    """Guarda el motivo del fallo que devuelve Meta para mostrarlo en el chat."""
+    if not wa_message_id or not isinstance(error, dict):
+        return
+    _ensure_media_columns()
+    code = str(error.get('code') or '')
+    text = error.get('details') or error.get('message') or error.get('title') or ''
+    db = get_db()
+    db.execute("UPDATE whatsapp_messages SET error_code = ?, error_text = ? "
+               "WHERE wa_message_id = ? AND direction = 'outbound'",
+               (code, str(text)[:500], wa_message_id))
+    db.commit()
+    db.close()
+
+
+def _tpl_context(client) -> dict:
+    """Datos del cliente para rellenar las variables de las plantillas."""
+    if not client:
+        return {}
+    keys = client.keys()
+    try:
+        from models.client import PROJECT_TYPES
+        labels = dict(PROJECT_TYPES)
+    except Exception:
+        labels = {}
+    ptype = (client['project_type'] if 'project_type' in keys else '') or ''
+    try:
+        pending = float(client['total_cost'] or 0) - float(client['amount_paid'] or 0)
+    except Exception:
+        pending = 0
+    return {
+        'first_name': (client['first_name'] or '').strip(),
+        'project': '' if ptype in ('', 'other') else labels.get(ptype, ptype),
+        'pending': f"${pending:,.2f}" if pending > 0 else '',
+    }
 def deliver(phone: str, message: str, org_id=1, template=None) -> str:
+    """Envía por la misma línea (305 / 786…) por la que escribió el contacto."""
+    with zernio.use_account(_get_conv_account(phone, org_id)):
+        return _deliver_line(phone, message, org_id, template)
+
+
+def _deliver_line(phone: str, message: str, org_id=1, template=None) -> str:
     """
     Envía un WhatsApp y devuelve el id del mensaje.
     template = {'name': ..., 'language': 'es', 'params': [...]} para primer contacto.
@@ -359,6 +498,8 @@ def deliver(phone: str, message: str, org_id=1, template=None) -> str:
                 'Este contacto no ha escrito todavía. WhatsApp exige una plantilla aprobada para el primer mensaje.',
                 code='TEMPLATE_REQUIRED')
         _save_conv_id(phone, conv_id, org_id)
+        if not window_state(phone, org_id)['open']:
+            raise zernio.TemplateRequired(_WINDOW_MSG, code='WINDOW_CLOSED')
         data = zernio.send_text(conv_id, message)
         return data.get('messageId', '')
 
@@ -418,7 +559,7 @@ def _ensure_media_columns():
     db = get_db()
     try:
         cols = {r[1] for r in db.execute('PRAGMA table_info(whatsapp_messages)').fetchall()}
-        for col in ('media_path', 'media_type', 'media_mime'):
+        for col in ('media_path', 'media_type', 'media_mime', 'error_code', 'error_text'):
             if col not in cols:
                 db.execute(f'ALTER TABLE whatsapp_messages ADD COLUMN {col} TEXT')
         db.commit()
@@ -558,6 +699,13 @@ def _webp_to_png(data: bytes) -> bytes:
 
 def deliver_media(phone: str, data: bytes, mime: str, kind: str, filename: str = 'archivo',
                   voice: bool = False, org_id=1) -> str:
+    """Adjunto por la misma línea por la que escribió el contacto."""
+    with zernio.use_account(_get_conv_account(phone, org_id)):
+        return _deliver_media_line(phone, data, mime, kind, filename, voice, org_id)
+
+
+def _deliver_media_line(phone: str, data: bytes, mime: str, kind: str, filename: str = 'archivo',
+                        voice: bool = False, org_id=1) -> str:
     """Envía audio / sticker / imagen / archivo por Zernio. Devuelve el id del mensaje."""
     if _provider() != 'zernio':
         raise RuntimeError('El envío de audios y stickers requiere Zernio como proveedor de WhatsApp.')
@@ -568,6 +716,8 @@ def deliver_media(phone: str, data: bytes, mime: str, kind: str, filename: str =
             'Este contacto no ha escrito todavía. WhatsApp exige una plantilla aprobada para el primer mensaje.',
             code='TEMPLATE_REQUIRED')
     _save_conv_id(phone, conv_id, org_id)
+    if not window_state(phone, org_id)['open']:
+        raise zernio.TemplateRequired(_WINDOW_MSG, code='WINDOW_CLOSED')
     base = 'audio' if kind == 'audio' else 'sticker' if kind == 'sticker' else 'archivo'
     url = zernio.upload_media(data, base + _ext_for(mime), mime)
     if kind == 'sticker':
@@ -779,12 +929,15 @@ def index():
 
     return render_template(
         'whatsapp/index.html',
+        wa_lines=zernio.lines(),
         conversations=conversations,
         conversations_data=conversations_to_dicts(conversations, org_id),
         active_phone=active_phone,
         active_msgs=active_msgs,
         active_msgs_data=messages_to_dicts(active_msgs),
         active_client=active_client,
+        wa_window=window_state(active_phone, org_id) if active_phone else None,
+        tpl_context=_tpl_context(active_client) if active_phone else {},
         bot_state=(ai_agent.contact_bot_state(zernio.to_e164(active_phone) or active_phone, org_id)
                    if active_phone else None),
     )
@@ -807,6 +960,8 @@ def _clients_by_digits(org_id=1):
 
 def conversations_to_dicts(rows, org_id=1):
     clients = _clients_by_digits(org_id)
+    accs = _accounts_by_phone(org_id)
+    multi = len(zernio.lines()) > 1
     out = []
     for r in rows:
         client_id, first, last = r['client_id'], r['first_name'], r['last_name']
@@ -824,6 +979,8 @@ def conversations_to_dicts(rows, org_id=1):
             'last_status':    r['last_status'],
             'last_at':    r['last_at'],
             'unread':     r['unread'] or 0,
+            'line_id': accs.get(r['phone']) or zernio.default_account_id(),
+            'line': zernio.line_label(accs.get(r['phone'])) if multi else '',
         })
     return out
 
@@ -852,7 +1009,8 @@ def webhook():
     client_id = _resolve_client_id(phone, profile, body, org_id)
     save_message(phone=phone, direction='inbound', message=body or '[mensaje sin texto]',
                  wa_message_id=wa_id, client_id=client_id, org_id=org_id)
-    ai_agent.handle_incoming(phone, client_id, org_id)
+    _push_inbound(phone, client_id, profile, body, org_id)
+    ai_agent.handle_incoming(phone, client_id, org_id, text=body)
     return '<Response></Response>', 200, {'Content-Type': 'text/xml'}
 
 
@@ -897,6 +1055,7 @@ def zernio_webhook():
             if m_type and (not msg.get('text') or text.startswith('[')):
                 text = msg.get('text') or _media_label(m_type)
             _save_conv_id(phone, conv.get('id') or msg.get('conversationId'), org_id, inbound=True)
+            _set_conv_account(phone, account.get('accountId') or account.get('id'), org_id)
             name = (sender.get('name') or sender.get('displayName')
                     or conv.get('participantName') or conv.get('name') or '')
             # Número desconocido → se crea como cliente en "Nuevo Lead" (pipeline)
@@ -905,14 +1064,17 @@ def zernio_webhook():
                          media_path=m_path, media_type=m_type, media_mime=m_mime,
                          wa_message_id=wa_id, client_id=client_id,
                          org_id=org_id)
+            # Aviso push a la app móvil (antes del bot, para que llegue al instante)
+            _push_inbound(phone, client_id, name, text or '[mensaje]', org_id)
             # Asistente IA: responde si está activo y la conversación no está pausada
-            ai_agent.handle_incoming(phone, client_id, org_id)
+            ai_agent.handle_incoming(phone, client_id, org_id, text=(msg.get('text') or ''))
 
         elif event == 'message.sent':
             # Enviado desde el celular (coexistence) o desde el panel de Zernio
             phone = zernio.to_e164(conv.get('participantId') or '')
             if phone and not _message_exists(wa_id):
                 _save_conv_id(phone, conv.get('id'), org_id)
+                _set_conv_account(phone, account.get('accountId') or account.get('id'), org_id)
                 sent_media = _save_inbound_media(msg.get('attachments'))
                 _record_outbound(phone, msg.get('text') or _media_label(sent_media[1]) or '[mensaje]',
                                  wa_id, org_id, media=sent_media)
@@ -924,11 +1086,48 @@ def zernio_webhook():
             _update_status(wa_id, event.split('.', 1)[1])
             if event == 'message.failed':
                 log.warning('Zernio message.failed: %s', payload.get('error'))
+                _save_error(wa_id, payload.get('error'))
     except Exception:
         log.exception('Error procesando webhook de Zernio')
         # 200 igual: el error es nuestro, reintentar no lo arregla
     return jsonify({'ok': True})
 
+def _tpl_body(t) -> str:
+    """Cuerpo (BODY) de una plantilla tal como la devuelve Zernio/Meta."""
+    if not isinstance(t, dict):
+        return ''
+    for c in t.get('components') or []:
+        if isinstance(c, dict) and str(c.get('type', '')).upper() == 'BODY':
+            return c.get('text') or ''
+    body = t.get('body')
+    if isinstance(body, dict):
+        body = body.get('text')
+    return body or t.get('text') or t.get('content') or ''
+
+
+def _template_text(template: dict) -> str:
+    """Texto final de la plantilla con las variables ya puestas, para mostrarlo en el chat."""
+    name = template.get('name')
+    fallback = f"[plantilla: {name}]"
+    lang = str(template.get('language') or 'es').lower()[:2]
+    params = template.get('params') or []
+    if isinstance(params, str):
+        params = [p.strip() for p in params.split('|')]
+    try:
+        data = zernio.list_templates()
+        items = data.get('templates') or data.get('data') or []
+    except Exception:
+        log.exception('WhatsApp: no se pudo leer el cuerpo de la plantilla %s', name)
+        return fallback
+    same = [t for t in items if isinstance(t, dict) and t.get('name') == name]
+    best = next((t for t in same if str(t.get('language', '')).lower().startswith(lang)),
+                same[0] if same else None)
+    body = _tpl_body(best)
+    if not body:
+        return fallback
+    for i, val in enumerate(params, start=1):
+        body = body.replace('{{%d}}' % i, str(val))
+    return body
 
 @whatsapp_bp.route('/whatsapp/send', methods=['POST'])
 def send_message():
@@ -945,7 +1144,7 @@ def send_message():
 
     try:
         wa_id = deliver(phone, message, org_id, template=template)
-        shown = message or f"[plantilla: {template.get('name')}]"
+        shown = message or _template_text(template)
         _record_outbound(phone, shown, wa_id, org_id, client_id)
         try:
             ai_agent.pause(zernio.to_e164(phone), org_id)   # intervención humana
@@ -968,6 +1167,7 @@ def conversation_json(phone):
     client = find_client_by_phone(phone, org_id)
     return jsonify({
         'messages': messages_to_dicts(msgs),
+        'window': window_state(phone, org_id),
         'client': {
             'id':         client['id'],
             'first_name': client['first_name'],
@@ -985,12 +1185,26 @@ def templates_json():
         data = zernio.list_templates()
         items = data.get('templates') or data.get('data') or []
         out = [{'name': t.get('name'), 'language': t.get('language'),
-                'status': t.get('status'), 'category': t.get('category')}
+                'status': t.get('status'), 'category': t.get('category'),
+                'body': _tpl_body(t)}
                for t in items if str(t.get('status', '')).upper() == 'APPROVED']
         return jsonify({'templates': out})
     except Exception as exc:
         return jsonify({'templates': [], 'error': str(exc)})
 
+
+@whatsapp_bp.route('/whatsapp/meta-costs.json')
+def meta_costs_json():
+    """Costos de WhatsApp que cobra Meta, para la tarjeta del Dashboard (solo admin)."""
+    from flask import session
+    if session.get('user_role') not in ('admin', 'superadmin'):
+        return jsonify({'error': 'Solo administradores'}), 403
+    from services import meta_billing
+    try:
+        return jsonify(meta_billing.summary(force=request.args.get('refresh') == '1'))
+    except Exception as exc:
+        log.exception('Meta: no se pudieron leer los costos de WhatsApp')
+        return jsonify({'configured': True, 'error': str(exc)[:300]})
 
 @whatsapp_bp.route('/whatsapp/status')
 def provider_status():
@@ -1023,7 +1237,7 @@ def new_conversation():
             template = {'name': tpl_name, 'language': tpl_lang, 'params': tpl_params} if tpl_name else None
             try:
                 wa_id = deliver(phone, message, org_id, template=template)
-                _record_outbound(phone, message if not template else f'[plantilla: {tpl_name}]',
+                _record_outbound(phone, message if not template else _template_text(template),
                                  wa_id, org_id)
             except zernio.TemplateRequired as exc:
                 flash(f'{exc} Elige una plantilla aprobada abajo.', 'danger')

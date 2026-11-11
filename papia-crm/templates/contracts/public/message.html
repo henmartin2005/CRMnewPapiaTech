@@ -1,0 +1,26 @@
+{% extends "contracts/public/_layout.html" %}
+
+{% block title %}{{ m[2] }}{% endblock %}
+{% block body %}
+<main class="ps-center">
+  <section class="ps-card ps-narrow" aria-labelledby="mt">
+    <div class="ps-icon-badge {{ m[0] }}"><i class="bi {{ m[1] }}"></i></div>
+    {% if env %}<div class="ps-eyebrow">{{ env.title }}</div>{% endif %}
+    <h1 id="mt" style="font-size:26px;">{{ m[2] }}</h1>
+    <p class="ps-muted" style="margin:0;">
+      {{ m[3] }}
+      {% if kind == 'done' %}
+        {% if env.status == 'completed' %}
+          Todas las partes firmaron; te enviamos la copia final con su certificado.
+        {% else %}
+          Cuando todas las partes firmen recibirás la copia final con el certificado de finalización.
+        {% endif %}
+      {% endif %}
+    </p>
+    {% if kind == 'done' and can_download and token %}
+      <a class="ps-btn primary" href="{{ url_for('contracts_public.sign_final', token=token) }}"><i class="bi bi-download"></i> Descargar PDF firmado</a>
+    {% endif %}
+    {% if env %}<p class="ps-muted" style="margin:0;font-size:12.5px;">ID del sobre: {{ env.uid }}</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

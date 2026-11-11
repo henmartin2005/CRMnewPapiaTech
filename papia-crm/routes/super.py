@@ -19,6 +19,7 @@ ALL_MODULES = [
     ('emails',    'Emails',     'bi-envelope'),
     ('calendar',  'Calendario', 'bi-calendar3'),
     ('proposals', 'Propuestas', 'bi-file-earmark-text'),
+    ('contracts', 'Contratos',  'bi-pen'),
     ('tasks',     'Tasks',      'bi-check2-square'),
     ('chat',      'Chat interno', 'bi-chat-square-text'),
 ]

@@ -42,6 +42,7 @@
       form.url.value = d ? d.url : '';
       form.color.value = d ? d.color : '#2A5BFF';
       form.mensaje.value = d ? (d.mensaje || '') : '';
+      form.modo.value = d && d.modo === 'redireccion' ? 'redireccion' : 'codigo';
       form.activo.checked = d ? !!d.activo : true;
       demoModal.querySelector('[data-title]').textContent = d ? 'Editar demo' : 'Nuevo demo';
     });
