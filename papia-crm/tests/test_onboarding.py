@@ -31,6 +31,12 @@ class OnboardingTests(unittest.TestCase):
                    "VALUES(33,'Otro','Cliente','otro@x.com','other',1)")
         db.execute("INSERT OR IGNORE INTO clients(id,first_name,last_name,email,project_type,org_id) "
                    "VALUES(34,'Ajeno','Org2','ajeno@x.com','other',2)")
+        db.execute("INSERT OR IGNORE INTO clients(id,first_name,last_name,email,project_type,project_details,org_id) "
+                   "VALUES(35,'Maybis','Rodriguez','maybis@x.com','crm','Organizar empresa de diseño web',1)")
+        db.execute("INSERT OR IGNORE INTO clients(id,first_name,last_name,email,company,project_type,org_id) "
+                   "VALUES(36,'Mell','B','mell@x.com','Maison by Mell Wig Boutique','website',1)")
+        db.execute("INSERT OR IGNORE INTO clients(id,first_name,last_name,email,company,project_type,org_id) "
+                   "VALUES(37,'Jariel','P','jariel@x.com','Jariel Barber Shop','website',1)")
         db.commit()
         from models.onboarding import ensure_schema
         ensure_schema()
@@ -125,7 +131,7 @@ class OnboardingTests(unittest.TestCase):
 
     def test_progress_counts_fields_and_zone_prefill(self):
         from models import onboarding as ob
-        tpl = ob.get_template()
+        tpl = ob.get_template('plan_pro_grooming')
         total = sum(len(s['fields']) for s in tpl['sections'])
         pct, per = ob.progress(tpl, {'zones': [{'zone': 'Naples', 'zips': '', 'days': ''}]}, {})
         self.assertEqual(pct, 0)  # la zona precargada sola no cuenta
@@ -190,6 +196,57 @@ class OnboardingTests(unittest.TestCase):
         html = r.get_data(as_text=True)
         self.assertIn('Onboarding', html)
         self.assertIn('/portal/admin/onboarding/32/respuestas', html)
+
+
+    # ── Plantilla según el tipo de negocio ─────────────────────────────────
+    def test_template_guessed_per_business(self):
+        from models import onboarding as ob
+        self.assertEqual(ob.load(32, 1)['template_key'], 'plan_pro_grooming')
+        self.assertEqual(ob.load(33, 1)['template_key'], 'web')
+        self.assertEqual(ob.load(35, 1)['template_key'], 'crm')
+        self.assertEqual(ob.load(36, 1)['template_key'], 'tienda')
+        self.assertEqual(ob.load(37, 1)['template_key'], 'citas')
+        html = self.admin.get('/portal/admin/onboarding/35').get_data(as_text=True)
+        self.assertNotIn('groomer', html.lower())
+        self.assertIn('Personas que usarán el sistema', html)
+
+    def test_every_template_is_valid(self):
+        from models import onboarding as ob
+        for key, tpl in ob.TEMPLATES.items():
+            keys = [f['key'] for _, f in ob._fields(tpl)]
+            self.assertEqual(len(keys), len(set(keys)), key)
+            cats = [f['category'] for _, f in ob._fields(tpl) if f['type'] == 'uploads']
+            self.assertEqual(len(cats), len(set(cats)), key)
+            if key != 'plan_pro_grooming':
+                blob = json.dumps(tpl, ensure_ascii=False).lower()
+                self.assertNotIn('groom', blob, key)
+                self.assertNotIn('mascota', blob, key)
+
+    def test_empty_grooming_rows_released_by_migration(self):
+        db = database.get_db()
+        db.execute("INSERT INTO client_onboarding(org_id, client_id, template_key, data) VALUES(1, 35, 'plan_pro_grooming', '{}')")
+        db.execute("INSERT INTO client_onboarding(org_id, client_id, template_key, data) VALUES(1, 32, 'plan_pro_grooming', '{\"legal_name\": \"L\"}')")
+        db.commit(); db.close()
+        from models import onboarding as ob
+        ob.ensure_schema()
+        self.assertEqual(self.row(35)['template_key'], '')
+        self.assertEqual(ob.load(35, 1)['template_key'], 'crm')
+        self.assertEqual(self.row(32)['template_key'], 'plan_pro_grooming')
+
+    def test_admin_changes_template_and_keeps_answers(self):
+        self.post_save(self.admin, {'legal_name': 'Mabys LLC'}, cid=35, preview=True)
+        self.assertEqual(self.row(35)['template_key'], 'crm')
+        r = self.admin.post('/portal/admin/onboarding/35/plantilla', data={'template_key': 'web'})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.row(35)['template_key'], 'web')
+        self.assertEqual(json.loads(self.row(35)['data'])['legal_name'], 'Mabys LLC')
+        self.assertEqual(self.admin.post('/portal/admin/onboarding/35/plantilla',
+                                         data={'template_key': 'nope'}).status_code, 400)
+        self.assertEqual(self.client_b.post('/portal/admin/onboarding/32/plantilla',
+                                            data={'template_key': 'web'}).status_code, 302)
+        self.assertEqual(self.row(32), None)
+        html = self.admin.get('/clients/35').get_data(as_text=True)
+        self.assertIn('Tipo de formulario', html)
 
 
 if __name__ == '__main__':

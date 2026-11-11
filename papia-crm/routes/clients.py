@@ -96,8 +96,10 @@ def new_client():
 
 def _onboarding_summary(client_id, org_id):
     try:
-        from models.onboarding import summary
-        return summary(client_id, org_id)
+        from models.onboarding import summary, template_choices
+        out = summary(client_id, org_id)
+        out['choices'] = template_choices()
+        return out
     except Exception:
         return None
 

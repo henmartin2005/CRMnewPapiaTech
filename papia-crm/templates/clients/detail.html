@@ -697,6 +697,15 @@
             <span style="margin-left:auto;font-size:13px;font-weight:600;">{{ onboarding.pct }}%</span>
           </div>
           <div style="height:6px;border-radius:99px;background:rgba(128,128,128,.2);overflow:hidden;"><i style="display:block;height:100%;width:{{ onboarding.pct }}%;background:linear-gradient(90deg,#2a5bff,#22d3ee);"></i></div>
+          <form method="post" action="{{ url_for('portal.admin_onboarding_template', client_id=client.id) }}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+            <label for="obTemplate" style="opacity:.75;">Tipo de formulario</label>
+            <select id="obTemplate" name="template_key" class="form-control" style="width:auto;max-width:100%;font-size:12px;padding:3px 8px;height:auto;" onchange="if(confirm('¿Cambiar el formulario de onboarding de este cliente? Las respuestas que ya dio no se borran.')){this.form.submit();}else{this.value=this.dataset.cur;}" data-cur="{{ '' if onboarding.template_auto else onboarding.template_key }}">
+              <option value=""{{ ' selected' if onboarding.template_auto }}>Automático ({{ onboarding.template_label }})</option>
+              {% for k, label in onboarding.choices %}
+              <option value="{{ k }}"{{ ' selected' if (not onboarding.template_auto and k == onboarding.template_key) }}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </form>
           <div style="font-size:12px;opacity:.75;">{{ onboarding.sections_done }} de {{ onboarding.sections_total }} secciones completas{% if onboarding.updated_at %} · última edición {{ onboarding.updated_at[:16] }}{% endif %}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <a class="btn btn-ghost btn-sm" target="_blank" href="{{ url_for('portal.admin_onboarding', client_id=client.id) }}"><i class="bi bi-pencil-square"></i> Abrir / completar</a>

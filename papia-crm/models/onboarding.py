@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS client_onboarding (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     org_id        INTEGER NOT NULL DEFAULT 1,
     client_id     INTEGER NOT NULL UNIQUE REFERENCES clients(id) ON DELETE CASCADE,
-    template_key  TEXT    NOT NULL DEFAULT 'plan_pro_grooming',
+    template_key  TEXT    NOT NULL DEFAULT '',             -- '' = automática según el cliente
     data          TEXT    NOT NULL DEFAULT '{}',
     status        TEXT    NOT NULL DEFAULT 'draft',      -- draft | submitted
     progress      INTEGER NOT NULL DEFAULT 0,
@@ -35,8 +35,422 @@ def _t(key, label, ftype='text', **kw):
     return d
 
 
+_INTRO = ('Complete este formulario dentro de los 7 días siguientes a la firma del contrato. '
+          'El plazo de desarrollo comienza cuando recibimos esta información y el pago inicial. '
+          'Sus respuestas se guardan solas mientras escribe; puede salir y volver cuando quiera.')
+
+# ── Secciones comunes ──────────────────────────────────────────────────────
+# Las claves se repiten entre plantillas a propósito: si se cambia el tipo de formulario de un
+# cliente, lo que ya respondió en campos comunes (nombre legal, marca, dominio…) se conserva.
+
+
+def _sec_legal(ein=False, extra=()):
+    fields = [
+        _t('legal_name', 'Nombre legal exacto de la empresa (como aparece en Sunbiz)'),
+        _t('entity_type', 'Tipo de empresa', 'choice', options=['LLC', 'Corporation', 'Negocio individual', 'Otro']),
+    ]
+    if ein:
+        fields.append(_t('ein', 'EIN (número de identificación fiscal federal)',
+                         hint='Solo lo ve Papia Tech. Es necesario para registrar WhatsApp y SMS a nombre del negocio.'))
+    fields += [
+        _t('legal_address', 'Dirección legal del negocio'),
+        _t('rep_name', 'Nombre del representante que firma el contrato'),
+        _t('rep_title', 'Cargo del representante'),
+        _t('rep_email', 'Correo del representante', 'email'),
+        _t('rep_phone', 'Teléfono del representante', 'tel'),
+        _t('year_started', 'Año en que comenzó el negocio', 'number'),
+    ]
+    fields += list(extra)
+    return {'key': 'legal', 'title': 'Datos legales y del negocio', 'icon': 'bi-building',
+            'lead': 'Van en el contrato. Deben coincidir con sus documentos oficiales.',
+            'fields': fields}
+
+
+def _sec_brand(name_hint='Ej.: el nombre con el que sus clientes lo conocen'):
+    return {'key': 'brand', 'title': 'Nombre, marca y logo', 'icon': 'bi-palette',
+            'fields': [
+                _t('site_name', 'Nombre comercial que quiere mostrar', hint=name_hint),
+                _t('slogan', 'Eslogan o frase del negocio'),
+                _t('colors', 'Colores de su marca', hint='Códigos HEX si los tiene (ej.: #1E88E5) o describa los colores'),
+                _t('font', 'Tipografía de su marca, si tiene una'),
+                _t('brand_manual', '¿Tiene manual de marca?', 'yesno'),
+                _t('ref_sites', 'Páginas o sistemas que le gustan como referencia (enlaces)', 'textarea'),
+                _t('style', 'Estilo que busca', 'choice', options=['Divertido', 'Elegante', 'Moderno', 'Familiar', 'Otro']),
+                _t('site_langs', 'Idiomas', 'choice', options=['Español', 'Inglés', 'Ambos']),
+                _t('logo_files', 'Archivos del logo', 'uploads', category='logo',
+                   hint='Envíe el logo en PDF (vector), AI o EPS, y también en PNG con fondo transparente. Si tiene versión en blanco o cuadrada, súbala también.'),
+            ]}
+
+
+def _sec_content(differentiator_hint, photos_hint, before_after=False):
+    fields = [
+        _t('story', 'Historia del negocio: cómo empezó y por qué (3 a 5 líneas)', 'textarea'),
+        _t('differentiator', '¿Qué lo diferencia de su competencia?', 'textarea', hint=differentiator_hint),
+        _t('experience', 'Experiencia del equipo (años, clientes atendidos, logros)'),
+        _t('show_team', '¿Quiere mostrar al equipo con nombre y foto?', 'yesno'),
+        _t('reviews', 'Reseñas de clientes para publicar, o enlace a sus reseñas de Google', 'textarea'),
+        _t('faqs', 'Preguntas frecuentes de sus clientes, con su respuesta', 'textarea'),
+        _t('hero_message', 'Mensaje principal para la portada (lo primero que se lee)'),
+        _t('photos', 'Fotos del negocio', 'uploads', category='imagen', hint=photos_hint),
+    ]
+    if before_after:
+        fields.append(_t('before_after', 'Fotos de antes y después (si aplica)', 'uploads', category='antes_despues',
+                         hint='Pares del mismo trabajo desde el mismo ángulo. Póngales nombre tipo "cliente1-antes" y "cliente1-despues".'))
+    fields.append(_t('photo_rights', 'Confirmo que las fotos son mías o que tengo permiso para usarlas', 'checklist',
+                     items=['Confirmo']))
+    return {'key': 'content', 'title': 'Contenido de la página: textos y fotos', 'icon': 'bi-images', 'fields': fields}
+
+
+def _sec_email(booking=False):
+    fields = [
+        _t('contact_email', 'Correo que aparecerá como contacto', 'email'),
+        _t('sender_email', 'Correo desde el que salen los avisos a sus clientes', 'email', hint='Ej.: info@sudominio.com'),
+        _t('wants_pro_email', '¿Quiere un correo profesional con su dominio?', 'yesno', hint='Ej.: info@sunegocio.com. Su costo lo cubre el cliente.'),
+        _t('email_provider', 'Si ya tiene correo con dominio: ¿en qué proveedor está?', 'choice', options=['Google Workspace', 'Outlook / Microsoft 365', 'Otro', 'No tengo']),
+    ]
+    if booking:
+        fields.append(_t('booking_notify_emails', 'Correo(s) que reciben el aviso de cada reserva nueva'))
+    fields += [
+        _t('owner_email', 'Correo del dueño para el acceso de administrador', 'email'),
+        _t('admin_emails', 'Correo(s) de otros administradores, si los hay'),
+    ]
+    return {'key': 'email', 'title': 'Correo electrónico', 'icon': 'bi-envelope', 'fields': fields}
+
+
+def _sec_whatsapp():
+    return {'key': 'whatsapp', 'title': 'WhatsApp y SMS', 'icon': 'bi-whatsapp',
+            'lead': 'WhatsApp y los SMS usan un número registrado a nombre de su negocio ante Meta y las operadoras. La aprobación tarda varios días: complete esta sección primero.',
+            'fields': [
+                _t('wa_number_choice', '¿Qué número quiere conectar a WhatsApp?', 'choice',
+                   options=['Mi número actual del negocio', 'Otro número que ya tengo', 'Un número nuevo que configure Papia Tech']),
+                _t('wa_number_other', 'Escriba el número (actual u otro)', 'tel'),
+                _t('wa_current_app', 'Si es su número actual: ¿lo usa hoy en la app WhatsApp Business? ¿Quién lo contesta?'),
+                _t('sms_same_number', '¿El mismo número enviará SMS?', 'yesno'),
+                _t('wa_display_name', 'Nombre que verán sus clientes en WhatsApp'),
+                _t('wa_description', 'Descripción corta del negocio para el perfil de WhatsApp', 'textarea'),
+                _t('fb_page', 'Página de Facebook del negocio (enlace)', 'url'),
+                _t('has_meta_business', '¿Tiene cuenta de Meta Business (business.facebook.com)?', 'yesno'),
+                _t('client_consent', '¿Sus clientes aceptaron recibir mensajes de su negocio? ¿Cómo?', 'textarea',
+                   hint='Por ley (TCPA) solo se puede escribir a quien dio su consentimiento.'),
+                _t('chat_agents', 'Persona(s) que atenderán los chats'),
+                _t('chat_hours', 'Horario de atención humana en el chat'),
+                _t('meta_tasks', 'Pasos en Meta', 'checklist',
+                   items=['Agregué a henrry@papiatech.com como administrador o socio en mi Meta Business',
+                          'Tengo a mano los documentos para la verificación de Meta (Articles of Organization, EIN, factura con la dirección)']),
+            ]}
+
+
+def _sec_ai(handoff_hint='Ej.: quejas, reclamos de pagos, casos urgentes'):
+    return {'key': 'ai', 'title': 'Asistente de inteligencia artificial', 'icon': 'bi-robot',
+            'lead': 'El asistente responde en español e inglés con la información que usted dé aquí. Si no contrató asistente, deje esta sección en blanco.',
+            'fields': [
+                _t('ai_name', 'Nombre del asistente, si quiere darle uno'),
+                _t('ai_tone', 'Tono', 'choice', options=['Formal', 'Cercano', 'Divertido']),
+                _t('ai_greeting', 'Saludo de bienvenida que le gustaría', 'textarea'),
+                _t('ai_forbidden', 'Temas que el asistente NO debe responder y debe pasar a una persona', 'textarea'),
+                _t('ai_prices', '¿Puede dar precios exactos o solo estimados?', 'choice', options=['Precios exactos', 'Solo estimados', 'No dar precios']),
+                _t('ai_handoff', 'Casos que siempre deben pasar a una persona', 'textarea', hint=handoff_hint),
+                _t('ai_after_hours', 'Respuesta fuera de horario', 'textarea'),
+                _t('ai_more_faqs', 'Otras preguntas frecuentes por WhatsApp', 'textarea'),
+            ]}
+
+
+def _sec_domain(domain_hint='Ej.: sunegocio.com'):
+    return {'key': 'domain', 'title': 'Dominio, Google y redes sociales', 'icon': 'bi-globe2',
+            'lead': 'El dominio se registra a nombre de su negocio; su costo anual lo cubre el cliente.',
+            'fields': [
+                _t('domain', '¿Tiene dominio? ¿Cuál?', hint=domain_hint),
+                _t('registrar', '¿Dónde lo compró?', 'choice', options=['GoDaddy', 'Namecheap', 'Google / Squarespace', 'Wix', 'Otro', 'No tengo dominio']),
+                _t('current_site', 'Página web actual (enlace)', 'url'),
+                _t('domain_options', 'Si no tiene dominio: 3 opciones de nombre que le gustarían', 'textarea'),
+                _t('gbp', 'Perfil de Google Business / Google Maps (enlace)', 'url'),
+                _t('instagram', 'Instagram'),
+                _t('facebook', 'Facebook'),
+                _t('tiktok', 'TikTok'),
+                _t('other_social', 'Otras redes o directorios (Yelp, LinkedIn, Nextdoor)'),
+                _t('domain_tasks', 'Accesos', 'checklist',
+                   items=['Di acceso al dominio a henrry@papiatech.com (usuario delegado o configuración DNS)',
+                          'Agregué a henrry@papiatech.com como administrador de mi perfil de Google Business']),
+            ]}
+
+
+def _sec_legal_texts(items):
+    return {'key': 'legal_texts', 'title': 'Textos legales', 'icon': 'bi-file-earmark-text',
+            'lead': 'Usted aporta y aprueba los textos legales con su propio asesor; nosotros los publicamos.',
+            'fields': [
+                _t('legal_have', 'Textos que ya tengo', 'checklist', items=items),
+                _t('legal_template', '¿Quiere que le enviemos un modelo base para que lo revise su abogado?', 'yesno'),
+                _t('legal_files', 'Suba aquí los textos legales que ya tiene', 'uploads', category='documento'),
+            ]}
+
+
+def _sec_confirm():
+    return {'key': 'confirm', 'title': 'Confirmación', 'icon': 'bi-check2-square',
+            'fields': [
+                _t('completed_by', 'Completado por'),
+                _t('notes', 'Comentarios o dudas para Papia Tech', 'textarea'),
+            ]}
+
+
+def _sec_stripe(lead='El dinero va directo a su cuenta de Stripe; Papia Tech nunca recibe esos fondos.'):
+    return {'key': 'payments', 'title': 'Pagos y Stripe', 'icon': 'bi-credit-card', 'lead': lead,
+            'fields': [
+                _t('has_stripe', '¿Ya tiene cuenta de Stripe?', 'yesno'),
+                _t('stripe_email', 'Correo con el que está registrada la cuenta de Stripe', 'email'),
+                _t('stripe_verified', '¿Ya está verificada con su cuenta bancaria?', 'yesno'),
+                _t('other_methods', 'Otros métodos de pago que acepta', hint='Zelle, efectivo, transferencia, PayPal'),
+                _t('refunds_by', '¿Quién del equipo puede hacer reembolsos?'),
+                _t('stripe_tasks', 'Pasos en Stripe', 'checklist',
+                   items=['Creé o verifiqué la cuenta de Stripe a nombre del negocio',
+                          'Invité a henrry@papiatech.com como usuario «Developer» en Stripe']),
+            ]}
+
+
+_LEGAL_WEB = ['Política de privacidad de la página web', 'Términos y condiciones del servicio',
+              'Texto de aceptación para recibir SMS y WhatsApp']
+
+# ── Plantillas ─────────────────────────────────────────────────────────────
 TEMPLATES = {
+    'web': {
+        'label': 'Página web',
+        'title': 'Formulario de inicio',
+        'intro': _INTRO,
+        'sections': [
+            _sec_legal(),
+            _sec_brand(),
+            _sec_content('Ej.: atención personalizada, garantía, rapidez, precios',
+                         'Su local, el equipo trabajando y sus trabajos o productos (mínimo 10). En tamaño original, no capturas de pantalla.'),
+            {'key': 'services', 'title': 'Servicios y precios', 'icon': 'bi-briefcase',
+             'fields': [
+                 _t('services', 'Servicios principales', 'table', min_rows=3,
+                    columns=[{'key': 'name', 'label': 'Servicio', 'w': 3},
+                             {'key': 'price', 'label': 'Precio (USD)'},
+                             {'key': 'includes', 'label': 'Qué incluye', 'w': 3}]),
+                 _t('show_prices', '¿Quiere mostrar los precios en la página?', 'yesno'),
+                 _t('audience', '¿Quién es su cliente ideal?', 'textarea', hint='Edad, tipo de negocio, zona, qué problema le resuelve'),
+                 _t('service_area', 'Zonas o ciudades donde atiende'),
+                 _t('hours', 'Horario de atención'),
+             ]},
+            {'key': 'site', 'title': 'Páginas y contacto', 'icon': 'bi-layout-text-window',
+             'fields': [
+                 _t('pages', 'Secciones que quiere en la página', 'checklist',
+                    items=['Inicio', 'Servicios', 'Nosotros', 'Galería / portafolio', 'Testimonios',
+                           'Preguntas frecuentes', 'Blog', 'Contacto']),
+                 _t('main_cta', '¿Qué quiere que haga el visitante?', 'choice',
+                    options=['Escribir por WhatsApp', 'Llamar', 'Llenar un formulario', 'Agendar una cita', 'Comprar']),
+                 _t('form_fields', 'Datos que debe pedir el formulario de contacto', 'textarea', hint='Ej.: nombre, teléfono, servicio de interés'),
+                 _t('lead_notify', 'Correo o WhatsApp donde quiere recibir los contactos nuevos'),
+                 _t('address_public', 'Dirección que quiere mostrar (o «no mostrar»)'),
+             ]},
+            _sec_email(),
+            _sec_domain(),
+            _sec_legal_texts(_LEGAL_WEB),
+            _sec_confirm(),
+        ],
+    },
+    'crm': {
+        'label': 'CRM / sistema a medida',
+        'title': 'Formulario de inicio de su sistema',
+        'intro': _INTRO,
+        'sections': [
+            _sec_legal(ein=True),
+            {'key': 'brand', 'title': 'Nombre, marca y logo', 'icon': 'bi-palette',
+             'fields': [
+                 _t('site_name', 'Nombre con el que quiere ver el sistema', hint='Ej.: «CRM Mi Empresa»'),
+                 _t('colors', 'Colores de su marca', hint='Códigos HEX si los tiene (ej.: #1E88E5) o describa los colores'),
+                 _t('site_langs', 'Idiomas del sistema', 'choice', options=['Español', 'Inglés', 'Ambos']),
+                 _t('ref_sites', 'Sistemas o apps que le gustan como referencia', 'textarea'),
+                 _t('logo_files', 'Archivos del logo', 'uploads', category='logo',
+                    hint='PNG con fondo transparente y, si tiene, en PDF/AI/EPS.'),
+             ]},
+            {'key': 'business', 'title': 'Su negocio y cómo trabaja hoy', 'icon': 'bi-diagram-3',
+             'fields': [
+                 _t('business_desc', '¿A qué se dedica su negocio? ¿Qué vende o qué servicio da?', 'textarea'),
+                 _t('current_tools', '¿Cómo organiza hoy sus clientes y su trabajo?', 'choice',
+                    options=['Excel / Google Sheets', 'Papel o libreta', 'WhatsApp', 'Otro sistema o app', 'Una mezcla']),
+                 _t('current_tools_detail', 'Si usa otro sistema o app, ¿cuál? ¿Qué le falta?'),
+                 _t('pain_points', '¿Qué problemas quiere resolver con el sistema?', 'textarea',
+                    hint='Ej.: se me pierden clientes, no sé quién me debe, no tengo seguimiento'),
+                 _t('goals', '¿Cómo sabrá que el sistema funciona? ¿Qué quiere lograr en 3 meses?', 'textarea'),
+                 _t('process', 'Pasos desde que llega un cliente nuevo hasta que termina el trabajo', 'textarea',
+                    hint='Ej.: me escribe → le mando cotización → paga depósito → hago el trabajo → cobro el resto'),
+                 _t('stages', 'Etapas de su proceso (como columnas del pipeline)', 'table', min_rows=4,
+                    columns=[{'key': 'name', 'label': 'Etapa', 'w': 2},
+                             {'key': 'desc', 'label': 'Qué pasa en esta etapa', 'w': 4}]),
+             ]},
+            {'key': 'users', 'title': 'Usuarios y permisos', 'icon': 'bi-people',
+             'fields': [
+                 _t('users', 'Personas que usarán el sistema', 'table', min_rows=2,
+                    columns=[{'key': 'name', 'label': 'Nombre', 'w': 2},
+                             {'key': 'role', 'label': 'Rol / cargo'},
+                             {'key': 'email', 'label': 'Correo', 'type': 'email', 'w': 2},
+                             {'key': 'phone', 'label': 'Teléfono', 'type': 'tel'},
+                             {'key': 'access', 'label': 'Qué puede ver o hacer', 'w': 2}]),
+                 _t('restricted', '¿Hay información que solo debe ver el dueño?', 'textarea', hint='Ej.: pagos, ganancias, datos de clientes'),
+                 _t('mobile_use', '¿Lo usarán desde el teléfono?', 'yesno'),
+             ]},
+            {'key': 'modules', 'title': 'Módulos y funciones', 'icon': 'bi-grid-3x3-gap',
+             'fields': [
+                 _t('modules', 'Módulos que necesita', 'checklist',
+                    items=['Contactos y clientes', 'Pipeline de ventas', 'Calendario y citas', 'Tareas y recordatorios',
+                           'Cotizaciones / propuestas', 'Contratos con firma electrónica', 'Facturación y pagos',
+                           'Portal del cliente', 'WhatsApp', 'Correo', 'SMS', 'Inventario',
+                           'Documentos y archivos', 'Reportes']),
+                 _t('modules_other', 'Otras funciones que necesita y no están en la lista', 'textarea'),
+                 _t('client_fields', 'Datos que quiere guardar de cada cliente', 'textarea',
+                    hint='Ej.: nombre, teléfono, empresa, servicio, presupuesto, cómo nos conoció'),
+                 _t('reports', 'Reportes o números que quiere ver en el panel', 'textarea',
+                    hint='Ej.: ventas del mes, clientes nuevos, pagos pendientes'),
+                 _t('automations', 'Avisos o tareas que deberían pasar solas', 'textarea',
+                    hint='Ej.: recordatorio de pago, mensaje de bienvenida, aviso de cita'),
+             ]},
+            {'key': 'data', 'title': 'Datos e integraciones', 'icon': 'bi-database',
+             'fields': [
+                 _t('import_data', '¿Tiene clientes o datos para importar? ¿Cuántos registros, más o menos?'),
+                 _t('import_files', 'Suba aquí sus listas (Excel, CSV o exportación de su sistema actual)', 'uploads', category='documento'),
+                 _t('integrations', 'Herramientas que ya usa y quiere conectar', 'checklist',
+                    items=['Google Workspace (Gmail, Calendar, Drive)', 'Outlook / Microsoft 365', 'Stripe',
+                           'QuickBooks', 'Shopify', 'WhatsApp Business', 'Instagram / Facebook', 'Zoom']),
+                 _t('integrations_other', 'Otras herramientas'),
+                 _t('has_stripe', '¿Ya tiene cuenta de Stripe para cobrar desde el sistema?', 'yesno'),
+                 _t('subdomain', 'Dirección donde quiere el sistema', hint='Ej.: crm.sunegocio.com'),
+             ]},
+            _sec_whatsapp(),
+            _sec_email(),
+            _sec_domain(),
+            _sec_confirm(),
+        ],
+    },
+    'tienda': {
+        'label': 'Tienda online (Shopify / e-commerce)',
+        'title': 'Formulario de inicio de su tienda',
+        'intro': _INTRO,
+        'sections': [
+            _sec_legal(),
+            _sec_brand(),
+            {'key': 'catalog', 'title': 'Catálogo de productos', 'icon': 'bi-bag',
+             'fields': [
+                 _t('platform', 'Plataforma', 'choice', options=['Shopify', 'WooCommerce', 'Otra', 'Que Papia Tech recomiende']),
+                 _t('store_url', 'Si ya tiene tienda, enlace o usuario de la tienda'),
+                 _t('product_count', '¿Cuántos productos va a vender, más o menos?', 'number'),
+                 _t('categories', 'Categorías o colecciones', 'textarea', hint='Ej.: pelucas, extensiones, accesorios'),
+                 _t('products', 'Productos principales', 'table', min_rows=5,
+                    columns=[{'key': 'name', 'label': 'Producto', 'w': 3},
+                             {'key': 'price', 'label': 'Precio (USD)', 'type': 'number'},
+                             {'key': 'variants', 'label': 'Variantes (talla, color…)', 'w': 2},
+                             {'key': 'stock', 'label': 'Inventario', 'type': 'number'}]),
+                 _t('product_sheet', 'Enlace a la lista completa de productos (Google Sheets, Drive o Dropbox)', 'url',
+                    hint='Nombre, precio, descripción, variantes, inventario y SKU si los tiene.'),
+                 _t('photos', 'Fotos de productos', 'uploads', category='imagen',
+                    hint='Fondo limpio, buena luz, varias por producto. En tamaño original, no capturas de pantalla.'),
+                 _t('descriptions', '¿Quién escribe las descripciones de los productos?', 'choice',
+                    options=['Yo las doy', 'Que las escriba Papia Tech', 'Una mezcla']),
+                 _t('photo_rights', 'Confirmo que las fotos son mías o que tengo permiso para usarlas', 'checklist', items=['Confirmo']),
+             ]},
+            {'key': 'shipping', 'title': 'Envíos y entregas', 'icon': 'bi-truck',
+             'fields': [
+                 _t('ship_zones', '¿A dónde envía?', 'choice', options=['Solo mi ciudad', 'Todo Estados Unidos', 'Internacional', 'No hago envíos']),
+                 _t('carriers', 'Paquetería que usa', hint='USPS, UPS, FedEx, entrega propia'),
+                 _t('ship_cost', '¿Cómo cobra el envío?', 'textarea', hint='Tarifa fija, por peso, calculada por la paquetería'),
+                 _t('free_shipping', '¿Envío gratis a partir de cierto monto? ¿Cuál?'),
+                 _t('pickup', '¿Permite recoger en tienda?', 'yesno'),
+                 _t('processing_time', 'Tiempo de preparación del pedido', hint='Ej.: 1 a 3 días hábiles'),
+                 _t('ship_from', 'Dirección desde donde salen los envíos'),
+             ]},
+            {'key': 'payments', 'title': 'Pagos e impuestos', 'icon': 'bi-credit-card',
+             'fields': [
+                 _t('pay_methods', 'Métodos de pago en la tienda', 'checklist',
+                    items=['Tarjeta (Shopify Payments / Stripe)', 'PayPal', 'Apple Pay / Google Pay',
+                           'Pago a plazos (Afterpay, Klarna)', 'Zelle o transferencia']),
+                 _t('has_stripe', '¿Ya tiene cuenta de Stripe o Shopify Payments?', 'yesno'),
+                 _t('sales_tax', '¿Cobra impuesto de venta (sales tax)?', 'yesno'),
+                 _t('discounts', 'Descuentos o promociones de lanzamiento', 'textarea'),
+             ]},
+            {'key': 'policies', 'title': 'Políticas de la tienda', 'icon': 'bi-arrow-repeat',
+             'fields': [
+                 _t('returns', 'Política de devoluciones (plazo y condiciones)', 'textarea'),
+                 _t('exchanges', '¿Acepta cambios? ¿Cómo?', 'textarea'),
+                 _t('warranty', 'Garantía de los productos, si aplica', 'textarea'),
+                 _t('faqs', 'Preguntas frecuentes de sus clientes, con su respuesta', 'textarea'),
+             ]},
+            {'key': 'marketing', 'title': 'Canales de venta y marketing', 'icon': 'bi-megaphone',
+             'fields': [
+                 _t('channels', 'Canales a conectar', 'checklist',
+                    items=['Instagram Shopping', 'Facebook Shop', 'TikTok Shop', 'Google Shopping', 'Correo marketing (lista de suscriptores)']),
+                 _t('hero_message', 'Mensaje principal para la portada (lo primero que se lee)'),
+                 _t('story', 'Historia de la marca (3 a 5 líneas)', 'textarea'),
+                 _t('reviews', 'Reseñas de clientes para publicar', 'textarea'),
+             ]},
+            _sec_email(),
+            _sec_domain('Ej.: mitienda.com'),
+            _sec_legal_texts(['Política de privacidad', 'Términos y condiciones', 'Política de devoluciones',
+                              'Política de envíos']),
+            _sec_confirm(),
+        ],
+    },
+    'citas': {
+        'label': 'Negocio con citas (salón, barbería, spa, clínica)',
+        'title': 'Formulario de inicio',
+        'intro': _INTRO,
+        'sections': [
+            _sec_legal(ein=True, extra=[
+                _t('licenses', '¿Tiene licencias o certificaciones del estado? ¿Cuáles?', 'textarea')]),
+            _sec_brand(),
+            _sec_content('Ej.: productos que usa, especialidad, experiencia, ambiente',
+                         'Su local por dentro y por fuera, el equipo trabajando y sus trabajos terminados (mínimo 10). En tamaño original.',
+                         before_after=True),
+            {'key': 'services', 'title': 'Servicios y precios', 'icon': 'bi-scissors',
+             'lead': 'La duración es obligatoria: con ella el sistema calcula los horarios disponibles.',
+             'fields': [
+                 _t('services', 'Servicios principales', 'table', min_rows=4,
+                    columns=[{'key': 'name', 'label': 'Servicio', 'w': 3},
+                             {'key': 'price', 'label': 'Precio (USD)', 'type': 'number'},
+                             {'key': 'minutes', 'label': 'Duración (min)', 'type': 'number'},
+                             {'key': 'includes', 'label': 'Qué incluye', 'w': 3}]),
+                 _t('addons', 'Adicionales', 'table', min_rows=2,
+                    columns=[{'key': 'name', 'label': 'Adicional', 'w': 3},
+                             {'key': 'price', 'label': 'Precio (USD)', 'type': 'number'},
+                             {'key': 'minutes', 'label': 'Tiempo extra (min)', 'type': 'number'}]),
+                 _t('products', 'Productos que vende o quiere mostrar', 'textarea'),
+             ]},
+            {'key': 'ops', 'title': 'Equipo, local y horarios', 'icon': 'bi-shop',
+             'fields': [
+                 _t('staff', 'Personas que atienden citas (una fila por persona)', 'table', min_rows=1,
+                    hint='Cada persona puede recibir su propio usuario para ver su agenda.',
+                    columns=[{'key': 'name', 'label': 'Nombre', 'w': 2},
+                             {'key': 'services', 'label': 'Servicios que hace', 'w': 2},
+                             {'key': 'phone', 'label': 'Teléfono', 'type': 'tel'},
+                             {'key': 'email', 'label': 'Correo', 'type': 'email', 'w': 2},
+                             {'key': 'days', 'label': 'Días'},
+                             {'key': 'hours', 'label': 'Horario'}]),
+                 _t('location_type', '¿Dónde atiende?', 'choice', options=['En mi local', 'A domicilio', 'Ambos']),
+                 _t('address_public', 'Dirección del local'),
+                 _t('hours', 'Horario general de atención'),
+                 _t('max_per_day', 'Máximo de citas por persona al día', 'number'),
+                 _t('holidays', 'Días feriados o cerrados del año', 'textarea'),
+             ]},
+            {'key': 'booking', 'title': 'Reservas, depósito y políticas', 'icon': 'bi-calendar-check',
+             'fields': [
+                 _t('deposit', 'Monto del depósito', hint='Cantidad fija en USD, porcentaje o «sin depósito»'),
+                 _t('deposit_discount', '¿El depósito se descuenta del total del servicio?', 'yesno'),
+                 _t('max_advance', 'Con cuánta anticipación se puede reservar', hint='Ej.: hasta 30 días'),
+                 _t('min_advance', 'Anticipación mínima para reservar', hint='Ej.: 24 horas antes'),
+                 _t('cancel_policy', 'Política de cancelación (plazo y si se devuelve el depósito)', 'textarea'),
+                 _t('noshow_policy', 'Política de no-show (cliente ausente)', 'textarea'),
+                 _t('late_policy', 'Política de llegada tarde o reprogramación', 'textarea'),
+                 _t('booking_fields', 'Datos que debe dar el cliente al reservar, además de nombre y teléfono', 'textarea'),
+             ]},
+            _sec_stripe('El dinero de los depósitos va directo a su cuenta de Stripe; Papia Tech nunca recibe esos fondos.'),
+            _sec_email(booking=True),
+            _sec_whatsapp(),
+            _sec_ai('Ej.: quejas, alergias o reacciones, casos médicos'),
+            _sec_domain(),
+            _sec_legal_texts(['Consentimiento o exención del servicio', 'Política de cancelación y no-show'] + _LEGAL_WEB),
+            _sec_confirm(),
+        ],
+    },
     'plan_pro_grooming': {
+        'label': 'Grooming móvil (Plan Pro)',
         'title': 'Formulario de inicio',
         'intro': ('Complete este formulario dentro de los 7 días siguientes a la firma del contrato. '
                   'El plazo de desarrollo de 30 días comienza cuando recibimos esta información y el pago inicial. '
@@ -236,11 +650,55 @@ TEMPLATES = {
         ],
     },
 }
-DEFAULT_TEMPLATE = 'plan_pro_grooming'
+DEFAULT_TEMPLATE = 'web'
+
+# Palabras que delatan el tipo de negocio (se buscan en empresa, nombre, detalles y etapa).
+_KW_GROOMING = ('groom',)
+_KW_TIENDA = ('shopify', 'tienda', 'ecommerce', 'e-commerce', 'store', 'boutique', 'woocommerce')
+_KW_CITAS = ('salon', 'salón', 'barber', 'spa', 'uñas', 'unas', 'nail', 'pestaña', 'lash', 'facial',
+             'estética', 'estetica', 'beauty', 'belleza', 'clínica', 'clinica', 'clinic', 'dental',
+             'citas', 'reservas', 'booking')
+
+
+def template_choices():
+    """[(key, label)] para el selector del perfil."""
+    return [(k, v.get('label', k)) for k, v in TEMPLATES.items()]
+
+
+def guess_template(client):
+    """Elige la plantilla según los datos del cliente (dict o Row). Nunca devuelve grooming
+    salvo que el negocio lo diga explícitamente."""
+    c = dict(client or {})
+    hay = ' '.join(str(c.get(k) or '') for k in ('company', 'first_name', 'last_name',
+                                                  'project_details', 'pipeline_stage')).lower()
+    ptype = (c.get('project_type') or '').lower()
+    if any(w in hay for w in _KW_GROOMING):
+        return 'plan_pro_grooming'
+    if ptype in ('crm', 'mobile_app'):
+        return 'crm'
+    if any(w in hay for w in _KW_TIENDA):
+        return 'tienda'
+    if any(w in hay for w in _KW_CITAS):
+        return 'citas'
+    if 'crm' in hay or 'sistema' in hay:
+        return 'crm'
+    return DEFAULT_TEMPLATE
 
 
 def get_template(key=None):
     return TEMPLATES.get(key or DEFAULT_TEMPLATE) or TEMPLATES[DEFAULT_TEMPLATE]
+
+
+def _client_row(client_id, org_id):
+    db = get_db()
+    try:
+        r = db.execute("SELECT * FROM clients WHERE id = ? AND COALESCE(org_id, 1) = ?",
+                       (client_id, org_id)).fetchone()
+        return dict(r) if r else {}
+    except Exception:
+        return {}
+    finally:
+        db.close()
 
 
 def _fields(tpl):
@@ -257,7 +715,15 @@ def _db():
 
 
 def ensure_schema():
-    _db().close()
+    """Crea la tabla y libera los formularios que quedaron con la plantilla de grooming por
+    defecto sin respuestas: vuelven a «automática» y toman la del tipo de negocio."""
+    db = _db()
+    try:
+        db.execute("UPDATE client_onboarding SET template_key = '' "
+                   "WHERE template_key = 'plan_pro_grooming' AND COALESCE(data, '') IN ('', '{}')")
+        db.commit()
+    finally:
+        db.close()
 
 
 def load(client_id, org_id):
@@ -269,10 +735,14 @@ def load(client_id, org_id):
     finally:
         db.close()
     if not row:
-        return {'client_id': client_id, 'org_id': org_id, 'template_key': DEFAULT_TEMPLATE,
+        return {'client_id': client_id, 'org_id': org_id,
+                'template_key': guess_template(_client_row(client_id, org_id)), 'template_auto': True,
                 'data': {}, 'status': 'draft', 'progress': 0, 'submitted_at': None,
                 'admin_seen': 1, 'updated_at': None, 'exists': False}
     rec = dict(row)
+    rec['template_auto'] = rec.get('template_key') not in TEMPLATES
+    if rec['template_auto']:
+        rec['template_key'] = guess_template(_client_row(client_id, org_id))
     try:
         rec['data'] = json.loads(rec.get('data') or '{}')
         if not isinstance(rec['data'], dict):
@@ -374,11 +844,11 @@ def save(client_id, org_id, incoming, submit=False, by_client=True):
     try:
         if rec['exists']:
             db.execute(
-                "UPDATE client_onboarding SET data = ?, progress = ?, status = ?, "
+                "UPDATE client_onboarding SET template_key = ?, data = ?, progress = ?, status = ?, "
                 "submitted_at = CASE WHEN ? THEN datetime('now','localtime') ELSE submitted_at END, "
                 "admin_seen = CASE WHEN ? THEN 0 ELSE admin_seen END, "
                 "updated_at = datetime('now','localtime') WHERE client_id = ? AND org_id = ?",
-                (json.dumps(data, ensure_ascii=False), pct, status, 1 if submit else 0,
+                (rec['template_key'], json.dumps(data, ensure_ascii=False), pct, status, 1 if submit else 0,
                  1 if (submit and by_client) else 0, client_id, org_id))
         else:
             db.execute(
@@ -387,6 +857,29 @@ def save(client_id, org_id, incoming, submit=False, by_client=True):
                 "CASE WHEN ? THEN datetime('now','localtime') END, ?)",
                 (org_id, client_id, rec['template_key'], json.dumps(data, ensure_ascii=False), pct,
                  status, 1 if submit else 0, 0 if (submit and by_client) else 1))
+        db.commit()
+    finally:
+        db.close()
+    return load(client_id, org_id)
+
+
+def set_template(client_id, org_id, key):
+    """Fija el tipo de formulario del cliente ('' = automático). Las respuestas no se borran:
+    los campos comunes se conservan y, si se vuelve a la plantilla anterior, reaparecen."""
+    if key and key not in TEMPLATES:
+        raise ValueError('plantilla desconocida')
+    rec = load(client_id, org_id)
+    eff = key or guess_template(_client_row(client_id, org_id))
+    pct, _ = progress(get_template(eff), rec['data'], upload_counts(client_id, org_id))
+    db = _db()
+    try:
+        if rec['exists']:
+            db.execute("UPDATE client_onboarding SET template_key = ?, progress = ?, "
+                       "updated_at = datetime('now','localtime') WHERE client_id = ? AND org_id = ?",
+                       (key, pct, client_id, org_id))
+        else:
+            db.execute("INSERT INTO client_onboarding(org_id, client_id, template_key, data, progress) "
+                       "VALUES (?, ?, ?, '{}', ?)", (org_id, client_id, key, pct))
         db.commit()
     finally:
         db.close()
@@ -412,4 +905,6 @@ def summary(client_id, org_id):
     return {'status': rec['status'], 'pct': pct, 'exists': rec['exists'],
             'submitted_at': rec.get('submitted_at'), 'updated_at': rec.get('updated_at'),
             'admin_seen': rec.get('admin_seen', 1), 'sections_done': sections_done,
-            'sections_total': len(per)}
+            'sections_total': len(per), 'template_key': rec['template_key'],
+            'template_label': tpl.get('label', rec['template_key']),
+            'template_auto': rec.get('template_auto', False)}

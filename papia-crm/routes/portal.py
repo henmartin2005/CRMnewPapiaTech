@@ -650,6 +650,21 @@ def admin_onboarding(client_id):
     return _render_onboarding(client_id, access[0], preview=True)
 
 
+@portal_bp.route('/admin/onboarding/<int:client_id>/plantilla', methods=['POST'])
+@_admin_required
+def admin_onboarding_template(client_id):
+    """Cambia el tipo de formulario del cliente (web, CRM, tienda, citas, grooming o automático)."""
+    access = _onboarding_access(client_id, as_admin=True)
+    if not access:
+        abort(404)
+    from models import onboarding as ob
+    key = (request.form.get('template_key') or '').strip()
+    if key and key not in ob.TEMPLATES:
+        abort(400)
+    ob.set_template(client_id, access[0], key)
+    return redirect(url_for('clients.detail', client_id=client_id) + '#portalCliente')
+
+
 @portal_bp.route('/admin/onboarding/<int:client_id>/respuestas')
 @_admin_required
 def admin_onboarding_answers(client_id):
