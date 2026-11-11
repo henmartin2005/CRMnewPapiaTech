@@ -152,25 +152,22 @@ def manual_delete(record_id):
 
 @pagos_bp.route('/pagos/cuota/<int:inst_id>/link', methods=['POST'])
 def installment_link(inst_id):
-    """Link de Stripe para una cuota; el webhook la marca pagada al cobrarse."""
+    """Link permanente de pago de una cuota (/pagar/<token>): no caduca, muestra
+    Zelle y tarjeta, y el webhook marca la cuota pagada al cobrarse."""
     from models.payment_schedule import installment_with_client
-    from routes.payments import PaymentLinkError, create_checkout
+    from routes.pagar import pay_url
 
     org_id = _org()
     data = request.get_json(silent=True) or {}
-    client_id = data.get('client_id')
-    inst = installment_with_client(inst_id, int(client_id or 0), org_id)
+    inst = installment_with_client(inst_id, int(data.get('client_id') or 0), org_id)
     if not inst or inst['status'] == 'paid':
         return jsonify({'success': False, 'error': 'Cuota no encontrada o ya pagada'}), 404
-    name = f"{inst['first_name']} {inst['last_name'] or ''}".strip()
-    try:
-        res = create_checkout(org_id, inst['client_id'], inst['amount'],
-                              f"{inst['label']} — {name}", installment_id=inst_id)
-        return jsonify({'success': True, **res, 'name': name})
-    except PaymentLinkError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), exc.status
-    except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+    cfg = stripe_fees.get_settings(org_id)
+    q = stripe_fees.quote(inst['amount'], cfg['fee_pct'], cfg['fee_fixed'])
+    return jsonify({'success': True, 'url': pay_url(inst_id), 'net_amount': q['zelle'],
+                    'charge': q['card'] if cfg['pass_fees'] else q['zelle'],
+                    'fee_estimated': q['fee'], 'pass_fees': cfg['pass_fees'],
+                    'name': f"{inst['first_name']} {inst['last_name'] or ''}".strip()})
 
 
 @pagos_bp.route('/pagos/sincronizar', methods=['POST'])

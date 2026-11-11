@@ -52,7 +52,8 @@ class PaymentLinkError(Exception):
 
 
 def create_checkout(org_id, client_id, amount, description='Pago — Papia Technology Solutions',
-                    currency='usd', pass_fees=None, installment_id=None):
+                    currency='usd', pass_fees=None, installment_id=None,
+                    success_url=None, cancel_url=None):
     """Crea un Checkout de Stripe. `amount` es lo que el negocio quiere recibir
     (precio Zelle). Si pass_fees, el cliente paga el precio con tarjeta, que
     incluye la comisión de Stripe. Devuelve dict con url, cobro y desglose."""
@@ -106,8 +107,8 @@ def create_checkout(org_id, client_id, amount, description='Pago — Papia Techn
         }],
         mode='payment',
         customer_email=client['email'] or None,
-        success_url=f'{base_url}/payments/success?session_id={{CHECKOUT_SESSION_ID}}',
-        cancel_url=f'{base_url}/clients/{client_id}',
+        success_url=success_url or f'{base_url}/payments/success?session_id={{CHECKOUT_SESSION_ID}}',
+        cancel_url=cancel_url or f'{base_url}/clients/{client_id}',
         metadata={'client_id': str(client_id), 'crm': 'papia',
                   'credit_amount': f'{amount:.2f}',
                   'installment_id': str(installment_id or '')},

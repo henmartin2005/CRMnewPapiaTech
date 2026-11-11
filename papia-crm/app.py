@@ -34,6 +34,7 @@ from routes.admin import admin_bp
 from routes.super import super_bp
 from routes.payments import payments_bp
 from routes.pagos import pagos_bp
+from routes.pagar import pagar_bp
 from routes.meta_webhook import meta_webhook_bp, get_meta_unread_count
 from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
@@ -88,6 +89,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(super_bp)
 app.register_blueprint(payments_bp)
 app.register_blueprint(pagos_bp)
+app.register_blueprint(pagar_bp)
 app.register_blueprint(meta_webhook_bp)
 app.register_blueprint(internal_chat_bp)
 app.register_blueprint(vault_bp)
@@ -118,7 +120,7 @@ def set_org_context():
 @app.before_request
 def require_login():
     open_endpoints = {'auth.login', 'auth.logout', 'auth.google_login', 'auth.google_callback', 'static', 'whatsapp.webhook', 'whatsapp.zernio_webhook',
-                      'payments.stripe_webhook', 'payments.success',
+                      'payments.stripe_webhook', 'payments.success', 'pagar.page', 'pagar.card',
                       'meta_webhook.verify', 'meta_webhook.receive', 'demos_go.open'}
     if request.endpoint in open_endpoints:
         return

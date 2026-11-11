@@ -218,6 +218,10 @@
             <button class="btn btn-ghost btn-icon-xs sched-mail" title="Recordatorio pendiente (se envía solo 1 día antes) · clic para enviar ahora"><i class="bi bi-envelope"></i></button>
           </form>
           {% endif %}
+          {% if p.status != 'paid' %}
+          <button type="button" class="btn btn-ghost btn-icon-xs" title="Copiar link de pago (Zelle o tarjeta)"
+                  onclick="copyPayLink(this, '{{ pay_url(p.id) }}')"><i class="bi bi-link-45deg" style="color:#635BFF;"></i></button>
+          {% endif %}
           {% if p.status == 'paid' %}
           <form method="POST" style="margin:0;" onsubmit="return confirm('¿Volver a pendiente esta cuota?');"
                 action="{{ url_for('payment_schedule.unpaid', client_id=client.id, inst_id=p.id) }}">
@@ -1314,6 +1318,15 @@ function openStripeModal() {
   document.getElementById('stripeGenBtn').style.display     = '';
   new bootstrap.Modal(document.getElementById('stripeModal')).show();
   stripeQuote(true);
+}
+
+function copyPayLink(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const icon = btn.querySelector('i');
+    icon.className = 'bi bi-check2';
+    btn.title = 'Link copiado: ' + url;
+    setTimeout(() => { icon.className = 'bi bi-link-45deg'; }, 1800);
+  });
 }
 
 let stripeQuoteTimer = null, stripeQuoteInit = false;

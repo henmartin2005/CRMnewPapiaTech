@@ -90,8 +90,33 @@ def test_flow():
     r = c.post(f"/pagos/cuota/{insts[1]['id']}/link", json={'client_id': cid})
     d = r.get_json()
     assert d['success'] and d['charge'] == 257.78 and d['net_amount'] == 250 and d['pass_fees'], d
+    assert '/pagar/' in d['url'], d
+    token = d['url'].rsplit('/', 1)[1]
+    assert c.post(f"/pagos/cuota/{insts[1]['id']}/link", json={'client_id': cid}).get_json()['url'] == d['url']
+
+    # Página pública /pagar/<token> (sin sesión)
+    pub = flask_app.test_client()
+    r = pub.get(f'/pagar/{token}')
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and '$250.00' in html and '$257.78' in html and 'Pagar con tarjeta' in html
+    assert pub.get('/pagar/no-existe').status_code == 404
+    r = pub.post(f'/pagar/{token}/tarjeta')
+    assert r.status_code == 303 and r.headers['Location'] == FakeSession.url, r.headers
     assert captured['line_items'][0]['price_data']['unit_amount'] == 25778
     assert 'custom_text' in captured
+    assert captured['success_url'].endswith(f'/pagar/{token}?pagado=1')
+    assert captured['cancel_url'].endswith(f'/pagar/{token}?cancelado=1')
+    # Segundo clic: reutiliza el checkout abierto (no crea otro)
+    captured.clear()
+    r = pub.post(f'/pagar/{token}/tarjeta')
+    assert r.status_code == 303 and not captured
+
+    # Email de recordatorio con botón de tarjeta
+    from models.payment_schedule import installment_with_client
+    from services.payment_reminders import build_reminder
+    with flask_app.app_context():
+        subj, mail_html = build_reminder(installment_with_client(insts[1]['id'], cid, 1))
+    assert f'/pagar/{token}' in mail_html and '257.78' in mail_html, mail_html[-800:]
 
     # Webhook: checkout completado, comisión real 7.78
     payments_mod.fetch_stripe_fee = lambda stripe, pi: (7.78, 250.00)
@@ -131,7 +156,9 @@ def test_flow():
 
     # Perfil del cliente sigue cargando con el modal nuevo
     r = c.get(f'/clients/{cid}')
-    assert r.status_code == 200 and 'stripePassFees' in r.get_data(as_text=True)
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and 'stripePassFees' in html and 'copyPayLink(this' in html
+    assert pub.get(f'/pagar/{token}').get_data(as_text=True).count('ya está pagada') == 1
 
     # Un usuario no admin no ve Pagos
     with c.session_transaction() as s:

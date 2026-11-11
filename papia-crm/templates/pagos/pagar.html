@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pagar {{ inst.label }} · {{ company }}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       background:#f4f2fb;color:#1e1b4b;min-height:100vh;display:flex;justify-content:center;padding:28px 14px}
+  .wrap{width:100%;max-width:460px}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:#4c4a6b;margin-bottom:14px}
+  .brand i{color:#6d1ed4;font-size:18px}
+  .card{background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(30,27,75,.08);overflow:hidden}
+  .head{background:linear-gradient(135deg,#1e1b4b,#3b2a8c);color:#fff;padding:22px 22px 20px}
+  .head .k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+  .head h1{margin:4px 0 2px;font-size:20px}
+  .head .due{font-size:13px;opacity:.85}
+  .body{padding:20px 22px 22px;display:flex;flex-direction:column;gap:14px}
+  .opt{border:1.5px solid #e7e4f5;border-radius:14px;padding:16px}
+  .opt h2{margin:0 0 4px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .amt{font-size:28px;font-weight:800;margin:6px 0 4px;letter-spacing:-.5px}
+  .muted{color:#6b6990;font-size:13px;line-height:1.5}
+  .zelle{border-color:#e0c8ff;background:#faf5ff}
+  .zelle h2 i{color:#6d1ed4}
+  .copy{display:flex;gap:6px;margin-top:10px}
+  .copy code{flex:1;background:#fff;border:1px solid #e0c8ff;border-radius:10px;padding:9px 10px;font-size:14px;color:#6d1ed4;font-weight:700;overflow:hidden;text-overflow:ellipsis}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:12px;
+       padding:13px 14px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none}
+  .btn-sm{width:auto;padding:9px 12px;font-size:13px}
+  .btn-zelle{background:#6d1ed4;color:#fff}
+  .btn-wa{background:#25D366;color:#fff;margin-top:10px}
+  .btn-card{background:#635BFF;color:#fff;margin-top:10px}
+  .card-opt h2 i{color:#635BFF}
+  .note{font-size:12px;color:#8a88a8;line-height:1.5}
+  .banner{border-radius:12px;padding:12px 14px;font-size:14px;display:flex;gap:10px;align-items:flex-start}
+  .ok{background:#ecfdf3;color:#166534}
+  .warn{background:#fff7ed;color:#9a3412}
+  .paid{text-align:center;padding:30px 22px}
+  .paid i{font-size:44px;color:#16a34a}
+  footer{text-align:center;font-size:12px;color:#8a88a8;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><i class="bi bi-shield-lock-fill"></i> {{ company }}</div>
+  <div class="card">
+    <div class="head">
+      <div class="k">Pago para {{ name }}</div>
+      <h1>{{ inst.label }}</h1>
+      <div class="due">Vence: {{ inst.due_date }}</div>
+    </div>
+
+    {% if inst.status == 'paid' %}
+    <div class="paid">
+      <i class="bi bi-check-circle-fill"></i>
+      <h2 style="margin:10px 0 4px;">Esta cuota ya está pagada</h2>
+      <p class="muted">¡Gracias, {{ inst.first_name }}! No tienes nada pendiente en este pago.</p>
+    </div>
+    {% else %}
+    <div class="body">
+      {% if just_paid %}
+      <div class="banner ok"><i class="bi bi-check-circle-fill"></i>
+        <div><b>¡Pago recibido!</b> Stripe está confirmando tu pago; en unos segundos esta cuota aparecerá como pagada. Recibirás el recibo por email.</div></div>
+      {% elif cancelled %}
+      <div class="banner warn"><i class="bi bi-info-circle-fill"></i>
+        <div>No se completó el pago con tarjeta. Puedes intentarlo de nuevo o pagar por Zelle.</div></div>
+      {% endif %}
+
+      <div class="opt zelle">
+        <h2><i class="bi bi-lightning-charge-fill"></i> Pagar por Zelle</h2>
+        <div class="amt">${{ '{:,.2f}'.format(q.zelle) }}</div>
+        <div class="muted">Envía este monto por Zelle y luego mándanos el comprobante por WhatsApp.</div>
+        <div class="copy">
+          <code id="zEmail">{{ zelle_email }}</code>
+          <button class="btn btn-zelle btn-sm" type="button" onclick="copyZ(this)"><i class="bi bi-clipboard"></i> Copiar</button>
+        </div>
+        <a class="btn btn-wa" target="_blank" rel="noopener"
+           href="https://wa.me/{{ whatsapp }}?text={{ ('Hola, envío el comprobante de Zelle de mi ' ~ inst.label ~ ' ($' ~ '{:,.2f}'.format(q.zelle) ~ ').') | urlencode }}">
+          <i class="bi bi-whatsapp"></i> Enviar comprobante
+        </a>
+      </div>
+
+      <div class="opt card-opt">
+        <h2><i class="bi bi-credit-card-2-front-fill"></i> Pagar con tarjeta</h2>
+        {% if cfg.pass_fees %}
+        <div class="amt">${{ '{:,.2f}'.format(q.card) }}</div>
+        <div class="muted">Precio con tarjeta. Pagando por Zelle ahorras ${{ '{:,.2f}'.format(q.extra) }}.</div>
+        {% else %}
+        <div class="amt">${{ '{:,.2f}'.format(q.zelle) }}</div>
+        <div class="muted">Pago seguro con tarjeta de crédito o débito.</div>
+        {% endif %}
+        <form method="POST" action="/pagar/{{ token }}/tarjeta" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').innerHTML='Abriendo pago seguro…';">
+          <button class="btn btn-card" type="submit"><i class="bi bi-lock-fill"></i> Pagar con tarjeta</button>
+        </form>
+        <div class="note" style="margin-top:8px;">Procesado por Stripe. No guardamos los datos de tu tarjeta.</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <footer>{{ company }} · <a href="https://papiatech.com" style="color:#6d1ed4;text-decoration:none;">papiatech.com</a></footer>
+</div>
+<script>
+function copyZ(btn){
+  navigator.clipboard.writeText(document.getElementById('zEmail').textContent.trim());
+  btn.innerHTML='<i class="bi bi-check2"></i> Copiado';
+  setTimeout(()=>{btn.innerHTML='<i class="bi bi-clipboard"></i> Copiar';},1800);
+}
+</script>
+</body>
+</html>

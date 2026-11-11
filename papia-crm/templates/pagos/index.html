@@ -385,7 +385,7 @@ function openManual(clientId, instId, amount, label) {
 let linkUrl = '', linkPhone = '', linkName = '';
 async function instLink(instId, clientId, phone, name, zelle, card) {
   linkUrl = ''; linkPhone = phone; linkName = name;
-  document.getElementById('lStatus').textContent = 'Generando link de Stripe…';
+  document.getElementById('lStatus').textContent = 'Generando link de pago…';
   document.getElementById('lBox').style.display = 'none';
   new bootstrap.Modal(document.getElementById('linkModal')).show();
   try {
@@ -397,9 +397,9 @@ async function instLink(instId, clientId, phone, name, zelle, card) {
     if (!d.success) { document.getElementById('lStatus').textContent = d.error || 'No se pudo crear el link.'; return; }
     linkUrl = d.url;
     document.getElementById('lUrl').value = linkUrl;
-    document.getElementById('lStatus').innerHTML = d.pass_fees
-      ? `Con tarjeta paga <b>${fmt(d.charge)}</b> (incluye comisión de ${fmt(d.fee_estimated)}). Por Zelle serían <b>${fmt(d.net_amount)}</b>. Al pagarse, la cuota se marca sola.`
-      : `Cobro de <b>${fmt(d.charge)}</b>; recibes aprox. ${fmt(d.net_amount)} después de la comisión.`;
+    document.getElementById('lStatus').innerHTML =
+      `Link permanente de esta cuota: el cliente elige Zelle (<b>${fmt(d.net_amount)}</b>) o tarjeta (<b>${fmt(d.charge)}</b>). `
+      + `No caduca, y al pagarse con tarjeta la cuota se marca sola.`;
     document.getElementById('lBox').style.display = '';
   } catch (e) {
     document.getElementById('lStatus').textContent = 'Error de conexión.';
@@ -408,7 +408,7 @@ async function instLink(instId, clientId, phone, name, zelle, card) {
 function copyLink() { if (linkUrl) navigator.clipboard.writeText(linkUrl); }
 function waLink() {
   if (!linkUrl) return;
-  const msg = encodeURIComponent(`Hola ${linkName}, aquí está el link para realizar tu pago con tarjeta de forma segura:\n${linkUrl}`);
+  const msg = encodeURIComponent(`Hola ${linkName}, aquí tienes el link para realizar tu pago (Zelle o tarjeta):\n${linkUrl}`);
   window.open(`https://wa.me/${(linkPhone || '').replace(/\D/g, '')}?text=${msg}`, '_blank');
 }
 </script>

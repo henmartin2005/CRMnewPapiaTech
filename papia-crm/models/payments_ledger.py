@@ -1,6 +1,7 @@
 """Registro unificado de pagos: Stripe (payment_links), pagos manuales
 (Zelle/efectivo/transferencia) y cuotas marcadas como pagadas en el cronograma."""
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 
 from database import get_db
 from models.payment_schedule import _SCHEMA as _SCHEDULE_SCHEMA, mark_paid, mark_unpaid
@@ -52,6 +53,10 @@ def ensure_schema():
         for name, ddl in _LINK_COLUMNS:
             if name not in cols:
                 db.execute(f"ALTER TABLE payment_links ADD COLUMN {name} {ddl}")
+        sched_cols = {r['name'] for r in db.execute("PRAGMA table_info(payment_schedule)").fetchall()}
+        if 'pay_token' not in sched_cols:
+            db.execute("ALTER TABLE payment_schedule ADD COLUMN pay_token TEXT")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sched_pay_token ON payment_schedule(pay_token)")
         db.commit()
     finally:
         db.close()
@@ -264,5 +269,55 @@ def save_link_fee(link_id, fee, net, payment_intent=None):
             (fee, net, payment_intent, link_id),
         )
         db.commit()
+    finally:
+        db.close()
+
+
+# ── Link de pago permanente por cuota (/pagar/<token>) ───────────────────────
+
+def pay_token_for(inst_id):
+    """Token público y permanente de una cuota (se crea la primera vez)."""
+    db = _db()
+    try:
+        r = db.execute("SELECT pay_token FROM payment_schedule WHERE id=?", (inst_id,)).fetchone()
+        if not r:
+            return None
+        if r['pay_token']:
+            return r['pay_token']
+        token = secrets.token_urlsafe(16)
+        db.execute("UPDATE payment_schedule SET pay_token=? WHERE id=? AND pay_token IS NULL", (token, inst_id))
+        db.commit()
+        r = db.execute("SELECT pay_token FROM payment_schedule WHERE id=?", (inst_id,)).fetchone()
+        return r['pay_token']
+    finally:
+        db.close()
+
+
+def installment_by_token(token):
+    if not token or len(token) > 64:
+        return None
+    db = _db()
+    try:
+        r = db.execute(
+            "SELECT p.*, c.first_name, c.last_name, c.email, c.phone, c.company "
+            "FROM payment_schedule p JOIN clients c ON c.id = p.client_id WHERE p.pay_token=?",
+            (token,),
+        ).fetchone()
+        return dict(r) if r else None
+    finally:
+        db.close()
+
+
+def open_checkout_for(inst_id, charge, max_age_hours=20):
+    """Checkout de Stripe aún vigente para esta cuota (evita crear uno nuevo en cada clic)."""
+    limit = (datetime.utcnow() - timedelta(hours=max_age_hours)).strftime('%Y-%m-%d %H:%M:%S')
+    db = _db()
+    try:
+        r = db.execute(
+            "SELECT stripe_link_url FROM payment_links WHERE installment_id=? AND status='pending' "
+            "AND abs(amount - ?) < 0.005 AND created_at >= ? ORDER BY id DESC LIMIT 1",
+            (inst_id, charge, limit),
+        ).fetchone()
+        return r['stripe_link_url'] if r else None
     finally:
         db.close()
