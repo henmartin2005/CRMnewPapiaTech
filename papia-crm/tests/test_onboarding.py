@@ -249,5 +249,28 @@ class OnboardingTests(unittest.TestCase):
         self.assertIn('Tipo de formulario', html)
 
 
+    # ── Correo al admin cuando el cliente envía ────────────────────────────
+    def test_submit_emails_admin_once(self):
+        with patch('services.push.notify_event'), patch('services.mailer.send_email') as mail:
+            r = self.post_save(self.client_b, {'legal_name': 'X'}, submit=True)
+            self.assertEqual(r.status_code, 200)
+            self.post_save(self.client_b, {'slogan': 'Y'}, submit=True)
+        self.assertEqual(mail.call_count, 1)
+        args = mail.call_args[0]
+        self.assertEqual(args[1], 'henmartin2005@gmail.com')
+        self.assertIn('Lucas Pet Grooming', args[2])
+        self.assertIn('/portal/admin/onboarding/32/respuestas', args[3])
+
+    def test_admin_submit_does_not_email_and_mail_failure_is_safe(self):
+        with patch('services.push.notify_event'), patch('services.mailer.send_email') as mail:
+            self.post_save(self.admin, {'legal_name': 'X'}, cid=33, preview=True, submit=True)
+        self.assertEqual(mail.call_count, 0)
+        with patch('services.push.notify_event'), \
+                patch('services.mailer.send_email', side_effect=RuntimeError('gmail caído')):
+            r = self.post_save(self.client_b, {'legal_name': 'X'}, submit=True)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.row()['status'], 'submitted')
+
+
 if __name__ == '__main__':
     unittest.main()

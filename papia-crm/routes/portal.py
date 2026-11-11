@@ -13,7 +13,7 @@ from uuid import uuid4
 from werkzeug.utils import secure_filename
 
 from flask import (Blueprint, render_template, request, session, redirect, url_for,
-                   send_file, abort, jsonify, g)
+                   send_file, abort, jsonify, g, current_app)
 
 from database import get_db
 
@@ -625,20 +625,66 @@ def onboarding_save():
 
 
 def _notify_admin_onboarding(org_id, client_id, pct):
+    """Aviso al admin cuando el cliente envía su formulario: push + correo. Nunca rompe el guardado."""
+    name, email, label = '', '', ''
     try:
         db = get_db()
         try:
-            c = db.execute("SELECT first_name, last_name, company FROM clients WHERE id = ?",
+            c = db.execute("SELECT first_name, last_name, company, email FROM clients WHERE id = ?",
                            (client_id,)).fetchone()
         finally:
             db.close()
-        name = (c[2] or ' '.join(x for x in (c[0] or '', c[1] or '') if x).strip()) if c else ''
+        person = ' '.join(x for x in ((c[0] or ''), (c[1] or '')) if x).strip() if c else ''
+        name = (c[2] or person) if c else ''
+        email = (c[3] or '') if c else ''
+        if c and c[2] and person:
+            name = f'{person} ({c[2]})'
+    except Exception:
+        pass
+    try:
         from services.push import notify_event
         notify_event(org_id, f'{name or "Un cliente"} envió su formulario de inicio',
                      f'Completado al {pct}%. Revísalo en su perfil.',
                      {'type': 'portal_onboarding', 'client_id': client_id})
     except Exception:
         pass
+    _email_admin_onboarding(org_id, client_id, pct, name, email)
+
+
+def _email_admin_onboarding(org_id, client_id, pct, name, client_email):
+    to = (os.getenv('ONBOARDING_NOTIFY_EMAIL') or 'henmartin2005@gmail.com').strip()
+    if not to:
+        return
+    try:
+        from models import onboarding as ob
+        import html as _h
+        from services.contract_notify import _base_url, _button
+        from services.mailer import send_email
+        from routes.emails import _get_settings, _build_html_email
+        try:
+            label = ob.get_template(ob.load(client_id, org_id)['template_key']).get('label', '')
+        except Exception:
+            label = ''
+        base = _base_url(org_id)
+        answers = f'{base}/portal/admin/onboarding/{client_id}/respuestas'
+        profile = f'{base}/clients/{client_id}'
+        lines = [f'<b>{_h.escape(name or "Un cliente")}</b> completó y envió su formulario de onboarding.']
+        if label:
+            lines.append(f'Formulario: {_h.escape(label)}')
+        lines.append(f'Completado al {pct}%.')
+        if client_email:
+            lines.append(f'Correo del cliente: {_h.escape(client_email)}')
+        body = ''.join(f'<p style="margin:0 0 12px;">{ln}</p>' for ln in lines)
+        body += f'<p style="margin:20px 0;">{_button(answers, "Ver respuestas")}</p>'
+        body += (f'<p style="margin:0;font-size:13px;">Perfil del cliente: '
+                 f'<a href="{_h.escape(profile)}">{_h.escape(profile)}</a></p>')
+        html_body = _build_html_email(body, _get_settings(org_id))
+        send_email(org_id, to, f'Onboarding completado: {name or "cliente"}', html_body)
+    except Exception as exc:
+        try:
+            current_app.logger.warning('No se pudo enviar el correo de onboarding: %s', exc)
+        except Exception:
+            pass
 
 
 @portal_bp.route('/admin/onboarding/<int:client_id>')
