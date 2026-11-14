@@ -40,6 +40,8 @@ from routes.internal_chat import internal_chat_bp
 from routes.mobile_api import mobile_api_bp
 from routes.videos import videos_bp
 from routes.demos import demos_bp, demos_api_bp, demos_go_bp
+from routes.gcp_costs import gcp_costs_bp
+from services.gcp_costs import migrate as migrate_gcp_costs
 from migrate_videos import migrate as migrate_videos
 from routes.contracts import contracts_bp, contracts_public_bp
 from routes.portal import portal_bp
@@ -75,11 +77,13 @@ app.register_blueprint(emails_bp)
 init_db()
 migrate_videos()
 migrate_demos()
+migrate_gcp_costs()
 app.register_blueprint(videos_bp)
 app.register_blueprint(demos_bp)
 app.register_blueprint(demos_api_bp)
 app.register_blueprint(demos_go_bp)
 app.register_blueprint(clients_bp)
+app.register_blueprint(gcp_costs_bp)
 app.register_blueprint(payment_schedule_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
