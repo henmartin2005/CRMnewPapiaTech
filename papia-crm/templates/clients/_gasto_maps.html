@@ -1,0 +1,127 @@
+{# Pestaña "Gasto de API de Google Maps" — solo admin, solo si el cliente tiene proyecto vinculado. #}
+{% if is_admin %}
+{% set _gm = client_gmaps_config(client.id) %}
+{% if _gm %}
+<section class="card gm-card" id="gasto-maps" style="padding:16px;margin-bottom:16px;"
+         data-url="{{ url_for('gcp_costs.costs_json', client_id=client.id) }}">
+  <div class="gm-head">
+    <h2><i class="bi bi-geo-alt" aria-hidden="true"></i> Gasto de API de Google Maps</h2>
+    <div class="gm-actions">
+      <span class="gm-project">Proyecto <code>{{ _gm.gcp_project_id }}</code></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="gmRefresh"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+      <form method="POST" action="{{ url_for('gcp_costs.unlink_project', client_id=client.id) }}"
+            onsubmit="return confirm('¿Quitar el seguimiento de gasto de este cliente? No borra nada en Google Cloud.');">
+        <input type="hidden" name="csrf" value="{{ gcp_costs_csrf() }}">
+        <button type="submit" class="btn btn-ghost btn-sm" title="Desvincular"><i class="bi bi-x-lg"></i></button>
+      </form>
+    </div>
+  </div>
+
+  <div class="gm-kpis">
+    <div class="gm-kpi"><span class="gm-kpi-label">Este mes</span><span class="gm-kpi-val num" id="gmMonth">—</span></div>
+    <div class="gm-kpi"><span class="gm-kpi-label">Acumulado</span><span class="gm-kpi-val num" id="gmTotal">—</span></div>
+    <div class="gm-kpi"><span class="gm-kpi-label">Descontado por Google (gratis/créditos)</span><span class="gm-kpi-val num" id="gmCredits">—</span></div>
+  </div>
+
+  <div id="gmStatus" class="gm-status">Cargando gasto…</div>
+
+  <div id="gmBody" hidden>
+    <h3 class="gm-sub">Detalle de <span id="gmMonthLabel"></span></h3>
+    <table class="crm-table gm-table">
+      <thead><tr><th>Servicio · SKU</th><th class="num">Uso</th><th class="num">Costo</th><th class="num">Neto</th></tr></thead>
+      <tbody id="gmSkus"></tbody>
+    </table>
+    <h3 class="gm-sub">Por mes</h3>
+    <table class="crm-table gm-table">
+      <thead><tr><th>Mes</th><th class="num">Costo</th><th class="num">Descuentos</th><th class="num">Neto</th></tr></thead>
+      <tbody id="gmMonths"></tbody>
+    </table>
+  </div>
+  <p class="gm-foot" id="gmFoot"></p>
+</section>
+
+<style>
+  .gm-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .gm-head h2 { font-size:16px; margin:0; }
+  .gm-actions { display:flex; align-items:center; gap:6px; }
+  .gm-actions form { margin:0; }
+  .gm-project { font-size:12px; color:var(--c-text-2); }
+  .gm-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-top:14px; }
+  .gm-kpi { border:1px solid var(--c-border); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; gap:4px; }
+  .gm-kpi-label { font-size:11px; color:var(--c-text-3); text-transform:uppercase; letter-spacing:.03em; }
+  .gm-kpi-val { font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .gm-status { margin-top:12px; font-size:13px; color:var(--c-text-2); }
+  .gm-status.is-error { color:var(--c-danger); }
+  .gm-sub { font-size:13px; font-weight:600; margin:16px 0 6px; }
+  .gm-table td.num, .gm-table th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .gm-table .gm-svc { font-size:11px; color:var(--c-text-3); display:block; }
+  .gm-foot { font-size:11px; color:var(--c-text-3); margin:10px 0 0; }
+</style>
+<script>
+(function () {
+  var card = document.getElementById('gasto-maps');
+  if (!card) return;
+  var url = card.dataset.url;
+  var $ = function (id) { return document.getElementById(id); };
+  function money(v, cur) {
+    v = Number(v) || 0;
+    var digits = Math.abs(v) > 0 && Math.abs(v) < 1 ? 4 : 2;
+    return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: digits }) + (cur && cur !== 'USD' ? ' ' + cur : '');
+  }
+  function num(v) { return (Number(v) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function fmtDate(iso) { try { return new Date(iso).toLocaleString('es-US', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return iso; } }
+
+  function render(d) {
+    var cur = d.moneda;
+    $('gmMonth').textContent = money(d.mes_actual.neto, cur);
+    $('gmTotal').textContent = money(d.total_neto, cur);
+    $('gmCredits').textContent = money(d.total_bruto - d.total_neto, cur);
+    if (d.sin_datos) {
+      $('gmStatus').className = 'gm-status';
+      $('gmStatus').textContent = 'Todavía no hay gasto registrado. Google exporta la facturación una vez al día; los primeros datos pueden tardar hasta 24 h.';
+      $('gmStatus').hidden = false;
+      $('gmBody').hidden = true;
+    } else {
+      $('gmStatus').hidden = true;
+      $('gmBody').hidden = false;
+      $('gmMonthLabel').textContent = d.mes_actual.label;
+      var skus = d.mes_actual.skus || [];
+      $('gmSkus').innerHTML = skus.length ? skus.map(function (s) {
+        return '<tr><td>' + esc(s.sku) + '<span class="gm-svc">' + esc(s.servicio) + '</span></td>' +
+          '<td class="num">' + num(s.uso) + ' ' + esc(s.unidad) + '</td>' +
+          '<td class="num">' + money(s.bruto, cur) + '</td><td class="num">' + money(s.neto, cur) + '</td></tr>';
+      }).join('') : '<tr><td colspan="4" style="color:var(--c-text-3);">Sin uso este mes.</td></tr>';
+      $('gmMonths').innerHTML = d.meses.map(function (m) {
+        return '<tr><td>' + esc(m.label) + '</td><td class="num">' + money(m.bruto, cur) + '</td>' +
+          '<td class="num">' + money(m.creditos, cur) + '</td><td class="num"><strong>' + money(m.neto, cur) + '</strong></td></tr>';
+      }).join('');
+    }
+    var foot = 'Datos reales de la facturación de Google Cloud (se actualizan 1 vez al día).';
+    if (d.ultima_exportacion) foot += ' Última exportación: ' + fmtDate(d.ultima_exportacion) + '.';
+    foot += ' Consultado: ' + fmtDate(d.consultado) + (d.desde_cache ? ' (caché 1 h)' : '') + '.';
+    $('gmFoot').textContent = foot;
+  }
+
+  function load(refresh) {
+    $('gmStatus').hidden = false;
+    $('gmStatus').className = 'gm-status';
+    $('gmStatus').textContent = 'Cargando gasto…';
+    fetch(url + (refresh ? '?refresh=1' : ''), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res.ok) { throw new Error(res.error || 'Error desconocido'); }
+        render(res.data);
+      })
+      .catch(function (e) {
+        $('gmStatus').className = 'gm-status is-error';
+        $('gmStatus').textContent = 'No se pudo leer el gasto: ' + e.message;
+        $('gmBody').hidden = true;
+      });
+  }
+  $('gmRefresh').addEventListener('click', function () { load(true); });
+  load(false);
+})();
+</script>
+{% endif %}
+{% endif %}
