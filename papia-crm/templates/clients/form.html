@@ -136,6 +136,28 @@
     </div>
 
   </form>
+
+  {% if is_edit and is_admin %}
+  {% set _gm = client_gmaps_config(client_id) %}
+  <div class="section-card" style="margin-top:16px;" id="gasto-maps-config">
+    <div class="card-header">
+      <span class="card-header-left"><i class="bi bi-geo-alt"></i> Gasto de API de Google Maps</span>
+    </div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--c-text-2);margin:0 0 10px;">
+        Vincula el proyecto de Google Cloud del cliente para ver en su perfil cuánto va gastando en Google Maps.
+      </p>
+      <form method="POST" action="{{ url_for('gcp_costs.link_project', client_id=client_id) }}"
+            style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="hidden" name="csrf" value="{{ gcp_costs_csrf() }}">
+        <input type="text" name="gcp_project_id" class="form-control" style="max-width:260px;"
+               value="{{ _gm.gcp_project_id if _gm else '' }}" placeholder="ID del proyecto (ej. yeras-services)"
+               pattern="[a-z][a-z0-9\-]{4,28}[a-z0-9]" required>
+        <button type="submit" class="btn btn-primary btn-sm">{{ 'Guardar' if _gm else 'Vincular' }}</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {% endblock %}
