@@ -6,6 +6,8 @@ además de la copia que Gmail guarda en su carpeta "Enviados".
 """
 import base64
 import re
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from html import unescape
@@ -70,27 +72,54 @@ def save_sent_copy(org_id, to_email, subject, body, client_id=None, gmail_id=Non
     return client_id
 
 
-def send_email(org_id, to_email, subject, html, text=None, client_id=None, note=None):
+# Gmail rechaza mensajes de más de 25 MB; el base64 de los adjuntos agrega ~33 %.
+MAX_ATTACHMENTS_BYTES = 18 * 1024 * 1024
+
+
+def _attachment_part(filename, data, mime):
+    maintype, _, subtype = (mime or 'application/octet-stream').partition('/')
+    part = MIMEBase(maintype or 'application', subtype or 'octet-stream')
+    part.set_payload(data)
+    encoders.encode_base64(part)
+    part.add_header('Content-Disposition', 'attachment', filename=('utf-8', '', filename))
+    return part
+
+
+def send_email(org_id, to_email, subject, html, text=None, client_id=None, note=None, attachments=None):
     """Envía por el Gmail conectado de la organización y guarda la copia en Enviados.
 
     - html: cuerpo HTML ya armado.
     - text: versión texto plano (si no se da, se genera desde el HTML).
     - client_id: si es None se busca el cliente por el email del destinatario.
     - note: si se da, se registra como nota tipo 'email' en el perfil del cliente.
+    - attachments: lista de (nombre_archivo, bytes, mime_type).
     Devuelve (gmail_message_id, client_id). Lanza MailerError si no se puede enviar.
     """
     from routes.emails import _gmail_service  # import tardío: evita ciclos
+
+    attachments = [a for a in (attachments or []) if a and a[1]]
+    total = sum(len(a[1]) for a in attachments)
+    if total > MAX_ATTACHMENTS_BYTES:
+        raise MailerError(f'Los adjuntos pesan {total / 1048576:.1f} MB; el máximo es '
+                          f'{MAX_ATTACHMENTS_BYTES // 1048576} MB por email.')
 
     service = _gmail_service(org_id)
     if not service:
         raise MailerError('Gmail no conectado. Ve a Emails → Conectar Gmail.')
 
     text = text or html_to_text(html)
-    msg = MIMEMultipart('alternative')
+    body = MIMEMultipart('alternative')
+    body.attach(MIMEText(text, 'plain', 'utf-8'))
+    body.attach(MIMEText(html, 'html', 'utf-8'))
+    if attachments:
+        msg = MIMEMultipart('mixed')
+        msg.attach(body)
+        for filename, data, mime in attachments:
+            msg.attach(_attachment_part(filename, data, mime))
+    else:
+        msg = body
     msg['Subject'] = subject
     msg['To'] = to_email
-    msg.attach(MIMEText(text, 'plain', 'utf-8'))
-    msg.attach(MIMEText(html, 'html', 'utf-8'))
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
     try:
@@ -99,7 +128,10 @@ def send_email(org_id, to_email, subject, html, text=None, client_id=None, note=
         raise MailerError(str(exc)) from exc
 
     gmail_id = sent.get('id')
-    client_id = save_sent_copy(org_id, to_email, subject, text, client_id=client_id, gmail_id=gmail_id)
+    copy_text = text
+    if attachments:
+        copy_text += '\n\n📎 Adjuntos: ' + ', '.join(a[0] for a in attachments)
+    client_id = save_sent_copy(org_id, to_email, subject, copy_text, client_id=client_id, gmail_id=gmail_id)
 
     if note and client_id:
         db = get_db()

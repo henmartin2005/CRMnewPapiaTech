@@ -1,12 +1,14 @@
 import os
 import re
 import base64
+import mimetypes
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from flask import (Blueprint, request, jsonify, render_template,
                    redirect, url_for, flash, session, g)
+from werkzeug.utils import secure_filename
 from database import get_db
 from models.proposal_email import get_email_draft
 
@@ -551,7 +553,10 @@ def index():
             'client_email': active_client['email'] or '',
             'subject':      request.args.get('subject', ''),
             'body':         request.args.get('body', ''),
+            'attach':       request.args.getlist('attach'),   # ej. doc:12, contract:3
         }
+    # Archivos del perfil que se pueden adjuntar al redactar para este cliente
+    client_attachables = _client_attachables(active_client['id'], org_id) if active_client else []
 
     email_settings = _get_settings(org_id)
     return render_template('emails/index.html',
@@ -567,16 +572,93 @@ def index():
         all_clients=all_clients,
         proposal_draft=proposal_draft,
         compose_preset=compose_preset,
+        client_attachables=client_attachables,
+        upload_accept=UPLOAD_ACCEPT_ATTR,
     )
 
 
 # ── Send ──────────────────────────────────────────────────────────────────────
 
+UPLOAD_ALLOWED_EXTS = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'txt',
+                       'png', 'jpg', 'jpeg', 'gif', 'webp', 'zip'}
+UPLOAD_ACCEPT_ATTR = ','.join('.' + e for e in sorted(UPLOAD_ALLOWED_EXTS))
+
+
+def _client_attachables(client_id, org_id):
+    """Archivos del perfil del cliente que se pueden adjuntar: documentos subidos y contratos firmados."""
+    out = []
+    try:
+        from models.client_document import list_documents, file_path
+        for d in list_documents(client_id, org_id):
+            if d['kind'] != 'file' or not os.path.isfile(file_path(d)):
+                continue
+            out.append({'key': f"doc:{d['id']}", 'title': d['title'], 'meta': d.get('meta') or '',
+                        'icon': d.get('icon') or 'bi-file-earmark'})
+    except Exception:
+        pass
+    try:
+        from models.contract import list_envelopes, final_path
+        for e in list_envelopes(org_id, client_id=client_id, limit=50):
+            if e['status'] == 'completed' and os.path.isfile(final_path(e)):
+                out.append({'key': f"contract:{e['id']}", 'title': f"{e['title']} (firmado)",
+                            'meta': 'PDF · contrato', 'icon': 'bi-file-earmark-check'})
+    except Exception:
+        pass
+    return out
+
+
+def _load_profile_attachment(key, client_id, org_id):
+    """Lee un archivo del perfil del cliente. Devuelve (nombre, bytes, mime) o lanza ValueError."""
+    kind, _, raw_id = (key or '').partition(':')
+    if not raw_id.isdigit() or not client_id:
+        raise ValueError('Adjunto no válido')
+    if kind == 'doc':
+        from models.client_document import get_document, file_path
+        doc = get_document(int(raw_id), int(client_id), org_id)
+        if not doc or doc['kind'] != 'file' or not os.path.isfile(file_path(doc)):
+            raise ValueError('Un documento seleccionado ya no existe')
+        name = doc.get('original_name') or doc['stored_name']
+        with open(file_path(doc), 'rb') as fh:
+            return name, fh.read(), doc.get('mime_type') or mimetypes.guess_type(name)[0] or 'application/octet-stream'
+    if kind == 'contract':
+        from models.contract import get_envelope, final_path
+        env = get_envelope(int(raw_id), org_id, with_children=False)
+        if (not env or env.get('client_id') != int(client_id) or env.get('status') != 'completed'
+                or not os.path.isfile(final_path(env))):
+            raise ValueError('El contrato seleccionado no está firmado o ya no existe')
+        name = secure_filename(env['title'] or 'contrato') or 'contrato'
+        with open(final_path(env), 'rb') as fh:
+            return f'{name}-firmado.pdf', fh.read(), 'application/pdf'
+    raise ValueError('Adjunto no válido')
+
+
 @emails_bp.route('/emails/send', methods=['POST'])
 def send():
     org_id    = _get_org_id()
-    data      = request.get_json(silent=True) or {}
-    client_id = data.get('client_id')
+    # JSON (respuestas rápidas) o multipart/form-data (redactar con adjuntos)
+    data      = request.get_json(silent=True) or request.form.to_dict() or {}
+    client_id = data.get('client_id') or None
+    if client_id in ('null', 'None', ''):
+        client_id = None
+
+    # ── Adjuntos ──
+    attachments = []
+    for f in request.files.getlist('attachments'):
+        if not f or not f.filename:
+            continue
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+        if ext not in UPLOAD_ALLOWED_EXTS:
+            return jsonify({'success': False, 'error': f'Tipo de archivo no permitido: {f.filename}'}), 400
+        attachments.append((f.filename, f.read(),
+                            f.mimetype or mimetypes.guess_type(f.filename)[0] or 'application/octet-stream'))
+    profile_keys = request.form.getlist('profile_docs') if request.form else (data.get('profile_docs') or [])
+    if profile_keys:
+        docs_client = request.form.get('docs_client_id') if request.form else data.get('docs_client_id')
+        try:
+            for key in profile_keys:
+                attachments.append(_load_profile_attachment(key, docs_client, org_id))
+        except ValueError as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 400
     to_email  = (data.get('to_email')  or '').strip()
     subject   = (data.get('subject')   or '').strip()
     body      = (data.get('body')      or '').strip()
@@ -613,12 +695,15 @@ def send():
         settings  = _get_settings(org_id)
         html_body = _build_html_email(body, settings)
         # send_email guarda siempre la copia en Enviados y la nota en el cliente
+        note = f"Email enviado: {subject}"
+        if attachments:
+            note += ' · Adjuntos: ' + ', '.join(a[0] for a in attachments)
         gmail_id, _ = send_email(
             org_id, to_email, subject, html_body, text=(data.get('text') or '').strip() or body,
             client_id=int(client_id) if client_id else None,
-            note=f"Email enviado: {subject}",
+            note=note, attachments=attachments,
         )
-        return jsonify({'success': True, 'id': gmail_id})
+        return jsonify({'success': True, 'id': gmail_id, 'attachments': len(attachments)})
 
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500

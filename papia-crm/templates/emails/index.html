@@ -368,13 +368,57 @@
              style="width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;outline:none;" />
       <textarea id="composeBody" placeholder="Escribe tu mensaje..."
                 style="width:100%;min-height:140px;padding:9px 10px;border:1px solid var(--c-border);border-radius:7px;background:var(--c-bg);color:var(--c-text);font-size:13px;resize:vertical;outline:none;font-family:inherit;">{{ compose_preset.body if compose_preset else '' }}</textarea>
+
+      {% if active_client and client_attachables %}
+      <div class="cm-profile-docs">
+        <div class="cm-label"><i class="bi bi-folder2-open"></i> Documentos de {{ active_client.first_name }}</div>
+        <input type="hidden" id="composeDocsClient" value="{{ active_client.id }}">
+        {% set preset_attach = compose_preset.attach if compose_preset else [] %}
+        {% for a in client_attachables %}
+        <label class="cm-doc">
+          <input type="checkbox" class="cm-doc-cb" value="{{ a.key }}" {{ 'checked' if a.key in preset_attach }} onchange="renderAttachSummary()">
+          <i class="bi {{ a.icon }}"></i>
+          <span class="cm-doc-title" title="{{ a.title }}">{{ a.title }}</span>
+          <span class="cm-doc-meta">{{ a.meta }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <input type="file" id="composeFiles" multiple accept="{{ upload_accept }}" style="display:none" onchange="addComposeFiles(this.files); this.value='';">
+      <div id="composeDrop" class="cm-drop" onclick="document.getElementById('composeFiles').click()">
+        <i class="bi bi-paperclip"></i> Adjuntar PDF u otros archivos <span>(o arrástralos aquí · máx. 18 MB en total)</span>
+      </div>
+      <div id="composeAttachList" class="cm-attach-list"></div>
+
       <div style="display:flex;gap:6px;justify-content:flex-end;">
         <button class="em-reply-ai" onclick="generateAICompose()"><i class="ph ph-sparkle"></i> Generar con IA</button>
-        <button class="em-reply-send" onclick="sendCompose()"><i class="ph ph-paper-plane-tilt"></i> Enviar</button>
+        <button class="em-reply-send" id="composeSendBtn" onclick="sendCompose()"><i class="ph ph-paper-plane-tilt"></i> Enviar</button>
       </div>
     </div>
   </div>
 </div>
+<style>
+#composeModal > div { max-height: calc(100vh - 40px); overflow-y: auto; }
+.cm-label { font-size: 11px; font-weight: 700; color: var(--c-text-3); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
+.cm-profile-docs { border: 1px solid var(--c-border); border-radius: 7px; padding: 8px 10px; max-height: 170px; overflow-y: auto; background: var(--c-bg); }
+.cm-doc { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 12.5px; color: var(--c-text); cursor: pointer; }
+.cm-doc i { color: var(--c-accent); }
+.cm-doc-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-doc-meta { font-size: 11px; color: var(--c-text-3); white-space: nowrap; }
+.cm-drop { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border: 1px dashed var(--c-border); border-radius: 7px; font-size: 12.5px; color: var(--c-text-2, var(--c-text)); cursor: pointer; transition: all .15s; }
+.cm-drop span { color: var(--c-text-3); font-size: 11.5px; }
+.cm-drop:hover, .cm-drop.over { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-surface-2, transparent); }
+.cm-attach-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.cm-attach-list:empty { display: none; }
+.cm-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--c-border); border-radius: 999px; font-size: 12px; background: var(--c-bg); color: var(--c-text); }
+.cm-chip .n { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-chip .s { color: var(--c-text-3); font-size: 11px; }
+.cm-chip button { background: none; border: none; cursor: pointer; color: var(--c-text-3); padding: 0; line-height: 1; }
+.cm-chip button:hover { color: var(--c-danger, #e5484d); }
+.cm-total { font-size: 11.5px; color: var(--c-text-3); width: 100%; }
+.cm-total.too-big { color: var(--c-danger, #e5484d); font-weight: 600; }
+</style>
 
 <script>
 // ── Tab switching ──
@@ -478,6 +522,62 @@ function openCompose() {
 function closeCompose() {
   document.getElementById('composeModal').style.display = 'none';
 }
+// ── Adjuntos del redactor ──
+const MAX_ATTACH_BYTES = 18 * 1024 * 1024;
+const ALLOWED_EXTS = '{{ upload_accept }}'.split(',').map(e => e.replace('.', ''));
+let composeFiles = [];
+
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+function addComposeFiles(list) {
+  const rejected = [];
+  [...list].forEach(f => {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_EXTS.includes(ext)) { rejected.push(f.name); return; }
+    if (!composeFiles.some(x => x.name === f.name && x.size === f.size)) composeFiles.push(f);
+  });
+  if (rejected.length) alert('Tipo de archivo no permitido: ' + rejected.join(', '));
+  renderAttachSummary();
+}
+function removeComposeFile(i) { composeFiles.splice(i, 1); renderAttachSummary(); }
+function renderAttachSummary() {
+  const box = document.getElementById('composeAttachList');
+  box.innerHTML = '';
+  composeFiles.forEach((f, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'cm-chip';
+    chip.innerHTML = '<i class="bi bi-file-earmark' + (/\.pdf$/i.test(f.name) ? '-pdf' : '') + '"></i>' +
+      '<span class="n"></span><span class="s">' + fmtSize(f.size) + '</span>' +
+      '<button type="button" title="Quitar"><i class="bi bi-x-lg"></i></button>';
+    chip.querySelector('.n').textContent = f.name;
+    chip.querySelector('.n').title = f.name;
+    chip.querySelector('button').onclick = () => removeComposeFile(i);
+    box.appendChild(chip);
+  });
+  const total = composeFiles.reduce((s, f) => s + f.size, 0);
+  if (composeFiles.length) {
+    const t = document.createElement('div');
+    t.className = 'cm-total' + (total > MAX_ATTACH_BYTES ? ' too-big' : '');
+    t.textContent = composeFiles.length + ' archivo(s) · ' + fmtSize(total) +
+      (total > MAX_ATTACH_BYTES ? ' — supera el máximo de 18 MB' : '');
+    box.appendChild(t);
+  }
+}
+(function () {
+  const drop = document.getElementById('composeDrop');
+  const modal = document.getElementById('composeModal');
+  ['dragenter', 'dragover'].forEach(ev => modal.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(ev => modal.addEventListener(ev, e => {
+    e.preventDefault(); if (ev === 'drop' || e.target === modal) drop.classList.remove('over');
+  }));
+  modal.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files.length) addComposeFiles(e.dataTransfer.files); });
+})();
+
 function sendCompose() {
   const to = document.getElementById('composeTo').value.trim().replace(/[;,\s]+$/, '');
   const subject = document.getElementById('composeSubject').value.trim();
@@ -486,17 +586,43 @@ function sendCompose() {
   const addrs = to.split(/[,;]/).map(a => a.trim()).filter(Boolean);
   const badAddr = addrs.find(a => !/^[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+$/.test(a));
   if (!addrs.length || badAddr) { alert('Email no válido: ' + (badAddr || to)); return; }
+  if (composeFiles.reduce((s, f) => s + f.size, 0) > MAX_ATTACH_BYTES) {
+    alert('Los adjuntos superan 18 MB. Quita alguno o compártelo por enlace.'); return;
+  }
   const match = [...document.querySelectorAll('#composeClients option')]
     .find(o => o.value.toLowerCase() === addrs[0].toLowerCase());
   const clientId = match ? parseInt(match.dataset.id, 10) : null;
+
+  const fd = new FormData();
+  fd.append('to_email', addrs.join(', '));
+  fd.append('subject', subject);
+  fd.append('body', body);
+  if (clientId) fd.append('client_id', clientId);
+  composeFiles.forEach(f => fd.append('attachments', f, f.name));
+  const docsClient = document.getElementById('composeDocsClient');
+  const picked = [...document.querySelectorAll('.cm-doc-cb:checked')].map(c => c.value);
+  if (docsClient && picked.length) {
+    fd.append('docs_client_id', docsClient.value);
+    picked.forEach(k => fd.append('profile_docs', k));
+  }
+
+  const btn = document.getElementById('composeSendBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ph ph-circle-notch em-syncing"></i> Enviando...';
+  const reset = () => { btn.disabled = false; btn.innerHTML = '<i class="ph ph-paper-plane-tilt"></i> Enviar'; };
   fetch('/emails/send', {
     method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
-    body: JSON.stringify({ to_email: addrs.join(', '), subject, body, client_id: clientId })
+    headers: {'X-CSRFToken': getCsrf()},
+    body: fd
   }).then(r => r.json()).then(d => {
-    if (d.success) { closeCompose(); location.reload(); }
-    else { alert('Error: ' + (d.error || '')); }
-  });
+    if (d.success) {
+      closeCompose();
+      // Quita ?compose=1&attach=… para que al recargar no se vuelva a abrir el redactor
+      const u = new URL(location.href);
+      ['compose', 'attach', 'subject', 'body'].forEach(p => u.searchParams.delete(p));
+      location.href = u.toString();
+    } else { reset(); alert('Error: ' + (d.error || '')); }
+  }).catch(() => { reset(); alert('No se pudo enviar. Revisa tu conexión e intenta de nuevo.'); });
 }
 function generateAICompose() {
   const subject = document.getElementById('composeSubject').value;

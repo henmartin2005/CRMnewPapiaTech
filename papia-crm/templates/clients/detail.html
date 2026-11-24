@@ -661,6 +661,10 @@
               </button>
             </form>
             <a class="btn btn-ghost btn-icon-xs" title="Descargar PDF firmado" href="{{ url_for('contracts.final', env_id=e.id, dl=1) }}"><i class="bi bi-download"></i></a>
+            {% if 'emails' in enabled_modules and client.email %}
+            <a class="btn btn-ghost btn-icon-xs" title="Enviar por email a {{ client.email }}"
+               href="{{ url_for('emails.index', client_id=client.id, compose=1, attach='contract:' ~ e.id, subject=e.title) }}"><i class="bi bi-send"></i></a>
+            {% endif %}
             {% endif %}
           </div>
           {% endfor %}
@@ -785,6 +789,10 @@
           <i class="bi bi-folder2-open" style="margin-right:5px;"></i>Documentos y enlaces
         </span>
         <span class="section-count">{{ documents | length }}</span>
+        {% if 'emails' in enabled_modules and client.email and (documents | selectattr('kind', 'equalto', 'file') | list) %}
+        <a class="btn btn-ghost btn-xs" style="margin-left:auto;" title="Elegir varios documentos y enviarlos en un solo email"
+           href="{{ url_for('emails.index', client_id=client.id, compose=1) }}"><i class="bi bi-send"></i> Enviar por email</a>
+        {% endif %}
       </div>
       <div class="card-body docs-forms">
         <div class="docs-tabs">
@@ -842,6 +850,12 @@
                href="{{ url_for('clients.open_document', client_id=client.id, doc_id=d.id, dl=1) }}">
               <i class="bi bi-download"></i>
             </a>
+            {% if 'emails' in enabled_modules and client.email %}
+            <a class="btn btn-ghost btn-icon-xs" title="Enviar por email a {{ client.email }}"
+               href="{{ url_for('emails.index', client_id=client.id, compose=1, attach='doc:' ~ d.id, subject=d.title) }}">
+              <i class="bi bi-send"></i>
+            </a>
+            {% endif %}
             {% endif %}
             {% if not d.from_client %}
             <form method="POST" style="margin:0;" action="{{ url_for('portal.admin_toggle_doc', doc_id=d.id) }}">
