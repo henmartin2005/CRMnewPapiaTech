@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Correos festivos{% endblock %}
+
+{% block content %}
+<div class="pg-header">
+  <div>
+    <h1 class="pg-title">🎉 Correos festivos</h1>
+    <p class="pg-sub">Solo reciben los clientes que marques. {{ dias_preparacion }} días antes de cada fecha te llega un aviso para revisar.</p>
+  </div>
+</div>
+
+<!-- Ocasiones -->
+<div class="fe-occ">
+  {% for p in proximas %}
+  <a href="{{ url_for('festivos.index', ocasion=p.clave) }}" class="fe-occ-card {% if p.clave == actual.clave %}active{% endif %}">
+    <span class="fe-occ-emoji">{{ p.emoji }}</span>
+    <span class="fe-occ-name">{{ p.nombre }}</span>
+    <span class="fe-occ-date num">{{ p.fecha_envio.strftime('%d/%m/%Y') }}</span>
+    <span class="fe-occ-days">{% if p.dias == 0 %}hoy{% elif p.dias == 1 %}mañana{% else %}en {{ p.dias }} días{% endif %}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="fe-grid">
+  <!-- Ocasión seleccionada -->
+  <div class="section-card" id="envios">
+    <div class="card-header">
+      <span class="card-header-left">{{ actual.emoji }} {{ actual.nombre }} · se envía el {{ actual.fecha_envio.strftime('%d/%m/%Y') }}</span>
+    </div>
+    <div class="card-body">
+      <div class="fe-actions">
+        <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="{{ url_for('festivos.preview', clave=actual.clave) }}"><i class="bi bi-eye"></i> Vista previa</a>
+        <form method="POST" action="{{ url_for('festivos.send_test', clave=actual.clave) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn btn-ghost btn-sm" type="submit"><i class="bi bi-send"></i> Enviarme una prueba</button>
+        </form>
+        <form method="POST" action="{{ url_for('festivos.prepare_now', clave=actual.clave) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-list-check"></i> Preparar lista ahora</button>
+        </form>
+      </div>
+      <p class="fe-help">La lista se crea sola {{ dias_preparacion }} días antes con los clientes marcados. El día del envío salen solo los que estén en <strong>pendiente</strong>.</p>
+
+      {% if envios %}
+      <table class="crm-table">
+        <thead><tr><th>Cliente</th><th>Email</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+        {% for e in envios %}
+          <tr>
+            <td><a href="{{ url_for('clients.detail', client_id=e.client_id) }}">{{ e.first_name }} {{ e.last_name }}</a>
+              {% if e.proyecto %}<div class="fe-sub">{{ e.proyecto }}</div>{% endif %}</td>
+            <td class="fe-sub">{{ e.email }}</td>
+            <td><span class="fe-st fe-st-{{ e.estado }}">{{ e.estado }}</span>
+              {% if e.error %}<div class="fe-sub" style="color:var(--c-danger);">{{ e.error }}</div>{% endif %}
+              {% if e.enviado_en %}<div class="fe-sub">{{ e.enviado_en|localdatetime }}</div>{% endif %}</td>
+            <td style="text-align:right;white-space:nowrap;">
+              <a class="btn btn-ghost btn-icon-xs" title="Ver su correo" target="_blank" rel="noopener"
+                 href="{{ url_for('festivos.preview', clave=actual.clave, client_id=e.client_id) }}"><i class="bi bi-eye"></i></a>
+              {% if e.estado in ('pendiente', 'error') %}
+              <form method="POST" action="{{ url_for('festivos.envio_estado', envio_id=e.id, accion='omitir') }}" style="display:inline;">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="ocasion" value="{{ actual.clave }}">
+                <button class="btn btn-ghost btn-xs" type="submit">Omitir</button>
+              </form>
+              {% elif e.estado == 'omitido' %}
+              <form method="POST" action="{{ url_for('festivos.envio_estado', envio_id=e.id, accion='restaurar') }}" style="display:inline;">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="ocasion" value="{{ actual.clave }}">
+                <button class="btn btn-ghost btn-xs" type="submit">Volver a incluir</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="fe-empty">Todavía no hay lista para esta fecha. Se crea sola {{ dias_preparacion }} días antes, o pulsa “Preparar lista ahora”.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <!-- Clientes -->
+    <div class="section-card" id="clientes">
+      <div class="card-header">
+        <span class="card-header-left"><i class="bi bi-people"></i> Clientes que reciben</span>
+        <span class="fe-sub" id="feCount"></span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('festivos.save_clients') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="ocasion" value="{{ actual.clave }}">
+          <input type="search" class="form-control" id="feFilter" placeholder="Buscar cliente…" style="margin-bottom:8px;">
+          <div class="fe-list">
+            {% for c in clientes %}
+            <label class="fe-row" data-q="{{ (c.first_name ~ ' ' ~ c.last_name ~ ' ' ~ (c.company or '') ~ ' ' ~ (c.email or ''))|lower }}">
+              <input type="checkbox" name="client_ids" value="{{ c.id }}" {% if c.enabled %}checked{% endif %} {% if not c.email %}disabled{% endif %}>
+              <span>
+                <strong>{{ c.first_name }} {{ c.last_name }}</strong>{% if c.company %} · {{ c.company }}{% endif %}
+                <span class="fe-sub">{{ c.email or 'sin email' }}{% if c.unsubscribed_at %} · se dio de baja{% endif %}{% if c.enabled and not c.proyecto %} · falta “proyecto”{% endif %}</span>
+              </span>
+            </label>
+            {% else %}
+            <p class="fe-empty">No hay clientes.</p>
+            {% endfor %}
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;"><i class="bi bi-check2"></i> Guardar selección</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Ajustes -->
+    <div class="section-card" id="ajustes">
+      <div class="card-header"><span class="card-header-left"><i class="bi bi-gear"></i> Ajustes</span></div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('festivos.save_settings') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="ocasion" value="{{ actual.clave }}">
+          <label class="form-label">Dirección física (pie del correo, requerida por CAN-SPAM)</label>
+          <input type="text" name="direccion" class="form-control" value="{{ ajustes.direccion }}" placeholder="Calle, ciudad, FL, código postal">
+          <label class="form-label" style="margin-top:8px;">Email para avisos y pruebas</label>
+          <input type="email" name="aviso_email" class="form-control" value="{{ ajustes.aviso_email }}">
+          <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;">Guardar</button>
+          {% if not ajustes.direccion %}<p class="fe-help" style="color:var(--c-danger);margin-top:8px;">Falta la dirección física.</p>{% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .fe-occ { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
+  .fe-occ-card { display:flex; flex-direction:column; gap:2px; padding:12px 14px; border:1px solid var(--c-border); border-radius:12px; background:var(--c-surface, #fff); color:inherit; text-decoration:none; }
+  .fe-occ-card.active { border-color:#db2777; box-shadow:0 0 0 2px #fce7f3; }
+  .fe-occ-emoji { font-size:24px; }
+  .fe-occ-name { font-weight:700; font-size:14px; }
+  .fe-occ-date { font-size:12px; color:var(--c-text-2); }
+  .fe-occ-days { font-size:11px; color:var(--c-text-3); }
+  .fe-grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:12px; align-items:start; }
+  @media (max-width: 900px) { .fe-grid { grid-template-columns:1fr; } }
+  .fe-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .fe-actions form { margin:0; }
+  .fe-help { font-size:12px; color:var(--c-text-2); margin:8px 0 12px; }
+  .fe-sub { font-size:11.5px; color:var(--c-text-3); display:block; }
+  .fe-empty { font-size:13px; color:var(--c-text-2); margin:8px 0 0; }
+  .fe-st { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:#f3f4f6; color:#374151; }
+  .fe-st-pendiente { background:#fef3c7; color:#92400e; }
+  .fe-st-enviado { background:#d1fae5; color:#065f46; }
+  .fe-st-omitido { background:#f3f4f6; color:#6b7280; }
+  .fe-st-error { background:#fee2e2; color:#991b1b; }
+  .fe-list { max-height:420px; overflow-y:auto; border:1px solid var(--c-border); border-radius:10px; }
+  .fe-row { display:flex; gap:10px; align-items:flex-start; padding:8px 10px; border-bottom:1px solid var(--c-border); font-size:13px; cursor:pointer; margin:0; }
+  .fe-row:last-child { border-bottom:0; }
+  .fe-row input { margin-top:3px; accent-color:#db2777; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const boxes = document.querySelectorAll('.fe-list input[type=checkbox]');
+  const count = document.getElementById('feCount');
+  const upd = () => { count.textContent = [...boxes].filter(b => b.checked).length + ' marcados'; };
+  boxes.forEach(b => b.addEventListener('change', upd)); upd();
+  document.getElementById('feFilter').addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.fe-row').forEach(r => { r.style.display = !q || r.dataset.q.includes(q) ? '' : 'none'; });
+  });
+})();
+</script>
+{% endblock %}

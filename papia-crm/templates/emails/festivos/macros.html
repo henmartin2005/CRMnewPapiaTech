@@ -1,0 +1,29 @@
+{# Tarjeta de color para destacar un bloque de texto #}
+{% macro tarjeta(fondo, borde, titulo=None, color_titulo="#111827") -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 22px;">
+<tr><td bgcolor="{{ fondo }}" style="background:{{ fondo }};border-left:5px solid {{ borde }};border-radius:12px;padding:20px 22px;">
+  {% if titulo %}<p style="margin:0 0 8px;font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:{{ color_titulo }};">{{ titulo }}</p>{% endif %}
+  {{ caller() }}
+</td></tr>
+</table>
+{%- endmacro %}
+
+{# Fila de meta con icono en círculo de color #}
+{% macro meta(icono, color, titulo, texto) -%}
+<tr>
+  <td width="56" valign="top" style="padding:0 0 16px;">
+    <div style="width:46px;height:46px;border-radius:50%;background:{{ color }};font-size:22px;line-height:46px;text-align:center;">{{ icono }}</div>
+  </td>
+  <td valign="top" style="padding:2px 0 16px 10px;">
+    <strong style="font-size:16px;color:#111827;">{{ titulo }}</strong><br>
+    <span style="font-size:15px;color:#4b5563;line-height:1.5;">{{ texto }}</span>
+  </td>
+</tr>
+{%- endmacro %}
+
+{# Botón (con respaldo de color sólido) #}
+{% macro boton(url, texto, color, degradado) -%}
+<tr><td align="center" style="padding:6px 36px 26px;">
+  <a href="{{ url }}" style="display:inline-block;background:{{ color }};background-image:{{ degradado }};color:#ffffff;text-decoration:none;font-weight:800;font-size:16px;padding:15px 30px;border-radius:999px;">{{ texto }}</a>
+</td></tr>
+{%- endmacro %}

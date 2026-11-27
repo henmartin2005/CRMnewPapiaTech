@@ -1,0 +1,25 @@
+{% extends "emails/festivos/base.html" %}
+{% from "emails/festivos/macros.html" import tarjeta %}
+{% set tema = {
+  "color": "#c2410c",
+  "degradado": "linear-gradient(135deg,#f59e0b 0%,#ea580c 50%,#9a3412 100%)",
+  "fondo_pagina": "#fff7ed",
+  "acento": "#c2410c",
+  "franja": ["#f59e0b","#ea580c","#b45309","#ea580c","#f59e0b"],
+  "confeti": "🍂 🍁 🍂 🍁 🍂",
+  "emoji": "🦃",
+} %}
+
+{% block titulo %}Gracias por elegirnos{% endblock %}
+{% block subtitulo %}Este año tú estás en mi lista de agradecimientos 🧡{% endblock %}
+
+{% block cuerpo %}
+<p style="margin:0 0 18px;">Thanksgiving es el momento de dar gracias, y este año tú estás en mi lista.</p>
+
+{% call tarjeta("#fff7ed", "#ea580c", "🧡 Gracias por", "#c2410c") %}
+  <p style="margin:0;font-size:16px;line-height:1.6;color:#1f2937;">Elegir a PapiaTech, confiarnos tu negocio y compartir con nosotros cada idea y cada proyecto{% if proyecto %}, como {{ proyecto }}{% endif %}. Detrás de cada web, cada CRM y cada automatización hay una relación de confianza, y la tuya la valoro de verdad.</p>
+{% endcall %}
+
+<p style="margin:0 0 16px;">Que disfrutes estos días rodeado de tu familia y de mucha comida rica.</p>
+<p style="margin:0 0 8px;font-size:20px;font-weight:800;color:#c2410c;">¡Feliz Día de Acción de Gracias! 🦃</p>
+{% endblock %}

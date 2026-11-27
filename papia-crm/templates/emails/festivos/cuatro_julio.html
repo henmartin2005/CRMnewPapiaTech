@@ -1,0 +1,25 @@
+{% extends "emails/festivos/base.html" %}
+{% from "emails/festivos/macros.html" import tarjeta %}
+{% set tema = {
+  "color": "#1e3a8a",
+  "degradado": "linear-gradient(135deg,#1e3a8a 0%,#2563eb 50%,#dc2626 100%)",
+  "fondo_pagina": "#eff6ff",
+  "acento": "#1d4ed8",
+  "franja": ["#dc2626","#ffffff","#1d4ed8","#ffffff","#dc2626"],
+  "confeti": "🎆 ⭐ 🎇 ⭐ 🎆",
+  "emoji": "🇺🇸",
+} %}
+
+{% block titulo %}¡Feliz 4 de Julio, {{ nombre }}!{% endblock %}
+{% block subtitulo %}Celebramos la libertad de emprender{% endblock %}
+
+{% block cuerpo %}
+<p style="margin:0 0 18px;">Hoy Estados Unidos celebra su independencia, y yo celebro algo que me toca muy de cerca: <strong>la libertad de emprender y construir un negocio propio en este país.</strong></p>
+
+{% call tarjeta("#eff6ff", "#dc2626", "⭐ Gracias", "#1d4ed8") %}
+  <p style="margin:0;font-size:16px;line-height:1.6;color:#1f2937;">Por ser parte de nuestra historia y por dejarnos ser parte de la tuya. Cada negocio que crece es una prueba de que el sueño americano sigue vivo.</p>
+{% endcall %}
+
+<p style="margin:0 0 16px;">Disfruta el día con tu familia, la parrillada y los fuegos artificiales.</p>
+<p style="margin:0 0 8px;font-size:20px;font-weight:800;color:#1d4ed8;">¡Feliz Día de la Independencia! 🎆</p>
+{% endblock %}
