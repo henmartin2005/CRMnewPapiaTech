@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ asunto }}</title>
+</head>
+<body style="margin:0;padding:0;background:{{ tema.fondo_pagina }};font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{ preheader }}</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="{{ tema.fondo_pagina }}" style="background:{{ tema.fondo_pagina }};">
+<tr><td align="center" style="padding:28px 12px;">
+
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.08);">
+
+    <!-- Franja de colores superior -->
+    <tr><td style="padding:0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        {% for c in tema.franja %}<td height="8" bgcolor="{{ c }}" style="background:{{ c }};height:8px;font-size:0;line-height:0;">&nbsp;</td>{% endfor %}
+      </tr></table>
+    </td></tr>
+
+    <!-- Hero con degradado (Outlook muestra el color sólido de respaldo) -->
+    <tr><td align="center" bgcolor="{{ tema.color }}" style="background:{{ tema.color }};background-image:{{ tema.degradado }};padding:44px 28px 40px;">
+      <div style="font-size:22px;letter-spacing:6px;line-height:1;">{{ tema.confeti }}</div>
+      <div style="font-size:64px;line-height:1;margin-top:14px;">{{ tema.emoji }}</div>
+      <h1 style="margin:18px 0 0;color:#ffffff;font-size:34px;line-height:1.2;font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,0.18);">{% block titulo %}{% endblock %}</h1>
+      <p style="margin:10px 0 0;color:#ffffff;opacity:0.95;font-size:17px;line-height:1.4;">{% block subtitulo %}{% endblock %}</p>
+    </td></tr>
+
+    <!-- Cuerpo -->
+    <tr><td style="padding:34px 36px 6px;color:#1f2937;font-size:16px;line-height:1.65;">
+      <p style="margin:0 0 16px;font-size:18px;">Hola <strong style="color:{{ tema.acento }};">{{ nombre }}</strong>:</p>
+      {% block cuerpo %}{% endblock %}
+    </td></tr>
+
+    {% block cta %}{% endblock %}
+
+    <!-- Firma -->
+    <tr><td style="padding:10px 36px 34px;color:#1f2937;font-size:16px;line-height:1.5;">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td width="52" valign="middle">
+          <div style="width:48px;height:48px;border-radius:50%;background:{{ tema.acento }};color:#fff;font-weight:800;font-size:20px;line-height:48px;text-align:center;">H</div>
+        </td>
+        <td valign="middle" style="padding-left:12px;">
+          <strong>Henrry Martin</strong><br>
+          <span style="color:#6b7280;font-size:14px;">Fundador · PapiaTech</span>
+        </td>
+      </tr></table>
+    </td></tr>
+
+    <!-- Franja de colores inferior -->
+    <tr><td style="padding:0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        {% for c in tema.franja|reverse %}<td height="6" bgcolor="{{ c }}" style="background:{{ c }};height:6px;font-size:0;line-height:0;">&nbsp;</td>{% endfor %}
+      </tr></table>
+    </td></tr>
+
+    <!-- Pie -->
+    <tr><td align="center" style="background:#f9fafb;padding:22px 24px;color:#6b7280;font-size:12px;line-height:1.7;">
+      <strong style="color:#374151;">Papia Technology Solutions LLC</strong><br>
+      <a href="https://www.papiatech.com" style="color:#6b7280;">www.papiatech.com</a> ·
+      <a href="mailto:henrry@papiatech.com" style="color:#6b7280;">henrry@papiatech.com</a> ·
+      WhatsApp <a href="https://wa.me/17869157096" style="color:#6b7280;">786-915-7096</a><br>
+      {% if direccion_fisica %}{{ direccion_fisica }}<br>{% endif %}
+      <a href="{{ unsubscribe_url }}" style="color:#9ca3af;">No quiero recibir más estos correos</a>
+    </td></tr>
+
+  </table>
+</td></tr>
+</table>
+</body>
+</html>

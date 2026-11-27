@@ -1,0 +1,48 @@
+{% extends "emails/festivos/base.html" %}
+{% from "emails/festivos/macros.html" import tarjeta, meta, boton %}
+{% set tema = {
+  "color": "#7c3aed",
+  "degradado": "linear-gradient(135deg,#7c3aed 0%,#ec4899 50%,#f59e0b 100%)",
+  "fondo_pagina": "#fdf4ff",
+  "acento": "#7c3aed",
+  "franja": ["#7c3aed","#ec4899","#f59e0b","#10b981","#3b82f6"],
+  "confeti": "🎊 ✨ 🎉 ✨ 🎊",
+  "emoji": "🥂",
+} %}
+
+{% block titulo %}¡Feliz {{ anio }}, {{ nombre }}!{% endblock %}
+{% block subtitulo %}Este año es tuyo. Vamos por todo. 🚀{% endblock %}
+
+{% block cuerpo %}
+<p style="margin:0 0 20px;">¡Llegó {{ anio }}! Antes de que el año arranque a toda velocidad, quiero tomarme un momento para decirte algo que pienso de verdad: <strong>estoy orgulloso de lo que construimos juntos.</strong></p>
+
+{% call tarjeta("#fdf2f8", "#ec4899", "🏆 Lo que lograste en " ~ (anio - 1), "#be185d") %}
+  {% if proyecto %}
+  <p style="margin:0;font-size:16px;line-height:1.6;color:#1f2937;">El año pasado diste un paso enorme: <strong>pusiste en marcha {{ proyecto }}</strong>.{% if logro %} Y ya se nota: {{ logro }}.{% endif %} Muchos negocios se quedan en la idea. <strong>Tú lo hiciste realidad.</strong></p>
+  {% else %}
+  <p style="margin:0;font-size:16px;line-height:1.6;color:#1f2937;">El año pasado decidiste apostar por la tecnología para hacer crecer tu negocio. Muchos se quedan en la idea. <strong>Tú diste el paso.</strong></p>
+  {% endif %}
+{% endcall %}
+
+<p style="margin:0 0 18px;">Y lo mejor es que esto apenas empieza. Para {{ anio }} te deseo metas grandes, de esas que dan un poquito de vértigo:</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+  {{ meta("🚀", "#ede9fe", "Más clientes que te encuentren", "Que tu negocio aparezca justo cuando alguien te está buscando.") }}
+  {{ meta("⚡", "#fef3c7", "Más tiempo para lo que importa", "Que las tareas repetitivas se hagan solas y tú te enfoques en crecer.") }}
+  {{ meta("🌟", "#d1fae5", "Un negocio que trabaja para ti", "Que tus ventas, citas y mensajes sigan fluyendo incluso mientras duermes.") }}
+  {{ meta("❤️", "#fce7f3", "Salud y alegría en casa", "Porque ningún éxito vale la pena si no lo disfrutas con los tuyos.") }}
+</table>
+
+{% call tarjeta("#fffbeb", "#f59e0b") %}
+  <p style="margin:0;font-size:18px;line-height:1.5;color:#92400e;font-style:italic;text-align:center;">“Las metas grandes no dan miedo cuando tienes al equipo correcto a tu lado.”</p>
+{% endcall %}
+
+<p style="margin:0 0 16px;">Gracias por confiar en mí y por dejarme ser parte de tu historia. Este año quiero seguir a tu lado, celebrando cada logro tuyo como si fuera mío.</p>
+<p style="margin:0 0 8px;font-size:20px;font-weight:800;color:#7c3aed;">¡Feliz Año Nuevo! 🎉</p>
+{% endblock %}
+
+{% block cta %}
+{{ boton("https://wa.me/17869157096?text=" ~ ("¡Hola Henrry! Mi meta para " ~ anio ~ " es...")|urlencode,
+         "Cuéntame tu gran meta para " ~ anio ~ " 💬",
+         "#ec4899", "linear-gradient(90deg,#7c3aed,#ec4899,#f59e0b)") }}
+{% endblock %}

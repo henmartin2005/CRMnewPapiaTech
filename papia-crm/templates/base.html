@@ -171,6 +171,16 @@
     </li>
     {% endif %}
 
+    {% if 'emails' in enabled_modules and is_admin %}
+    <li>
+      <a href="{{ url_for('festivos.index') }}"
+         class="sb-link {% if request.endpoint and request.endpoint.startswith('festivos.') %}active{% endif %}">
+        <i class="bi bi-balloon-heart"></i>
+        <span class="sb-label">Festivos</span>
+      </a>
+    </li>
+    {% endif %}
+
     {% if 'tasks' in enabled_modules %}
     <li>
       <a href="{{ url_for('followups.tasks') }}"

@@ -1,0 +1,25 @@
+{% extends "emails/festivos/base.html" %}
+{% from "emails/festivos/macros.html" import tarjeta %}
+{% set tema = {
+  "color": "#e11d48",
+  "degradado": "linear-gradient(135deg,#f472b6 0%,#e11d48 55%,#be123c 100%)",
+  "fondo_pagina": "#fff1f2",
+  "acento": "#e11d48",
+  "franja": ["#fda4af","#f472b6","#e11d48","#f472b6","#fda4af"],
+  "confeti": "💕 🌹 💕 🌹 💕",
+  "emoji": "💌",
+} %}
+
+{% block titulo %}Feliz Día del Amor y la Amistad{% endblock %}
+{% block subtitulo %}Hoy celebramos a quienes nos eligen ❤️{% endblock %}
+
+{% block cuerpo %}
+<p style="margin:0 0 18px;">Hoy se celebra el amor y la amistad, y yo quiero celebrar a quienes hacen posible mi trabajo: mis clientes.</p>
+
+{% call tarjeta("#fff1f2", "#e11d48") %}
+  <p style="margin:0;font-size:17px;line-height:1.6;color:#9f1239;text-align:center;">Gracias por elegirnos y por confiarnos tu negocio. <strong>Las relaciones basadas en la confianza son las que más valoro, y la tuya es una de ellas.</strong></p>
+{% endcall %}
+
+<p style="margin:0 0 16px;">Que pases un día lindo junto a las personas que quieres.</p>
+<p style="margin:0 0 8px;font-size:20px;font-weight:800;color:#e11d48;">¡Feliz 14 de febrero! 💕</p>
+{% endblock %}

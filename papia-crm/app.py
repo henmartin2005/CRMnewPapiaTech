@@ -41,6 +41,8 @@ from routes.mobile_api import mobile_api_bp
 from routes.videos import videos_bp
 from routes.demos import demos_bp, demos_api_bp, demos_go_bp
 from routes.gcp_costs import gcp_costs_bp
+from routes.festivos import festivos_bp
+from services.festivos import migrate as migrate_festivos
 from services.gcp_costs import migrate as migrate_gcp_costs
 from migrate_videos import migrate as migrate_videos
 from routes.contracts import contracts_bp, contracts_public_bp
@@ -78,12 +80,14 @@ init_db()
 migrate_videos()
 migrate_demos()
 migrate_gcp_costs()
+migrate_festivos()
 app.register_blueprint(videos_bp)
 app.register_blueprint(demos_bp)
 app.register_blueprint(demos_api_bp)
 app.register_blueprint(demos_go_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(gcp_costs_bp)
+app.register_blueprint(festivos_bp)
 app.register_blueprint(payment_schedule_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(followups_bp)
@@ -125,7 +129,7 @@ def set_org_context():
 def require_login():
     open_endpoints = {'auth.login', 'auth.logout', 'auth.google_login', 'auth.google_callback', 'static', 'whatsapp.webhook', 'whatsapp.zernio_webhook',
                       'payments.stripe_webhook', 'payments.success', 'pagar.page', 'pagar.card',
-                      'meta_webhook.verify', 'meta_webhook.receive', 'demos_go.open'}
+                      'meta_webhook.verify', 'meta_webhook.receive', 'demos_go.open', 'festivos.baja'}
     if request.endpoint in open_endpoints:
         return
     # Papia Sign: páginas públicas del firmante y de verificación

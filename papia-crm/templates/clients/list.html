@@ -63,6 +63,12 @@
 
     </div>
     <div class="toolbar-right">
+      {% if is_admin %}
+        <a href="{{ url_for('clients.list_clients', q=search, stage=request.args.get('stage'), festivos=None if request.args.get('festivos') else '1') }}"
+           class="chip {% if request.args.get('festivos') %}active{% endif %}" title="Solo los que reciben correos festivos">
+          🎉 Festivos
+        </a>
+      {% endif %}
       {% if search or request.args.get('stage') %}
         <a href="{{ url_for('clients.list_clients') }}" class="btn btn-ghost btn-xs">
           <i class="bi bi-x"></i> Limpiar
@@ -82,12 +88,14 @@
             <th class="d-none d-md-table-cell">Proyecto</th>
             <th>Estado</th>
             <th style="text-align:right;">Pendiente</th>
-            <th style="text-align:center;width:96px;">Acciones</th>
+            <th style="text-align:center;width:120px;">Acciones</th>
           </tr>
         </thead>
         <tbody>
+          {% set _fe_ids = festivos_enabled_ids() %}
           {% for client in clients %}
-            {% if not request.args.get('stage') or client.pipeline_stage == request.args.get('stage') %}
+            {% if (not request.args.get('stage') or client.pipeline_stage == request.args.get('stage'))
+                  and (not request.args.get('festivos') or client.id in _fe_ids) %}
             <tr data-href="{{ url_for('clients.detail', client_id=client.id) }}">
 
               <td style="padding-left:16px;">
@@ -126,6 +134,13 @@
 
               <td style="text-align:center;">
                 <div style="display:flex;align-items:center;justify-content:center;gap:3px;">
+                  {% if is_admin %}
+                  {% set _on = client.id in _fe_ids %}
+                  <button type="button" class="btn btn-ghost btn-icon-xs fe-toggle {% if _on %}is-on{% endif %}"
+                          data-id="{{ client.id }}" aria-pressed="{{ 'true' if _on else 'false' }}"
+                          title="{{ 'Recibe correos festivos (clic para quitar)' if _on else 'Activar correos festivos' }}"
+                          onclick="event.stopPropagation();toggleFestivos(this)">🎉</button>
+                  {% endif %}
                   <a href="{{ url_for('clients.detail', client_id=client.id) }}"
                      class="btn btn-ghost btn-icon-xs" title="Ver perfil"
                      onclick="event.stopPropagation()">
@@ -198,7 +213,27 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+  .fe-toggle { filter:grayscale(1); opacity:.35; font-size:12px; }
+  .fe-toggle.is-on { filter:none; opacity:1; }
+</style>
 <script>
+function toggleFestivos(btn) {
+  const on = btn.getAttribute('aria-pressed') !== 'true';
+  const body = new URLSearchParams({enabled: on ? '1' : '0', csrf: '{{ festivos_csrf() if is_admin else '' }}'});
+  btn.disabled = true;
+  fetch('/clients/' + btn.dataset.id + '/festivos/toggle', {method: 'POST', body})
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) throw new Error(d.error || 'Error');
+      btn.classList.toggle('is-on', d.enabled);
+      btn.setAttribute('aria-pressed', d.enabled ? 'true' : 'false');
+      btn.title = d.enabled ? 'Recibe correos festivos (clic para quitar)' : 'Activar correos festivos';
+    })
+    .catch(e => alert('No se pudo cambiar: ' + e.message))
+    .finally(() => { btn.disabled = false; });
+}
+
 function confirmDelete(id, name) {
   document.getElementById('deleteClientName').textContent = name;
   document.getElementById('deleteForm').action = '/clients/' + id + '/delete';

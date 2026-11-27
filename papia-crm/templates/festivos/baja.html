@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Correos festivos · Papia Technology Solutions</title>
+<style>
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:#fdf4ff; font-family:'Segoe UI',Arial,sans-serif; color:#1f2937; padding:20px; box-sizing:border-box; }
+  .box { max-width:440px; width:100%; background:#fff; border-radius:18px; padding:32px 28px; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.08); }
+  h1 { font-size:22px; margin:12px 0 8px; }
+  p { font-size:15px; line-height:1.6; color:#4b5563; margin:0 0 16px; }
+  button { background:#7c3aed; color:#fff; border:0; border-radius:999px; padding:12px 26px; font-size:15px; font-weight:700; cursor:pointer; }
+  .emoji { font-size:42px; }
+  a { color:#7c3aed; }
+</style>
+</head>
+<body>
+<div class="box">
+  {% if estado == 'confirmar' %}
+    <div class="emoji">💌</div>
+    <h1>¿Dejar de recibir los correos festivos?</h1>
+    <p>Son los saludos de Navidad, Año Nuevo y otras fechas especiales de Papia Technology Solutions. Seguirás recibiendo los correos sobre tu proyecto.</p>
+    <form method="POST"><button type="submit">Sí, no quiero recibirlos</button></form>
+  {% elif estado == 'hecho' %}
+    <div class="emoji">👋</div>
+    <h1>Listo{% if nombre %}, {{ nombre }}{% endif %}</h1>
+    <p>Ya no te enviaremos los correos festivos. Si cambias de opinión, escríbenos a <a href="mailto:henrry@papiatech.com">henrry@papiatech.com</a>.</p>
+  {% else %}
+    <div class="emoji">🤔</div>
+    <h1>Enlace no válido</h1>
+    <p>Este enlace ya no funciona. Si quieres dejar de recibir correos, escríbenos a <a href="mailto:henrry@papiatech.com">henrry@papiatech.com</a>.</p>
+  {% endif %}
+</div>
+</body>
+</html>

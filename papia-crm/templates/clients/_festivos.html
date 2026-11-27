@@ -1,0 +1,57 @@
+{# Cuadro "Correos festivos" en el perfil del cliente — solo admin. #}
+{% if is_admin %}
+{% set _fe = client_festivos_config(client.id) %}
+{% if _fe is not none %}
+<div class="section-card" id="festivos">
+  <div class="card-header">
+    <span class="card-header-left"><i class="bi bi-balloon-heart"></i> Correos festivos</span>
+    {% if _fe.enabled %}
+      <span class="fe-pill fe-on">🎉 Activo</span>
+    {% elif _fe.unsubscribed_at %}
+      <span class="fe-pill fe-off">Se dio de baja</span>
+    {% else %}
+      <span class="fe-pill fe-off">Desactivado</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('festivos.save_client', client_id=client.id) }}" class="fe-form">
+      <input type="hidden" name="csrf" value="{{ festivos_csrf() }}">
+
+      <label class="fe-switch">
+        <input type="checkbox" name="enabled" value="1" {% if _fe.enabled %}checked{% endif %}>
+        <span>Recibe correos festivos</span>
+      </label>
+      <p class="fe-help">Navidad, Año Nuevo, San Valentín, 4 de Julio y Thanksgiving.
+        {% if not client.email %}<strong style="color:var(--c-danger);">Este cliente no tiene email.</strong>{% endif %}
+        {% if _fe.unsubscribed_at %}<br><strong>Se dio de baja el {{ _fe.unsubscribed_at[:10] }}.</strong> Solo actívalo si el cliente te lo pidió.{% endif %}
+      </p>
+
+      <label class="form-label" for="fe-proyecto">Proyecto <span class="fe-opt">(sale en Año Nuevo y Thanksgiving)</span></label>
+      <input id="fe-proyecto" type="text" name="proyecto" class="form-control" maxlength="200"
+             value="{{ _fe.proyecto }}" placeholder="tu nueva página web con reservas online">
+
+      <label class="form-label" for="fe-logro" style="margin-top:8px;">Logro <span class="fe-opt">(opcional)</span></label>
+      <input id="fe-logro" type="text" name="logro" class="form-control" maxlength="200"
+             value="{{ _fe.logro }}" placeholder="tus clientes ya agendan citas solos">
+
+      <div class="fe-actions">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check2"></i> Guardar</button>
+        <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener"
+           href="{{ url_for('festivos.preview', clave='ano_nuevo', client_id=client.id) }}"><i class="bi bi-eye"></i> Ver Año Nuevo</a>
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('festivos.index') }}"><i class="bi bi-calendar-heart"></i> Panel</a>
+      </div>
+    </form>
+  </div>
+</div>
+<style>
+  .fe-pill { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
+  .fe-on { background:#fce7f3; color:#be185d; }
+  .fe-off { background:var(--c-surface-2, #f3f4f6); color:var(--c-text-3); }
+  .fe-switch { display:flex; align-items:center; gap:8px; font-weight:600; font-size:13px; cursor:pointer; }
+  .fe-switch input { width:16px; height:16px; accent-color:#db2777; }
+  .fe-help { font-size:12px; color:var(--c-text-2); margin:4px 0 12px; }
+  .fe-opt { color:var(--c-text-3); font-weight:400; }
+  .fe-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+</style>
+{% endif %}
+{% endif %}
